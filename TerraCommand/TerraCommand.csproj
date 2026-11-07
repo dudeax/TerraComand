@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    tModLoader install used for references + packaging.
+    Defaults to the repo-local copy in ../.tml (see tools/setup-toolchain.sh).
+    Override with: dotnet build -p:TmlDir=/path/to/tModLoader/
+    Inside a real ModSources folder the standard ../tModLoader.targets is used instead.
+  -->
+  <PropertyGroup>
+    <TmlDir Condition="'$(TmlDir)' == '' And Exists('..\tModLoader.targets')"></TmlDir>
+    <TmlDir Condition="'$(TmlDir)' == ''">$(MSBuildThisFileDirectory)..\.tml\</TmlDir>
+  </PropertyGroup>
+  <Import Project="..\tModLoader.targets" Condition="Exists('..\tModLoader.targets')" />
+  <Import Project="$(TmlDir)tMLMod.targets" Condition="!Exists('..\tModLoader.targets')" />
+
+  <PropertyGroup>
+    <AssemblyName>TerraCommand</AssemblyName>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+  </PropertyGroup>
+
+</Project>

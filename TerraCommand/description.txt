@@ -1,0 +1,7 @@
+Terra Command is a total-conversion style overhaul inspired by the mechanics of Cortex Command.
+
+- Pixel-level terrain destruction: bullets chip, explosions crater, pickaxes carve.
+- Command multiple bodies: deploy clone units and swap control between them. If your body dies, control jumps to another one.
+- Orbital stockpile: launch resources into orbit from a Launch Pad. Every player shares the stockpile, can craft inside it, build straight from it, and order drop pods to bring equipment back down.
+
+Licensed under AGPL-3.0-or-later.

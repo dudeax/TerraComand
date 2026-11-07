@@ -1,0 +1,79 @@
+Keybinds: {
+	SwitchBody.DisplayName: Switch Body (hovered or next)
+	CycleOrders.DisplayName: Toggle Unit Orders (hold / follow)
+	OrbitalMenu.DisplayName: Orbital Command Menu
+}
+
+Items: {
+	LaunchPadItem: {
+		DisplayName: Launch Pad
+		Tooltip:
+			'''
+			Sends items to the shared orbital stockpile
+			Right-click it with an item, or throw items onto it
+			'''
+	}
+
+	OrbitalConstructor: {
+		DisplayName: Orbital Constructor
+		Tooltip: Places blocks and walls straight from the orbital stockpile
+	}
+
+	CloneBody: {
+		DisplayName: Clone Body
+		Tooltip:
+			'''
+			Deploys a new body at the cursor
+			Press the Switch Body key to take control of it
+			'''
+	}
+}
+
+Tiles.LaunchPad.MapEntry: Launch Pad
+NPCs.CloneUnit.DisplayName: Clone
+
+Projectiles: {
+	LaunchRocket.DisplayName: Cargo Rocket
+	DropPod.DisplayName: Drop Pod
+}
+
+Configs: {
+	TerraCommandConfig: {
+		DisplayName: Terra Command
+
+		Headers: {
+			Terrain: Terrain
+			Units: Units
+		}
+
+		PixelMining: {
+			Label: Pixel mining
+			Tooltip: Pickaxes carve the pixels nearest the cursor instead of chipping whole tiles
+		}
+
+		PixelExplosions: {
+			Label: Pixel explosions
+			Tooltip: Explosives leave round craters instead of removing whole tiles
+		}
+
+		ProjectilesChipTerrain: {
+			Label: Projectiles chip terrain
+			Tooltip: Bullets, arrows and other projectiles chip away terrain where they hit
+		}
+
+		CrumbleThreshold: {
+			Label: Crumble threshold
+			Tooltip: Fraction of a tile's pixels that must be removed before the rest collapses
+		}
+
+		TransferControlOnDeath: {
+			Label: Transfer control on death
+			Tooltip: When your body dies, control jumps to your nearest idle body instead
+		}
+
+		MaxUnitsPerTeam: {
+			Label: Max bodies per team
+			Tooltip: How many idle bodies each team can have at once
+		}
+	}
+}

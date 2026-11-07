@@ -1,0 +1,6 @@
+.tml/
+bin/
+obj/
+*.user
+.vs/
+.idea/
