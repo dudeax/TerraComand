@@ -68,6 +68,19 @@ Scenario commands, one per tick (tile offsets are relative to the tile under the
 | `screenshot name`, `probe n`, `log text` | output (`probe` logs aim and item-use state for n ticks) |
 | `expect stock\|inv item op n`, `expect units\|damaged\|ground\|life op n`, `expect projectiles name op n`, `expect npcs name op n`, `expect tile dx dy empty\|solid\|partial\|launchpad`, `expect wall dx dy`, `expect alive`, `expect menu open\|closed` | assertions (`op` is one of `>= <= > < == !=`) |
 
+### Multiplayer testing
+```bash
+tools/testenv/run-mp.sh tools/testenv/mp/basic --build    # dedicated server + 2 clients (~3 min)
+```
+An MP scenario directory holds `server.txt` and one script per client (`a.txt`, `b.txt`, ...):
+- **Server:** the server loads a fresh copy of the baseline world and runs `server.txt` from its console with
+  `tc script` (setup only, before anyone joins).
+- **Clients:** each client gets its own save directory, character (`TCTestA`, ...) and virtual display, then joins
+  over localhost.
+- **Coordination:** clients wait for each other with `sync <label>` barriers. For example, A launches Wood, both
+  sync, then B checks that it can see the Wood in the shared stockpile.
+- **Speed:** multiplayer runs at normal game speed, without fast-forward.
+
 ### Testing without a game client
 ```bash
 cd .tml && ~/.dotnet/dotnet tModLoader.dll -server -nosteam -config <serverconfig.txt>

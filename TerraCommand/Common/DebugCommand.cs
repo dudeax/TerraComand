@@ -42,6 +42,10 @@ namespace TerraCommand.Common
 					caller.Reply($"Crater r={r} at {at}.");
 					break;
 				}
+				case "script": // tc script <file> [outDir]   (test harness: server-side setup script)
+					Testing.AutoTest.RunServerScript(args[1], args.Length > 2 ? args[2] : System.IO.Path.GetDirectoryName(args[1]));
+					caller.Reply("script done");
+					break;
 				case "selftest":
 					SelfTest(caller);
 					break;

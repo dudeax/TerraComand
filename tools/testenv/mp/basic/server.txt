@@ -1,0 +1,3 @@
+# Runs on the dedicated server before clients join. Offsets are relative to the world spawn tile.
+nospawn
+flatten 60 14

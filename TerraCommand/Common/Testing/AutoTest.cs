@@ -32,6 +32,10 @@ namespace TerraCommand.Common.Testing
 		static int scenarioIndex = -1, totalFails;
 		static StreamWriter summary;
 		static bool scenarioDone = true, allDone, quitRequested;
+		static bool serverMode;           // running a setup script on the dedicated server
+		static string joinAddress, playerName = "TCTest", syncDir, clientId;
+		static int peers;
+		static string waitingSync;
 		static int menuSettle;
 		static int speed = 1, drawEvery = 1, shotWarmup = 10, frame;
 
@@ -75,6 +79,11 @@ namespace TerraCommand.Common.Testing
 			if (string.IsNullOrEmpty(list) || Main.dedServ)
 				return;
 			Enabled = true;
+			joinAddress = Environment.GetEnvironmentVariable("TC_JOIN");          // "ip:port" -> multiplayer client
+			playerName = Environment.GetEnvironmentVariable("TC_PLAYER") ?? playerName;
+			syncDir = Environment.GetEnvironmentVariable("TC_SYNC_DIR");
+			clientId = Environment.GetEnvironmentVariable("TC_CLIENT_ID") ?? playerName;
+			peers = EnvInt("TC_PEERS", 1);
 			scenarios = list.Split(':', StringSplitOptions.RemoveEmptyEntries);
 			outRoot = Environment.GetEnvironmentVariable("TC_OUT") ?? Path.Combine(Path.GetTempPath(), "tc-autotest");
 			worldPath = Environment.GetEnvironmentVariable("TC_WORLD");
@@ -93,7 +102,8 @@ namespace TerraCommand.Common.Testing
 		{
 			if (!Enabled)
 				return;
-			Main.OnTickForThirdPartySoftwareOnly -= SessionTick;
+			if (!serverMode)
+				Main.OnTickForThirdPartySoftwareOnly -= SessionTick;
 			Main.OnPostDraw -= PostDraw;
 			results?.Dispose();
 			summary?.Dispose();
@@ -139,7 +149,7 @@ namespace TerraCommand.Common.Testing
 			results = null;
 			totalFails += fails;
 			summary.WriteLine($"{(fails == 0 ? "PASS" : "FAIL")} {ScenarioName}: {passes} passed, {fails} failed");
-			if (scenarioIndex + 1 < scenarios.Length) {
+			if (scenarioIndex + 1 < scenarios.Length && !serverMode && joinAddress == null) {
 				quitRequested = true; // the next scenario starts from the main menu with a fresh world
 			}
 			else {
@@ -172,7 +182,7 @@ namespace TerraCommand.Common.Testing
 			}
 		}
 
-		static void StartNext()
+		static void StartNext(bool boot = true)
 		{
 			scenarioIndex++;
 			line = waitTicks = ticksInWorld = passes = fails = 0;
@@ -181,6 +191,7 @@ namespace TerraCommand.Common.Testing
 			AimOffset = null;
 			UseTicks = Probe = 0;
 			NoSpawns = NoPickup = false;
+			waitingSync = null;
 			scenarioDone = false;
 
 			outDir = scenarios.Length == 1 ? outRoot : Path.Combine(outRoot, $"{scenarioIndex + 1:D2}-{ScenarioName}");
@@ -189,12 +200,47 @@ namespace TerraCommand.Common.Testing
 			Report("INFO", $"scenario {scenarios[scenarioIndex]} ({scenarioIndex + 1}/{scenarios.Length}); speed {speed} ticks/frame");
 			try {
 				lines = File.ReadAllLines(scenarios[scenarioIndex]).Select(l => l.Split('#')[0].Trim()).ToList();
-				Boot();
+				if (boot)
+					Boot();
 			}
 			catch (Exception e) {
 				fails++;
 				FinishScenario($"boot failed: {e.Message}");
 			}
+		}
+
+		/// <summary>
+		/// Dedicated server setup (`tc script FILE [OUTDIR]` in the server console). A server doesn't update its
+		/// world while no players are connected, so the script runs synchronously; `wait` and `sync` are ignored.
+		/// Writes READY + results to OUTDIR.
+		/// </summary>
+		public static void RunServerScript(string path, string outDirectory)
+		{
+			Enabled = serverMode = true;
+			outRoot = outDirectory;
+			Directory.CreateDirectory(outRoot);
+			summary = new StreamWriter(Path.Combine(outRoot, "summary.txt"), append: false) { AutoFlush = true };
+			scenarios = new[] { path };
+			scenarioIndex = -1;
+			StartNext(boot: false);
+			while (!scenarioDone) {
+				try {
+					while (line < lines.Count && lines[line].Length == 0)
+						line++;
+					if (line >= lines.Count) {
+						FinishScenario("end of server script");
+						break;
+					}
+					string[] a = lines[line++].Split(' ', StringSplitOptions.RemoveEmptyEntries);
+					if (a[0] != "wait" && a[0] != "sync")
+						Run(a);
+				}
+				catch (Exception e) {
+					fails++;
+					Report("FAIL", $"line {line}: exception {e.GetType().Name}: {e.Message}");
+				}
+			}
+			File.WriteAllText(Path.Combine(outRoot, "READY"), "");
 		}
 
 		/// <summary>Runs once per game tick while in a world.</summary>
@@ -203,11 +249,11 @@ namespace TerraCommand.Common.Testing
 			if (!Enabled || scenarioDone || Main.gameMenu)
 				return;
 			try {
-				if (Main.LocalPlayer == null || !Main.LocalPlayer.active)
+				if (!serverMode && (Main.LocalPlayer == null || !Main.LocalPlayer.active))
 					return;
 				if (ticksInWorld++ < 90) // let the world settle
 					return;
-				if (Main.netMode == NetmodeID.SinglePlayer) {
+				if (Main.netMode != NetmodeID.MultiplayerClient) {
 					Main.dayTime = true;
 					Main.time = Math.Max(Main.time, 16200) % 54000;
 				}
@@ -223,18 +269,18 @@ namespace TerraCommand.Common.Testing
 
 		static void Boot()
 		{
-			if (string.IsNullOrEmpty(worldPath))
+			if (joinAddress == null && string.IsNullOrEmpty(worldPath))
 				throw new InvalidOperationException("TC_WORLD not set");
-			if (!string.IsNullOrEmpty(baselinePath)) {
+			if (joinAddress == null && !string.IsNullOrEmpty(baselinePath)) {
 				File.Copy(baselinePath, worldPath, overwrite: true);
 				string twld = Path.ChangeExtension(baselinePath, ".twld");
 				if (File.Exists(twld))
 					File.Copy(twld, Path.ChangeExtension(worldPath, ".twld"), overwrite: true);
 			}
-			if (!File.Exists(worldPath))
+			if (joinAddress == null && !File.Exists(worldPath))
 				throw new FileNotFoundException("world not found", worldPath);
 
-			var p = new Player { name = "TCTest" };
+			var p = new Player { name = playerName };
 			var vanilla = new List<Item> { new(ItemID.CopperShortsword), new(ItemID.CopperPickaxe), new(ItemID.CopperAxe) };
 			PlayerLoader.SetStartInventory(p, PlayerLoader.GetStartingItems(p, vanilla, mediumCoreDeath: false));
 			// Save, then load back from disk like the character-creation menu does, so every field the
@@ -243,6 +289,16 @@ namespace TerraCommand.Common.Testing
 			PlayerFileData data = Player.LoadPlayer(path, false);
 			data.SetAsActive();
 
+			if (joinAddress != null) {
+				string[] hp = joinAddress.Split(':');
+				Netplay.ListenPort = hp.Length > 1 ? int.Parse(hp[1]) : 7777;
+				Netplay.SetRemoteIP(hp[0]);
+				Main.autoPass = true;
+				Main.statusText = "Joining test server";
+				Netplay.StartTcpClient();
+				Main.menuMode = 14;
+				return;
+			}
 			Main.ActiveWorldFileData = WorldFile.GetAllMetadata(worldPath, false);
 			Main.menuMode = 10;
 			WorldGen.playWorld();
@@ -253,6 +309,12 @@ namespace TerraCommand.Common.Testing
 		static void Step()
 		{
 			if (waitTicks > 0) { waitTicks--; return; }
+			if (waitingSync != null) {
+				if (Directory.GetFiles(syncDir, waitingSync + ".*").Length < peers)
+					return;
+				Report("INFO", $"sync {waitingSync} reached");
+				waitingSync = null;
+			}
 			if (UseTicks > 0 || pendingShot != null) return;
 			while (line < lines.Count && lines[line].Length == 0)
 				line++;
@@ -268,7 +330,7 @@ namespace TerraCommand.Common.Testing
 		static Player P => Main.LocalPlayer;
 		static float F(string s) => float.Parse(s, CultureInfo.InvariantCulture);
 		static int I(string s) => int.Parse(s, CultureInfo.InvariantCulture);
-		static Point PlayerTile => P.Bottom.ToTileCoordinates();
+		static Point PlayerTile => serverMode ? new Point(Main.spawnTileX, Main.spawnTileY) : P.Bottom.ToTileCoordinates();
 
 		static int ItemType(string s)
 		{
@@ -309,7 +371,8 @@ namespace TerraCommand.Common.Testing
 						for (int y = t.Y; y < t.Y + 6; y++) { Main.tile[x, y].ClearEverything(); Main.tile[x, y].ResetToType(TileID.Dirt); PixelTerrain.Clear(x, y); }
 					}
 					WorldGen.RangeFrame(t.X - w / 2 - 1, t.Y - h - 1, t.X + w / 2 + 1, t.Y + 7);
-					Main.sectionManager.SetAllFramedSectionsAsNeedingRefresh();
+					if (!Main.dedServ)
+						Main.sectionManager.SetAllFramedSectionsAsNeedingRefresh();
 					break;
 				}
 				case "settile": { // settile <dx> <dy> <TileID name>
@@ -332,8 +395,8 @@ namespace TerraCommand.Common.Testing
 				case "aim": AimOffset = new Vector2(F(a[1]), F(a[2])); break;
 				case "aimtile": AimOffset = new Vector2((t.X + I(a[1])) * 16 + 8, (t.Y + I(a[2])) * 16 + 8) - P.Center; break;
 				case "use": UseTicks = I(a[1]); break;
-				case "droptile": Item.NewItem(P.GetSource_FromThis(), new Vector2((t.X + I(a[3])) * 16 + 8, (t.Y + I(a[4])) * 16), ItemType(a[1]), I(a[2])); break;
-				case "drop": Item.NewItem(P.GetSource_FromThis(), P.Center + new Vector2(F(a[3]), F(a[4])), ItemType(a[1]), I(a[2])); break;
+				case "droptile": DropItem(new Vector2((t.X + I(a[3])) * 16 + 8, (t.Y + I(a[4])) * 16), ItemType(a[1]), I(a[2])); break;
+				case "drop": DropItem(P.Center + new Vector2(F(a[3]), F(a[4])), ItemType(a[1]), I(a[2])); break;
 				case "stock": OrbitalStockpile.Change(new StockKey(ItemType(a[1]), 0), a.Length > 2 ? long.Parse(a[2]) : 1); break;
 				case "carve": PixelTerrain.RequestCarve(P.Center + new Vector2(F(a[1]), F(a[2])), F(a[3]), a.Length > 4 ? I(a[4]) : 1000, CarveFlags.None); break;
 				case "projectile": { // projectile <type> <dx> <dy> <vx> <vy>
@@ -360,12 +423,27 @@ namespace TerraCommand.Common.Testing
 				}
 				case "order": OrbitalNet.RequestDropPod(new[] { (new StockKey(ItemType(a[1]), 0), I(a[2])) }, P.Center); break;
 				case "hurt": P.Hurt(PlayerDeathReason.LegacyDefault(), I(a[1]), 0, dodgeable: false); break;
+				case "sync": // barrier: wait until all TC_PEERS clients reached this label
+					if (syncDir == null) break;
+					Directory.CreateDirectory(syncDir);
+					File.WriteAllText(Path.Combine(syncDir, $"{a[1]}.{clientId}"), "");
+					waitingSync = a[1];
+					break;
+				case "ready": File.WriteAllText(Path.Combine(outRoot, "READY"), ""); break;
 				case "pickup": NoPickup = a[1] == "off"; break;
 				case "probe": Probe = I(a[1]); break;
 				case "screenshot": pendingShot = a[1]; shotFrames = shotWarmup; break;
 				case "expect": RunExpect(a); break;
 				default: throw new ArgumentException("unknown command " + a[0]);
 			}
+		}
+
+		/// <summary>Like a player throwing an item: on a client the new item must be sent to the server explicitly.</summary>
+		static void DropItem(Vector2 at, int type, int stack)
+		{
+			int idx = Item.NewItem(P.GetSource_FromThis(), at, type, stack);
+			if (Main.netMode == NetmodeID.MultiplayerClient)
+				NetMessage.SendData(MessageID.SyncItem, -1, -1, null, idx, 1f);
 		}
 
 		static void RunExpect(string[] a)

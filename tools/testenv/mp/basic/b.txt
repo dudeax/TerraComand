@@ -1,0 +1,25 @@
+# Client B: observes A's actions through the server.
+goto spawn
+pickup off
+wait 60
+sync start
+sync mined
+expect tile 2 0 partial       # A's pickaxe bite is visible here
+sync launched
+expect tile 3 -1 launchpad
+expect stock Wood >= 60       # shared stockpile reached B
+craft WorkBench               # B crafts from the shared stockpile
+wait 60
+expect stock WorkBench >= 1
+sync bombed
+expect tile -10 1 empty       # A's crater is visible here
+sync deployed
+expect units == 1
+aim 0 -400
+switch                        # take over the body A deployed
+wait 90
+expect units == 1
+expect inv CloneBody == 0     # now wearing the empty body
+sync switched
+screenshot b-final
+sync done

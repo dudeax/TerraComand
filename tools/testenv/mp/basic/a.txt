@@ -1,0 +1,48 @@
+# Client A: does things; client B checks it sees them.
+goto spawn
+pickup off
+wait 60
+sync start
+
+# mining (server computes the pixel mask and broadcasts it)
+hold CopperPickaxe
+aimtile 2 0
+use 2
+wait 60
+expect tile 2 0 partial
+sync mined
+
+# launch pad placed by a client; items thrown on it go to the shared stockpile
+hold LaunchPadItem
+aimtile 3 -1
+use 4
+wait 30
+expect tile 3 -1 launchpad
+droptile Wood 60 3 -3
+wait 150
+expect stock Wood >= 60
+sync launched
+
+# a client-owned bomb
+projectile Bomb -170 -16 0 0
+wait 240
+expect tile -10 1 empty
+sync bombed
+
+# deploy a body
+hold CloneBody
+aim 90 -30
+use 2
+wait 60
+expect units == 1
+sync deployed
+sync switched                 # B takes over that body
+expect units == 1             # B's old body is now the idle one
+
+# drop pod ordered by A, delivered on A
+order Wood 10
+pickup on
+wait 360
+expect inv Wood >= 10
+screenshot a-final
+sync done
