@@ -9,21 +9,41 @@ namespace TerraCommand.Common.Destruction
 	/// <summary>Explosions leave craters; bullets, arrows and bolts chip terrain where they hit.</summary>
 	public class DestructionGlobalProjectile : GlobalProjectile
 	{
+		public override bool InstancePerEntity => true;
+
+		/// <summary>Set when vanilla ran its tile-destroying explosion (we cratered there instead).</summary>
+		bool cratered;
+
 		static bool IsExplosive(Projectile p) => ProjectileID.Sets.Explosive[p.type] || p.aiStyle == ProjAIStyleID.Explosive;
+
+		public override void Load() => On_Projectile.ExplodeTiles += OnExplodeTiles;
+
+		/// <summary>
+		/// Vanilla calls this (on the owner) with the real blast radius in tiles. Carve a matching crater;
+		/// vanilla still runs afterwards for walls and non-carvable tiles (CanExplode blocks carvable ones).
+		/// </summary>
+		static void OnExplodeTiles(On_Projectile.orig_ExplodeTiles orig, Projectile self, Vector2 compareSpot, int radius,
+			int minI, int maxI, int minJ, int maxJ, bool wallSplode)
+		{
+			if (TerraCommandConfig.Instance.PixelExplosions) {
+				var center = new Vector2((minI + maxI + 1) * 8f, (minJ + maxJ + 1) * 8f);
+				float r = Math.Clamp(radius * 16f + 6f, 12f, 400f);
+				Testing.AutoTest.Trace($"ExplodeTiles {self.Name} radius={radius} tiles at {center.ToTileCoordinates()}");
+				PixelTerrain.RequestCarve(center, r, TerrainRules.ExplosivePower, CarveFlags.Explosion);
+				self.GetGlobalProjectile<DestructionGlobalProjectile>().cratered = true;
+			}
+			orig(self, compareSpot, radius, minI, maxI, minJ, maxJ, wallSplode);
+		}
 
 		public override void OnKill(Projectile projectile, int timeLeft)
 		{
 			if (Main.netMode == NetmodeID.MultiplayerClient || !TerraCommandConfig.Instance.PixelExplosions)
 				return;
-			if (!IsExplosive(projectile) || projectile.ModProjectile is Content.Projectiles.DropPod)
+			if (cratered || !IsExplosive(projectile) || projectile.ModProjectile is Content.Projectiles.DropPod)
 				return;
-
-			// Explosives are usually resized to their blast area right before dying.
-			float radius = Math.Clamp(Math.Max(projectile.width, projectile.height) * 0.5f, 12f, 200f);
-			// Vanilla tile-destroying explosives (bombs, dynamite) dig full craters; others (grenades, rockets) scorch.
-			if (!ProjectileID.Sets.Explosive[projectile.type])
-				radius *= 0.5f;
-			PixelTerrain.RequestCarve(projectile.Center, radius, TerrainRules.ExplosivePower, CarveFlags.Explosion);
+			// Explosives that don't destroy tiles in vanilla (grenades, Rocket I/III...) still scorch the ground.
+			Testing.AutoTest.Trace($"scorch {projectile.Name} at {projectile.Center.ToTileCoordinates()}");
+			PixelTerrain.RequestCarve(projectile.Center, 22f, TerrainRules.ExplosivePower, CarveFlags.Explosion);
 		}
 
 		public override bool OnTileCollide(Projectile projectile, Vector2 oldVelocity)

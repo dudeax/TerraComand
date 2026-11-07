@@ -14,6 +14,8 @@ namespace TerraCommand.Common.Net
 		CarveRequest,      // C->S
 		CarveApply,        // S->C
 		TerrainFull,       // S->C
+		MineRequest,       // C->S
+		MaskSet,           // S->C
 		// Join sync
 		FullSyncRequest,   // C->S
 		// Orbital stockpile
@@ -49,6 +51,12 @@ namespace TerraCommand.Common.Net
 					break;
 				case PacketType.TerrainFull:
 					PixelTerrain.ReceiveFull(r);
+					break;
+				case PacketType.MineRequest:
+					PixelTerrain.ReceiveMine(r, from);
+					break;
+				case PacketType.MaskSet:
+					PixelTerrain.ReceiveMaskSet(r);
 					break;
 				case PacketType.FullSyncRequest:
 					if (Main.netMode == NetmodeID.Server) {

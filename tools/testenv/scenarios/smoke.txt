@@ -1,0 +1,8 @@
+# Smoke test: boots into a world and takes a screenshot.
+nospawn
+goto spawn
+wait 30
+screenshot spawn
+expect alive
+expect inv CloneBody >= 2
+expect inv LaunchPadItem >= 1

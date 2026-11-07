@@ -22,10 +22,7 @@ namespace TerraCommand.Common.Destruction
 			}
 
 			Vector2 aim = self.whoAmI == Main.myPlayer ? Main.MouseWorld : self.Center;
-			Vector2 center = PixelTerrain.NearestSolidPixel(x, y, aim);
-			// Copper (35) ~ 5px, Molten (100) ~ 8px, Luminite (225) ~ 13px
-			float radius = 3.5f + pickPower / 22f;
-			PixelTerrain.RequestCarve(center, radius, pickPower, CarveFlags.DropItems);
+			PixelTerrain.RequestMine(x, y, aim, pickPower);
 		}
 	}
 }

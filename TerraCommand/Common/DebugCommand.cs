@@ -78,12 +78,16 @@ namespace TerraCommand.Common
 			int hx = x + 3, hy = y;
 			var saved = Main.tile[hx, hy].TileType;
 			bool had = Main.tile[hx, hy].HasTile;
-			WorldGen.PlaceTile(hx, hy, TileID.LihzahrdBrick, mute: true, forced: true);
+			Main.tile[hx, hy].ResetToType(TileID.LihzahrdBrick);
+			PixelTerrain.Clear(hx, hy);
 			PixelTerrain.RequestCarve(new Vector2(hx * 16 + 8, hy * 16 + 8), 20f, 35, CarveFlags.NoDust);
 			Check(c, ref fails, Main.tile[hx, hy].HasTile && Main.tile[hx, hy].TileType == TileID.LihzahrdBrick && !PixelTerrain.TryGet(hx, hy, out _),
 				"tiles above the carve power are untouched");
-			WorldGen.KillTile(hx, hy, noItem: true);
-			if (had) WorldGen.PlaceTile(hx, hy, saved, mute: true, forced: true);
+			if (had)
+				Main.tile[hx, hy].ResetToType(saved);
+			else
+				Main.tile[hx, hy].ClearTile();
+			WorldGen.SquareTileFrame(hx, hy);
 
 			// persistence round trip for terrain
 			PixelTerrain.RequestCarve(new Vector2((x + 6) * 16 + 2, y * 16 + 2), 3f, 1000, CarveFlags.NoDust);

@@ -24,7 +24,7 @@ namespace TerraCommand.Common.Units
 				OrbitalUISystem.Toggle();
 		}
 
-		void SwitchBody()
+		internal void SwitchBody()
 		{
 			var units = UnitSystem.TeamUnits(Player.team).OrderBy(u => u.NPC.whoAmI).ToList();
 			if (units.Count == 0) {
@@ -39,7 +39,7 @@ namespace TerraCommand.Common.Units
 			UnitSystem.RequestSwap(Player, target, leaveBody: true);
 		}
 
-		void CycleOrders()
+		internal void CycleOrders()
 		{
 			var units = UnitSystem.TeamUnits(Player.team).ToList();
 			if (units.Count == 0)

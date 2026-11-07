@@ -106,7 +106,8 @@ namespace TerraCommand.Content.Tiles
 			if (++timer < 45)
 				return;
 			timer = 0;
-			var area = new Rectangle(Position.X * 16, (Position.Y - 3) * 16, 48, 5 * 16);
+			// Generous catch area: a tile past each edge and four tiles up, so tossed stacks don't bounce off.
+			var area = new Rectangle((Position.X - 1) * 16, (Position.Y - 4) * 16, 5 * 16, 6 * 16);
 			bool launched = false;
 			int iconType = 0;
 			for (int n = 0; n < Main.maxItems; n++) {

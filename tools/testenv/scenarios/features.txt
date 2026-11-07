@@ -1,0 +1,98 @@
+# Full feature pass. Tile offsets are relative to the tile under the player's feet (row 0 = ground surface).
+nospawn
+goto spawn
+flatten 40 14
+wait 30
+
+# ---- pixel mining: a copper pickaxe chips part of a block instead of breaking it outright
+hold CopperPickaxe
+aimtile 2 0
+use 2                # a single swing (dirt takes 2)
+wait 30
+expect tile 2 0 partial
+screenshot 01-mining
+
+# ---- explicit carve + bomb crater + bullets chipping
+carve 140 30 30
+expect damaged >= 6
+projectile Bomb -170 -16 0 0
+wait 200
+expect tile -10 1 empty
+projectile Bullet -60 -60 0 12
+projectile Bullet -80 -60 0 12
+wait 20
+screenshot 02-craters
+
+# ---- launch pad: placed with the real item, auto-launches items thrown onto it
+hold LaunchPadItem
+aimtile 3 -1
+use 4
+wait 5
+expect tile 3 -1 launchpad
+pickup off   # the pad is within the player's grab range
+droptile Wood 60 3 -3
+wait 30
+screenshot 03-launch
+wait 60
+expect stock Wood >= 60
+expect inv Wood == 0
+pickup on
+interact 3 -1 StoneBlock 40
+expect stock StoneBlock >= 40
+
+# ---- crafting in orbit: work bench first, then a recipe that needs it
+craft WorkBench
+wait 2
+expect stock WorkBench >= 1
+craft WoodenChair
+wait 2
+expect stock WoodenChair >= 1
+menu
+wait 10
+expect menu open
+screenshot 04-orbital-menu
+menu
+
+# ---- building from orbit
+buildkey StoneBlock
+hold OrbitalConstructor
+aimtile -3 -3
+use 2
+wait 5
+expect tile -3 -3 solid
+expect stock StoneBlock <= 39
+
+# ---- drop pod delivery
+order WoodenChair 1
+wait 45
+screenshot 05-droppod-falling
+wait 150
+expect inv WoodenChair >= 1
+
+# ---- bodies: deploy, swap into it, swap back
+hold CloneBody
+aim 70 -30
+use 2
+wait 10
+expect units == 1
+give IronBroadsword
+aim 0 -400
+wait 5
+screenshot 06-unit-deployed
+switch
+wait 10
+expect units == 1
+expect inv CloneBody == 0
+screenshot 07-swapped
+switch
+wait 10
+expect inv CloneBody >= 1
+expect inv IronBroadsword >= 1
+
+# ---- death transfers control to the remaining body
+wait 40
+hurt 9999
+wait 30
+expect alive
+expect units == 0
+screenshot 08-after-death

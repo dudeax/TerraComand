@@ -1,0 +1,29 @@
+# Pickaxe power and hardness: copper can't carve Lihzahrd brick, but can carve dirt and stone.
+nospawn
+goto spawn
+flatten 30 12
+wait 30
+settile 2 0 LihzahrdBrick
+settile -2 0 Stone
+settile -4 0 Dirt
+hold CopperPickaxe
+aimtile 2 0
+use 30
+wait 5
+expect tile 2 0 solid
+aimtile -2 0
+probe 0
+use 2                          # one swing
+wait 30
+expect tile -2 0 partial
+use 60                         # vanilla: copper breaks stone in 3 hits
+wait 5
+expect tile -2 0 empty
+expect inv StoneBlock >= 1     # mining drops the block's item
+aimtile -4 0
+use 2
+wait 30
+expect tile -4 0 partial       # dirt: 2 hits with copper
+use 2
+wait 30
+expect tile -4 0 empty

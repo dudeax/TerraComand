@@ -159,6 +159,96 @@ namespace TerraCommand.Common.Destruction
 				NetMessage.SendData(MessageID.TileManipulation, -1, -1, null, drop ? 0 : 4, i, j);
 		}
 
+		// ---------------------------------------------------------------- mining
+
+		/// <summary>
+		/// One pickaxe hit. Mirrors vanilla pacing: a tile has 100 HP and a hit deals pick power (doubled on
+		/// soft ground), so each hit removes that percentage of the tile's pixels - the ones nearest the aim
+		/// point, which carves a round bite where the player is pointing.
+		/// </summary>
+		public static void RequestMine(int i, int j, Vector2 aim, int pickPower)
+		{
+			if (Main.netMode == NetmodeID.MultiplayerClient) {
+				ModPacket p = PacketHandler.Create(PacketType.MineRequest);
+				p.Write(i); p.Write(j); p.Write(aim.X); p.Write(aim.Y); p.Write((short)pickPower);
+				p.Send();
+				return;
+			}
+			ApplyMine(i, j, aim, pickPower);
+		}
+
+		internal static void ReceiveMine(BinaryReader r, int from)
+		{
+			int i = r.ReadInt32(), j = r.ReadInt32();
+			var aim = new Vector2(r.ReadSingle(), r.ReadSingle());
+			int power = r.ReadInt16();
+			if (Main.netMode == NetmodeID.Server && Vector2.Distance(Main.player[from].Center, new Vector2(i * 16, j * 16)) < 1200f)
+				ApplyMine(i, j, aim, power);
+		}
+
+		static void ApplyMine(int i, int j, Vector2 aim, int pickPower)
+		{
+			if (!TerrainRules.IsCarvable(i, j) || !WorldGen.CanKillTile(i, j))
+				return;
+			Tile tile = Main.tile[i, j];
+			int type = tile.TileType;
+			if (pickPower < TerrainRules.MinPick(type))
+				return;
+
+			int hitDamage = TerrainRules.Softness(type) >= 1f ? pickPower * 2 : pickPower;
+			int pixels = Math.Clamp((int)Math.Ceiling(Sub * Sub * hitDamage / 100f), 1, Sub * Sub);
+
+			var key = new Point16(i, j);
+			GetDamage(key, type, out Damage d);
+			Span<(float dist, int bit)> free = stackalloc (float, int)[Sub * Sub];
+			int n = 0;
+			for (int b = 0; b < Sub * Sub; b++) {
+				if ((d.Mask & (1UL << b)) != 0)
+					continue;
+				var p = new Vector2(i * 16 + (b % Sub) * SubSize + 1, j * 16 + (b / Sub) * SubSize + 1);
+				free[n++] = (Vector2.DistanceSquared(p, aim), b);
+			}
+			var slice = free[..n];
+			slice.Sort((x, y) => x.dist != y.dist ? x.dist.CompareTo(y.dist) : x.bit.CompareTo(y.bit));
+			for (int k = 0; k < Math.Min(pixels, n); k++)
+				d.Mask |= 1UL << slice[k].bit;
+
+			if (!Main.dedServ)
+				for (int k = 0; k < 3; k++)
+					WorldGen.KillTile_MakeTileDust(i, j, tile);
+
+			int threshold = (int)Math.Ceiling(Sub * Sub * TerraCommandConfig.Instance.CrumbleThreshold);
+			if (BitOperations.PopCount(d.Mask) >= threshold) {
+				damage.Remove(key);
+				Crumble(i, j, drop: true);
+				return;
+			}
+			damage[key] = d;
+			if (Main.netMode == NetmodeID.Server) {
+				ModPacket p = PacketHandler.Create(PacketType.MaskSet);
+				p.Write(i); p.Write(j); p.Write(d.Mask); p.Write(d.Type);
+				p.Send();
+			}
+		}
+
+		static void GetDamage(Point16 key, int type, out Damage d)
+		{
+			damage.TryGetValue(key, out d);
+			if (d.Type != type)
+				d = new Damage { Type = (ushort)type };
+		}
+
+		internal static void ReceiveMaskSet(BinaryReader r)
+		{
+			int i = r.ReadInt32(), j = r.ReadInt32();
+			var d = new Damage { Mask = r.ReadUInt64(), Type = r.ReadUInt16() };
+			if (Main.netMode != NetmodeID.MultiplayerClient)
+				return;
+			if (WorldGen.InWorld(i, j) && Main.tile[i, j].HasTile && !Main.dedServ)
+				WorldGen.KillTile_MakeTileDust(i, j, Main.tile[i, j]);
+			damage[new Point16(i, j)] = d;
+		}
+
 		/// <summary>Finds the remaining (uncarved) art pixel of a tile nearest to a world position.</summary>
 		public static Vector2 NearestSolidPixel(int i, int j, Vector2 target)
 		{

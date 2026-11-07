@@ -1,0 +1,22 @@
+# Idle bodies fight with the weapon they hold, and follow orders.
+nospawn
+goto spawn
+flatten 60 14
+wait 30
+give FlintlockPistol
+give MusketBall 100
+hold FlintlockPistol
+hold CloneBody
+aim 90 -30
+use 2
+wait 10
+hold FlintlockPistol
+aim 0 -400
+switch                          # our pistol-holding body stays behind as an idle sentry
+wait 10
+expect units == 1
+spawnnpc Zombie 200 -30
+wait 600
+expect npcs Zombie == 0         # the sentry shot it
+screenshot sentry
+orders                          # follow

@@ -101,7 +101,7 @@ namespace TerraCommand.Common.UI
 		{
 			Refresh();
 			int stockW = Cols * Slot, recipeW = 5 * Slot;
-			int w = Pad * 3 + stockW + recipeW, h = Pad * 4 + 24 + Rows * Slot + Slot + 30;
+			int w = Pad * 3 + stockW + recipeW, h = Pad * 4 + 24 + Rows * Slot + Slot + 46;
 			var panel = new Rectangle(Main.screenWidth / 2 - w / 2, Main.screenHeight / 2 - h / 2, w, h);
 			Utils.DrawInvBG(sb, panel, new Color(20, 25, 50, 230));
 			bool hover = panel.Contains(Main.MouseScreen.ToPoint());
@@ -193,8 +193,10 @@ namespace TerraCommand.Common.UI
 				Main.NewText("Drop pod inbound.", Color.Orange);
 			}
 
-			string help = "L-click: add to pod (Shift: stack)   R-click block: build with Orbital Constructor   Recipes: click to craft (Shift: x10)";
-			Utils.DrawBorderString(sb, help, new Vector2(panel.X + Pad, panel.Bottom - 26), Color.Gray, 0.7f);
+			Utils.DrawBorderString(sb, "Stockpile: L-click add to drop pod (Shift: whole stack), R-click a block to build with it",
+				new Vector2(panel.X + Pad, panel.Bottom - 40), Color.Gray, 0.65f);
+			Utils.DrawBorderString(sb, "Fabricate: click to craft one (Shift: x10)",
+				new Vector2(panel.X + Pad, panel.Bottom - 22), Color.Gray, 0.65f);
 		}
 
 		static void AddToManifest(StockKey k, int count)
