@@ -1,0 +1,35 @@
+# Per-pixel collision: bodies fit through carved openings and walk over pixel-rough ground.
+# (A body is 20x42 px. Tile offsets are relative to the tile under the player's feet; row 0 = ground.)
+nospawn
+goto spawn
+flatten 50 16
+wait 30
+
+# A 2-thick, 6-high stone wall with a 44px-tall doorway: rows -1/-2 removed entirely plus the bottom 12px
+# of row -3, which stays partly carved. Whole-tile collision would see only a 32px gap and block.
+fill 4 -6 5 -1 Stone
+carverect 64 -44 96 0
+wait 5
+expect tile 4 -3 partial
+mark
+walk right 60
+wait 5
+expect moved >= 8               # walked through the doorway
+screenshot doorway
+
+# An intact wall still blocks.
+fill 3 -6 3 -1 Stone
+mark
+walk right 120
+expect moved <= 2.5
+
+# Rough ground: a dirt block with its top 10px carved off leaves a 6px bump, stepped over without jumping.
+goto spawn
+fill -6 -1 -6 -1 Dirt
+carverect -96 -16 -80 -6
+wait 5
+expect tile -6 -1 partial
+mark
+walk left 90
+expect moved <= -5
+screenshot bump

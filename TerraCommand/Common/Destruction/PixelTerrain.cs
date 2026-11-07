@@ -111,6 +111,7 @@ namespace TerraCommand.Common.Destruction
 					if (authority && !WorldGen.CanKillTile(i, j))
 						continue;
 
+					SquareOff(i, j, authority);
 					float r = radius * TerrainRules.Softness(type);
 					float r2 = r * r;
 					var key = new Point16(i, j);
@@ -152,11 +153,58 @@ namespace TerraCommand.Common.Destruction
 			return removedTotal;
 		}
 
+		/// <summary>
+		/// Carved tiles are always plain full blocks with a pixel mask, so collision and drawing only deal with
+		/// one shape. A sloped / half block being carved is squared off first (authority, synced to clients).
+		/// </summary>
+		static void SquareOff(int i, int j, bool authority)
+		{
+			Tile t = Main.tile[i, j];
+			if (!authority || (t.Slope == SlopeType.Solid && !t.IsHalfBlock))
+				return;
+			t.Slope = SlopeType.Solid;
+			t.IsHalfBlock = false;
+			WorldGen.SquareTileFrame(i, j);
+			if (Main.netMode == NetmodeID.Server)
+				NetMessage.SendTileSquare(-1, i, j, 1);
+		}
+
 		static void Crumble(int i, int j, bool drop)
 		{
 			WorldGen.KillTile(i, j, fail: false, effectOnly: false, noItem: !drop);
 			if (Main.netMode == NetmodeID.Server)
 				NetMessage.SendData(MessageID.TileManipulation, -1, -1, null, drop ? 0 : 4, i, j);
+		}
+
+		/// <summary>
+		/// Removes every art pixel whose centre lies inside a world-pixel rectangle (authority only, not synced:
+		/// precise shapes for tests and scripted terrain).
+		/// </summary>
+		public static void CarveRect(Rectangle r)
+		{
+			if (Main.netMode == NetmodeID.MultiplayerClient)
+				return;
+			int threshold = (int)Math.Ceiling(Sub * Sub * TerraCommandConfig.Instance.CrumbleThreshold);
+			for (int i = r.Left / 16; i <= (r.Right - 1) / 16; i++) {
+				for (int j = r.Top / 16; j <= (r.Bottom - 1) / 16; j++) {
+					if (!TerrainRules.IsCarvable(i, j))
+						continue;
+					SquareOff(i, j, authority: true);
+					var key = new Point16(i, j);
+					GetDamage(key, Main.tile[i, j].TileType, out Damage d);
+					for (int b = 0; b < Sub * Sub; b++) {
+						int cx = i * 16 + (b % Sub) * SubSize + 1, cy = j * 16 + (b / Sub) * SubSize + 1;
+						if (cx >= r.Left && cx < r.Right && cy >= r.Top && cy < r.Bottom)
+							d.Mask |= 1UL << b;
+					}
+					if (BitOperations.PopCount(d.Mask) >= threshold) {
+						damage.Remove(key);
+						Crumble(i, j, drop: false);
+					}
+					else if (d.Mask != 0)
+						damage[key] = d;
+				}
+			}
 		}
 
 		// ---------------------------------------------------------------- mining
@@ -195,6 +243,7 @@ namespace TerraCommand.Common.Destruction
 			if (pickPower < TerrainRules.MinPick(type))
 				return;
 
+			SquareOff(i, j, authority: true);
 			int hitDamage = TerrainRules.Softness(type) >= 1f ? pickPower * 2 : pickPower;
 			int pixels = Math.Clamp((int)Math.Ceiling(Sub * Sub * hitDamage / 100f), 1, Sub * Sub);
 

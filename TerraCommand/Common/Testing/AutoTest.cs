@@ -53,6 +53,8 @@ namespace TerraCommand.Common.Testing
 		internal static bool NoSpawns;
 		internal static int Probe;
 		internal static bool NoPickup;
+		internal static int WalkDir, WalkTicks, JumpTicks, DownTicks;
+		static Vector2 markPos;
 
 		static int EnvInt(string name, int def) => int.TryParse(Environment.GetEnvironmentVariable(name), out int v) ? v : def;
 
@@ -189,7 +191,7 @@ namespace TerraCommand.Common.Testing
 			pendingShot = null;
 			shotFrames = 0;
 			AimOffset = null;
-			UseTicks = Probe = 0;
+			UseTicks = Probe = WalkTicks = JumpTicks = DownTicks = 0;
 			NoSpawns = NoPickup = false;
 			waitingSync = null;
 			scenarioDone = false;
@@ -309,6 +311,7 @@ namespace TerraCommand.Common.Testing
 		static void Step()
 		{
 			if (waitTicks > 0) { waitTicks--; return; }
+			if (WalkTicks > 0 || JumpTicks > 0 || DownTicks > 0) return;
 			if (waitingSync != null) {
 				if (Directory.GetFiles(syncDir, waitingSync + ".*").Length < peers)
 					return;
@@ -382,6 +385,28 @@ namespace TerraCommand.Common.Testing
 					WorldGen.SquareTileFrame(x, y);
 					break;
 				}
+				case "fill": { // fill dx0 dy0 dx1 dy1 TileName
+					ushort type = (ushort)TileID.Search.GetId(a[5]);
+					for (int x = t.X + I(a[1]); x <= t.X + I(a[3]); x++)
+						for (int y = t.Y + I(a[2]); y <= t.Y + I(a[4]); y++) {
+							Main.tile[x, y].ResetToType(type);
+							PixelTerrain.Clear(x, y);
+						}
+					WorldGen.RangeFrame(t.X + I(a[1]) - 1, t.Y + I(a[2]) - 1, t.X + I(a[3]) + 1, t.Y + I(a[4]) + 1);
+					if (Main.netMode == NetmodeID.Server)
+						NetMessage.SendTileSquare(-1, t.X + I(a[1]), t.Y + I(a[2]), I(a[3]) - I(a[1]) + 1, I(a[4]) - I(a[2]) + 1);
+					break;
+				}
+				case "carvetile": // carvetile <dtx> <dty> <r> : carve centered on a tile-grid point (dtx, dty may be fractional)
+					PixelTerrain.RequestCarve(new Vector2((t.X + F(a[1])) * 16, (t.Y + F(a[2])) * 16), F(a[3]), 1000, CarveFlags.None);
+					break;
+				case "carverect": // carverect x0 y0 x1 y1 : world-pixel offsets from the top-left of the player's foot tile
+					PixelTerrain.CarveRect(new Rectangle(t.X * 16 + I(a[1]), t.Y * 16 + I(a[2]), I(a[3]) - I(a[1]), I(a[4]) - I(a[2])));
+					break;
+				case "walk": WalkDir = a[1] == "left" ? -1 : 1; WalkTicks = I(a[2]); break;
+				case "jump": JumpTicks = I(a[1]); break;
+				case "crouch": DownTicks = I(a[1]); break;
+				case "mark": markPos = P.Bottom; break;
 				case "give": P.QuickSpawnItem(P.GetSource_FromThis(), ItemType(a[1]), a.Length > 2 ? I(a[2]) : 1); break;
 				case "clearinv": for (int i = 0; i < 58; i++) P.inventory[i].TurnToAir(); break;
 				case "hold": {
@@ -473,6 +498,16 @@ namespace TerraCommand.Common.Testing
 					Expect(ok, $"{desc} (tile {x},{y} has={has} type={Main.tile[x, y].TileType})");
 					break;
 				}
+				case "moved": { // horizontal distance in tiles since `mark` (signed: + = right)
+					float d = (P.Bottom.X - markPos.X) / 16f;
+					Expect(Cmp(d, a[2], F(a[3])), $"{desc} (moved {d:0.0} tiles, now at {P.Bottom.ToTileCoordinates()})");
+					break;
+				}
+				case "rose": { // vertical distance in tiles since `mark` (+ = up)
+					float d = (markPos.Y - P.Bottom.Y) / 16f;
+					Expect(Cmp(d, a[2], F(a[3])), $"{desc} (rose {d:0.0} tiles)");
+					break;
+				}
 				case "wall": { int x = t.X + I(a[2]), y = t.Y + I(a[3]); Expect(Main.tile[x, y].WallType != WallID.None, $"{desc} (wall {Main.tile[x, y].WallType})"); break; }
 				case "alive": Expect(!P.dead, $"{desc} (life {P.statLife})"); break;
 				case "life": Expect(Cmp(P.statLife, a[2], F(a[3])), $"{desc} (life {P.statLife})"); break;
@@ -544,6 +579,19 @@ namespace TerraCommand.Common.Testing
 				AutoTest.UseTicks--;
 				Player.controlUseItem = true;
 				Player.releaseUseItem = AutoTest.UseTicks % 2 == 0 || Player.HeldItem.autoReuse;
+			}
+			if (AutoTest.WalkTicks > 0) {
+				AutoTest.WalkTicks--;
+				Player.controlLeft = AutoTest.WalkDir < 0;
+				Player.controlRight = AutoTest.WalkDir > 0;
+			}
+			if (AutoTest.JumpTicks > 0) {
+				AutoTest.JumpTicks--;
+				Player.controlJump = true;
+			}
+			if (AutoTest.DownTicks > 0) {
+				AutoTest.DownTicks--;
+				Player.controlDown = true;
 			}
 			AutoTest.ProbeLog(Player, "SetControls");
 		}
