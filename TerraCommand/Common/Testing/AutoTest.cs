@@ -55,6 +55,7 @@ namespace TerraCommand.Common.Testing
 		internal static bool NoPickup;
 		internal static int WalkDir, WalkTicks, JumpTicks, DownTicks;
 		static Vector2 markPos;
+		static float peakRise;
 
 		static int EnvInt(string name, int def) => int.TryParse(Environment.GetEnvironmentVariable(name), out int v) ? v : def;
 
@@ -259,6 +260,8 @@ namespace TerraCommand.Common.Testing
 					Main.dayTime = true;
 					Main.time = Math.Max(Main.time, 16200) % 54000;
 				}
+				if (!serverMode && P != null)
+					peakRise = Math.Max(peakRise, (markPos.Y - P.Bottom.Y) / 16f);
 				Step();
 			}
 			catch (Exception e) {
@@ -362,11 +365,20 @@ namespace TerraCommand.Common.Testing
 				case "log": Report("INFO", string.Join(' ', a.Skip(1))); break;
 				case "quit": FinishScenario("quit"); break;
 				case "nospawn": NoSpawns = true; foreach (NPC n in Main.npc) if (n.active && !n.friendly && !n.townNPC) n.active = false; break;
-				case "goto": {
-					Vector2 to = a[1] == "spawn" ? new Vector2(Main.spawnTileX * 16, Main.spawnTileY * 16) : new Vector2(I(a[1]) * 16, I(a[2]) * 16);
+				case "goto": { // goto spawn | goto x y | goto rel dx dy   (tiles)
+					Vector2 to = a[1] == "spawn" ? new Vector2(Main.spawnTileX * 16, Main.spawnTileY * 16)
+						: a[1] == "rel" ? P.Bottom + new Vector2(F(a[2]) * 16, F(a[3]) * 16)
+						: new Vector2(I(a[1]) * 16, I(a[2]) * 16);
 					P.Bottom = to; P.velocity = Vector2.Zero; P.fallStart = (int)(P.position.Y / 16);
+					P.GetModPlayer<Physics.BodyPhysicsPlayer>().SkipImpactCheck();
 					break;
 				}
+				case "equip": { // equip <item> : into the first empty accessory slot
+					int slot = Array.FindIndex(P.armor, 3, 7, it => it.IsAir);
+					P.armor[slot] = new Item(ItemType(a[1]));
+					break;
+				}
+				case "heal": P.statLife = P.statLifeMax2; break;
 				case "flatten": { // clear a w x h area above the player's feet and lay a dirt floor, for repeatable setups
 					int w = I(a[1]), h = I(a[2]);
 					for (int x = t.X - w / 2; x <= t.X + w / 2; x++) {
@@ -406,7 +418,7 @@ namespace TerraCommand.Common.Testing
 				case "walk": WalkDir = a[1] == "left" ? -1 : 1; WalkTicks = I(a[2]); break;
 				case "jump": JumpTicks = I(a[1]); break;
 				case "crouch": DownTicks = I(a[1]); break;
-				case "mark": markPos = P.Bottom; break;
+				case "mark": markPos = P.Bottom; peakRise = 0f; break;
 				case "give": P.QuickSpawnItem(P.GetSource_FromThis(), ItemType(a[1]), a.Length > 2 ? I(a[2]) : 1); break;
 				case "clearinv": for (int i = 0; i < 58; i++) P.inventory[i].TurnToAir(); break;
 				case "hold": {
@@ -508,6 +520,10 @@ namespace TerraCommand.Common.Testing
 					Expect(Cmp(d, a[2], F(a[3])), $"{desc} (rose {d:0.0} tiles)");
 					break;
 				}
+				case "peak": Expect(Cmp(peakRise, a[2], F(a[3])), $"{desc} (peak {peakRise:0.0} tiles above mark)"); break;
+				case "mounted": Expect(P.mount.Active == (a[2] == "yes"), $"{desc} (mount active={P.mount.Active})"); break;
+				case "knocked": Expect((P.GetModPlayer<Physics.BodyPhysicsPlayer>().KnockedTicks > 0) == (a[2] == "yes"), desc); break;
+				case "fuel": { float f = P.GetModPlayer<Physics.BodyPhysicsPlayer>().FuelMax; Expect(Cmp(f, a[2], F(a[3])), $"{desc} (max fuel {f:0})"); break; }
 				case "wall": { int x = t.X + I(a[2]), y = t.Y + I(a[3]); Expect(Main.tile[x, y].WallType != WallID.None, $"{desc} (wall {Main.tile[x, y].WallType})"); break; }
 				case "alive": Expect(!P.dead, $"{desc} (life {P.statLife})"); break;
 				case "life": Expect(Cmp(P.statLife, a[2], F(a[3])), $"{desc} (life {P.statLife})"); break;

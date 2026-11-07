@@ -1,0 +1,70 @@
+# Cortex Command style movement: short hop, fuel-limited jetpack, momentum, impact damage, blasts, no mounts.
+nospawn
+goto spawn
+flatten 80 40
+wait 30
+
+# a tap of jump is only a short hop
+mark
+jump 1
+wait 60
+expect peak <= 2.5
+expect peak >= 0.5
+
+# holding jump: hop, then the jetpack carries you up
+mark
+jump 60
+wait 120
+expect peak >= 5
+expect life >= 60                # landing from your own jetpack climb stings, but isn't lethal
+heal
+
+# fuel runs out: holding jump forever doesn't fly forever, and you come back down
+mark
+jump 400
+wait 200
+expect peak <= 16
+expect rose <= 0.5
+
+# momentum: you keep sliding a little after letting go
+walk right 60
+mark
+wait 30
+expect moved >= 0.3
+
+# wings become jetpack fuel
+expect fuel <= 50
+equip AngelWings
+wait 5
+expect fuel >= 80                 # Angel Wings: +60 fuel on top of the base 30
+mark
+jump 150
+wait 240
+expect peak >= 12
+screenshot after-wings
+
+# mounts don't work
+give SlimySaddle
+hold SlimySaddle
+use 4
+wait 10
+expect mounted no
+
+# impact damage: a 40 tile drop hurts (vanilla would be harmless at this height with no fall damage reset)
+heal
+goto rel 0 -40
+wait 150
+expect life < 100
+expect alive
+
+# a nearby bomb throws you (and knocks you flat)
+heal
+wait 60
+mark
+projectile Bomb 40 -10 0 0
+wait 182                         # bomb fuse is 180 ticks
+expect knocked yes
+screenshot blast
+wait 120
+expect moved <= -1.5
+expect moved >= -12              # flung, not launched across the map

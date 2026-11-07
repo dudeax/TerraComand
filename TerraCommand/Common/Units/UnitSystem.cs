@@ -115,6 +115,7 @@ namespace TerraCommand.Common.Units
 			got.ApplyTo(p);
 			p.Bottom = bottom;
 			p.velocity = Vector2.Zero;
+			p.GetModPlayer<Physics.BodyPhysicsPlayer>().SkipImpactCheck();
 			p.fallStart = (int)(p.position.Y / 16f);
 			p.immune = true;
 			p.immuneTime = 30;

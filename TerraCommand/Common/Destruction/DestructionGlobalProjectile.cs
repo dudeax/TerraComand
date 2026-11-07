@@ -37,6 +37,8 @@ namespace TerraCommand.Common.Destruction
 
 		public override void OnKill(Projectile projectile, int timeLeft)
 		{
+			if (IsExplosive(projectile) && projectile.ModProjectile is not Content.Projectiles.LaunchRocket)
+				Physics.Explosions.Blast(projectile.Center, (Physics.Explosions.BlastRadiusTiles(projectile) + 2) * 16f, Physics.Tuning.BlastImpulse);
 			if (Main.netMode == NetmodeID.MultiplayerClient || !TerraCommandConfig.Instance.PixelExplosions)
 				return;
 			if (cratered || !IsExplosive(projectile) || projectile.ModProjectile is Content.Projectiles.DropPod)
