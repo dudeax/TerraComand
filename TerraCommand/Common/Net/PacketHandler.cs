@@ -24,7 +24,9 @@ namespace TerraCommand.Common.Net
 		CraftRequest,      // C->S
 		OrderShip,         // C->S
 		ShipLaunch,        // C->S
-		ShipCargo,         // S->C
+		ShipCargo,         // S->C: a ship's cargo list
+		ShipHold,          // C->S: take from / put into a landed ship's hold
+		ShipGive,          // S->C: an item taken from a hold, for the player's pack
 		BuildRequest,      // C->S
 		// Units
 		DeployUnit,        // C->S
@@ -80,6 +82,8 @@ namespace TerraCommand.Common.Net
 				case PacketType.OrderShip:
 				case PacketType.ShipLaunch:
 				case PacketType.ShipCargo:
+				case PacketType.ShipHold:
+				case PacketType.ShipGive:
 					Orbital.ShipSystem.Receive(type, r, from);
 					break;
 				case PacketType.CraftRequest:

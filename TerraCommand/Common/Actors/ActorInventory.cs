@@ -86,8 +86,11 @@ namespace TerraCommand.Common.Actors
 				Cycle(-1);
 			ItemInReach = FindItemInReach();
 			if (wantPickup && !busy) {
+				var ship = UI.ShipHoldUI.NearestLandedShip(Player);
 				if (ItemInReach >= 0)
 					PickUpItem(ItemInReach);
+				else if (ship != null)
+					UI.ShipHoldUI.Open(ship);   // standing by a landed ship: open its hold
 				else
 					interactTicks = 2; // nothing in reach: use / open what's under the cursor (doors, chests...)
 			}

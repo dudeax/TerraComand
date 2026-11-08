@@ -67,5 +67,14 @@ ship 3 Wood 10
 pickup on
 wait 560
 expect inv Wood >= 10
+# the hold, used from a client (the server does the moving)
+give Gel 15
+shiphold put Gel 15
+wait 30
+expect shipcargo >= 15
+expect inv Gel == 0
+shiphold take 0
+wait 30
+expect inv Gel >= 15
 screenshot a-final
 sync done

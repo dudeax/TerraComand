@@ -27,6 +27,33 @@ wait 450
 expect delivered >= 1
 expect stock CloneBody >= 1
 
+# the hold: load from the pack and take back out, like a chest
+ship 3
+wait 470
+expect shipstate waiting
+goto rel 3 0
+give Wood 30
+shiphold open
+wait 2
+expect menu closed
+shiphold put Wood 20
+wait 10
+expect shipcargo >= 20
+expect inv Wood == 10
+shiphold take 0
+wait 10
+expect inv Wood == 30
+expect shipcargo == 0
+shiphold put Wood 25
+wait 5
+screenshot ship-hold
+mark
+shiplaunch
+wait 450
+expect delivered >= 1
+expect stock Wood >= 25
+goto rel -3 0
+
 # order those bodies again: they step out where it lands
 ship -8 CloneBody 1
 wait 470

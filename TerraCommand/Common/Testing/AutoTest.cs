@@ -634,6 +634,24 @@ namespace TerraCommand.Common.Testing
 					break;
 				}
 				case "shiplaunch": ShipSystem.RequestLaunch(P); break;
+				case "shiphold": { // shiphold open | take <index> | put <Item> [n] : use the hold of the landed ship next to the player
+					var ship = UI.ShipHoldUI.NearestLandedShip(P) ?? throw new ArgumentException("no landed ship in reach");
+					if (a[1] == "open")
+						UI.ShipHoldUI.Open(ship);
+					else if (a[1] == "take")
+						ShipSystem.RequestTake(P, ship.NPC.whoAmI, I(a[2]));
+					else {
+						int type = ItemType(a[2]), n = a.Length > 3 ? I(a[3]) : 1;
+						int slot = Array.FindIndex(P.inventory, it => it.type == type);
+						if (slot < 0) throw new ArgumentException("not in inventory: " + a[2]);
+						Item put = P.inventory[slot].Clone();
+						put.stack = Math.Min(n, P.inventory[slot].stack);
+						P.inventory[slot].stack -= put.stack;
+						if (P.inventory[slot].stack <= 0) P.inventory[slot].TurnToAir();
+						ShipSystem.RequestPut(P, ship.NPC.whoAmI, put);
+					}
+					break;
+				}
 				case "shiphit": { // shiphit <damage> : enemy fire hits the nearest ship
 					NPC s = Main.npc.Where(n => n.active && n.ModNPC is Content.NPCs.CargoShip).OrderBy(n => Vector2.Distance(n.Center, P.Center)).First();
 					s.SimpleStrikeNPC(I(a[1]), 0);

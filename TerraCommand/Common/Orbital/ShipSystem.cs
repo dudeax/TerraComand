@@ -5,6 +5,7 @@ using System.Linq;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Terraria;
+using Terraria.Audio;
 using Terraria.Chat;
 using Terraria.GameContent;
 using Terraria.ID;
@@ -24,7 +25,7 @@ namespace TerraCommand.Common.Orbital
 	public class ShipSystem : ModSystem
 	{
 		static readonly Dictionary<int, List<Item>> cargo = new();      // authority: npc index -> cargo
-		static readonly Dictionary<int, int> cargoCountClient = new();  // clients: npc index -> item count (for the label)
+		static readonly Dictionary<int, List<Item>> cargoClient = new(); // clients: npc index -> a copy of the cargo (label + hold UI)
 		static readonly List<Item> transitOnLoad = new();               // cargo of ships in flight when the world was saved
 
 		static bool IsClient => Main.netMode == NetmodeID.MultiplayerClient;
@@ -33,13 +34,103 @@ namespace TerraCommand.Common.Orbital
 		public override void ClearWorld()
 		{
 			cargo.Clear();
-			cargoCountClient.Clear();
+			cargoClient.Clear();
 			PickingLz = false;
 		}
 
-		public static int CargoCountClient(int npc) =>
-			Main.netMode == NetmodeID.SinglePlayer ? (cargo.TryGetValue(npc, out var c) ? c.Sum(i => i.stack) : 0)
-			: cargoCountClient.TryGetValue(npc, out int n) ? n : 0;
+		public static int CargoCountClient(int npc) => CargoView(npc).Sum(i => i.stack);
+
+		/// <summary>The cargo as this machine knows it (the real list on the authority, a synced copy on clients).</summary>
+		public static IReadOnlyList<Item> CargoView(int npc) =>
+			(Main.netMode == NetmodeID.MultiplayerClient ? cargoClient : cargo).TryGetValue(npc, out var c) ? c : Array.Empty<Item>();
+
+		// ------------------------------------------------------------ the hold, opened by a body standing by the ship
+
+		/// <summary>Take cargo item <paramref name="index"/> into the player's pack (authority does it; the item goes to the player).</summary>
+		public static void RequestTake(Player p, int npc, int index)
+		{
+			if (IsClient) {
+				ModPacket pk = PacketHandler.Create(PacketType.ShipHold);
+				pk.Write((short)npc);
+				pk.Write(true);
+				pk.Write((short)index);
+				pk.Send();
+				return;
+			}
+			Item got = DoTake(p, npc, index);
+			if (got != null)
+				Give(p, got);
+		}
+
+		/// <summary>Put an item from the player into the hold. The caller has already removed it from the player.</summary>
+		public static void RequestPut(Player p, int npc, Item item)
+		{
+			if (item.IsAir)
+				return;
+			if (IsClient) {
+				ModPacket pk = PacketHandler.Create(PacketType.ShipHold);
+				pk.Write((short)npc);
+				pk.Write(false);
+				ItemIO.Send(item, pk, writeStack: true);
+				pk.Send();
+				return;
+			}
+			DoPut(p, npc, item);
+		}
+
+		static bool CanUseHold(Player p, int npc) =>
+			npc >= 0 && npc < Main.maxNPCs && Main.npc[npc].active && Main.npc[npc].ModNPC is CargoShip s && s.DoorOpen
+			&& s.Team == p.team && Vector2.Distance(p.Center, s.NPC.Center) < HoldReach;
+
+		public const float HoldReach = 16 * 6;
+
+		static Item DoTake(Player p, int npc, int index)
+		{
+			if (!CanUseHold(p, npc) || !cargo.TryGetValue(npc, out var items) || index < 0 || index >= items.Count)
+				return null;
+			Item it = items[index];
+			items.RemoveAt(index);
+			SendCargo(npc);
+			return it;
+		}
+
+		static void DoPut(Player p, int npc, Item item)
+		{
+			if (!CanUseHold(p, npc)) {
+				Give(p, item);   // not allowed: back to the player
+				return;
+			}
+			if (!cargo.TryGetValue(npc, out var items))
+				cargo[npc] = items = new List<Item>();
+			// stack onto what's there
+			foreach (Item have in items) {
+				if (item.IsAir)
+					break;
+				if (have.type == item.type && have.prefix == item.prefix && have.stack < have.maxStack) {
+					int move = Math.Min(item.stack, have.maxStack - have.stack);
+					have.stack += move;
+					item.stack -= move;
+				}
+			}
+			if (item.stack > 0)
+				items.Add(item);
+			SendCargo(npc);
+		}
+
+		/// <summary>Hand an item to a player: straight into their pack (or at their feet if it's full).</summary>
+		static void Give(Player p, Item item)
+		{
+			if (Main.netMode == NetmodeID.Server) {
+				ModPacket pk = PacketHandler.Create(PacketType.ShipGive);
+				ItemIO.Send(item, pk, writeStack: true);
+				pk.Send(p.whoAmI);
+				return;
+			}
+			Item left = p.GetItem(p.whoAmI, item, GetItemSettings.InventoryUIToInventorySettings);
+			if (!left.IsAir)
+				p.QuickSpawnItem(p.GetSource_FromThis(), left, left.stack);
+			SoundEngine.PlaySound(SoundID.Grab, p.Center);
+		}
 
 		public static IEnumerable<CargoShip> Ships() =>
 			Main.npc.Where(n => n.active && n.ModNPC is CargoShip).Select(n => (CargoShip)n.ModNPC);
@@ -89,7 +180,7 @@ namespace TerraCommand.Common.Orbital
 			ship.Team = team;
 			ship.State = ShipState.Descending;
 			cargo[idx] = items;
-			SendCount(idx);
+			SendCargo(idx);
 			Main.npc[idx].netUpdate = true;
 			Testing.AutoTest.Trace($"ship #{idx} ordered to {lz.ToTileCoordinates()} with {items.Sum(i => i.stack)} items");
 		}
@@ -125,7 +216,7 @@ namespace TerraCommand.Common.Orbital
 					NetMessage.SendData(MessageID.SyncItem, -1, -1, null, n, 1f);
 			}
 			items.Clear();
-			SendCount(ship.NPC.whoAmI);
+			SendCargo(ship.NPC.whoAmI);
 		}
 
 		/// <summary>Authority: anything thrown into the bay, and idle team bodies standing in it, go into the cargo.</summary>
@@ -159,7 +250,7 @@ namespace TerraCommand.Common.Orbital
 				changed = true;
 			}
 			if (changed) {
-				SendCount(ship.NPC.whoAmI);
+				SendCargo(ship.NPC.whoAmI);
 				Terraria.Audio.SoundEngine.PlaySound(SoundID.Grab, ship.NPC.Center);
 			}
 		}
@@ -223,13 +314,17 @@ namespace TerraCommand.Common.Orbital
 
 		// ------------------------------------------------------------ net
 
-		static void SendCount(int npc)
+		static void SendCargo(int npc)
 		{
 			if (Main.netMode != NetmodeID.Server)
 				return;
+			cargo.TryGetValue(npc, out var items);
 			ModPacket p = PacketHandler.Create(PacketType.ShipCargo);
 			p.Write((short)npc);
-			p.Write(cargo.TryGetValue(npc, out var items) ? items.Sum(i => i.stack) : 0);
+			int n = Math.Min(items?.Count ?? 0, 200);
+			p.Write((short)n);
+			for (int k = 0; k < n; k++)
+				ItemIO.Send(items[k], p, writeStack: true);
 			p.Send();
 		}
 
@@ -256,7 +351,35 @@ namespace TerraCommand.Common.Orbital
 				}
 				case PacketType.ShipCargo: {
 					int npc = r.ReadInt16();
-					cargoCountClient[npc] = r.ReadInt32();
+					int n = r.ReadInt16();
+					var list = new List<Item>(n);
+					for (int k = 0; k < n; k++)
+						list.Add(ItemIO.Receive(r, readStack: true));
+					cargoClient[npc] = list;
+					break;
+				}
+				case PacketType.ShipHold: {
+					int npc = r.ReadInt16();
+					bool take = r.ReadBoolean();
+					if (take) {
+						int index = r.ReadInt16();
+						if (Main.netMode == NetmodeID.Server) {
+							Item got = DoTake(Main.player[from], npc, index);
+							if (got != null)
+								Give(Main.player[from], got);
+						}
+					}
+					else {
+						Item item = ItemIO.Receive(r, readStack: true);
+						if (Main.netMode == NetmodeID.Server)
+							DoPut(Main.player[from], npc, item);
+					}
+					break;
+				}
+				case PacketType.ShipGive: {
+					Item item = ItemIO.Receive(r, readStack: true);
+					if (Main.netMode == NetmodeID.MultiplayerClient)
+						Give(Main.LocalPlayer, item);
 					break;
 				}
 			}

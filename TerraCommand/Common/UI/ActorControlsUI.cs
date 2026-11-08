@@ -40,7 +40,7 @@ namespace TerraCommand.Common.UI
 			new("Next item", () => true, () => Me.GetModPlayer<ActorInventory>().Next()),
 			new("Drop", () => !Me.inventory[ActorInventory.Held].IsAir, () => Me.GetModPlayer<ActorInventory>().DropHeld()),
 			new("Pick up", () => Me.GetModPlayer<ActorInventory>().ItemInReach >= 0, () => Me.GetModPlayer<ActorInventory>().PickUp()),
-			new("Previous item", () => true, () => Me.GetModPlayer<ActorInventory>().Prev()),
+			new("Ship hold", () => ShipHoldUI.NearestLandedShip(Me) != null, () => ShipHoldUI.Open(ShipHoldUI.NearestLandedShip(Me))),
 			new("Units: hold / follow", () => UnitSystem.TeamUnits(Me.team).Any(), () => Me.GetModPlayer<UnitPlayer>().CycleOrders()),
 			new("Switch body", () => UnitSystem.TeamUnits(Me.team).Any(), () => Me.GetModPlayer<UnitPlayer>().SwitchBody()),
 		};
