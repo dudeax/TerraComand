@@ -35,5 +35,16 @@ namespace TerraCommand.Common
 		[Range(1, 50)]
 		[DefaultValue(12)]
 		public int MaxUnitsPerTeam { get; set; } = 12;
+
+		[DefaultValue(true)]
+		public bool EnemyFaction { get; set; } = true;
+
+		[DefaultValue(10)]
+		[Range(1, 120)]
+		public int EnemyFirstAttackMinutes { get; set; } = 10;
+
+		[DefaultValue(7)]
+		[Range(1, 120)]
+		public int EnemyAttackMinutes { get; set; } = 7;
 	}
 }

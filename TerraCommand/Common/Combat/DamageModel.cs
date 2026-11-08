@@ -165,6 +165,12 @@ namespace TerraCommand.Common.Combat
 			pendingHead = DamageRules.InHeadZone(Player.Hitbox, hp);
 			if (DamageRules.IsExplosive(proj))
 				BlastedTimer = 15;
+			else {
+				// CC: a round pushes a body by its momentum, a little, along its flight - not vanilla's fixed knockback
+				// (which the actor physics would carry for tens of tiles)
+				modifiers.Knockback *= 0f;
+				Player.GetModPlayer<Physics.BodyPhysicsPlayer>().ApplyImpulse(proj.velocity.SafeNormalize(Vector2.Zero) * Math.Min(proj.knockBack * 0.25f, 1.5f));
+			}
 			if (pendingHead) {
 				modifiers.SourceDamage *= DamageRules.HeadshotMultiplier;
 				if (!Main.dedServ)

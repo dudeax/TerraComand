@@ -208,3 +208,49 @@ How the pieces map:
   - Terraria enemies are cut from their sprite frame (vanilla gore is suppressed when they are).
   - Blood droplets splat on terrain; a splat drops off when its ground is destroyed.
   - A control transfer isn't a vanilla death, so its remains are broadcast (`PacketType.DeathFx`).
+
+## Overnight round (v0.6.0): the rest of CC's systems
+
+**Terrain.** Blast debris is simulated as grains and settles back into the terrain as real pixels: loose, partly filled
+tiles that drop a proportional share of their item when mined. Mining debris is cosmetic, so it can't refill a hole or
+duplicate material. Blood is drawn exactly where a drop meets solid pixels.
+
+**Actor types** (`ActorStats` in `CCActor.cs`). The table holds mass, a health scale, jetpack tank and force, a speed
+scale, whether the type can run, jet or crouch, whether it moves at all, and its stand height. The same CC actor runs them
+all. The crab drone is drawn with four IK legs on the walk path, a quarter of a cycle apart. The turret is a base and a head
+that swivels to the aim. Both carry their gun on a mount (`RigRenderer.GunAt`).
+
+| Type | Mass | Health | Jet tank / force | Speed | Notes |
+|---|---|---|---|---|---|
+| Soldier | 140 | ×1 | 90 / 4050 | ×1 | |
+| Light | 110 | ×0.8 | 110 / 2900 | ×1.15 | |
+| Heavy | 200 | ×1.6 | 60 / 5800 | ×0.85 | |
+| Crab drone | 120 | ×1.2 | none | ×0.9 | can't run or crouch, 22 px tall, mounted pistol |
+| Turret | 300 | ×2 | none | none | 26 px tall, mounted rifle |
+| Brain | 140 | ×1 | none | ×0.6 | can't run |
+
+**Device systems** (`FirearmSpec`, `CCFirearm`, `CCThrowable`, `CCGrenade`). The spec covers RPM, full auto, bursts,
+activation delay (spin-up), particle count and spread (shotguns, diggers), magazine, reload, shake, sharp shake, sharp length,
+recoil, and the round. Grenades cover fuses, impact, sticky, remote detonation, shrapnel and bomblets. Each system has one
+original example item (see the README).
+
+**Economy.** Funds are the stockpile's coins. Spending makes change across platinum, gold, silver and copper. Catalogue
+prices are the items' Terraria value, and selling pays the vanilla sell price (a fifth of value). Ship costs depend on the
+craft. All of it is server-authoritative (Buy and Sell packets).
+
+**Unit AI modes.** Each order computes a goal, and the shared walk and jet controller moves the body to it. Gold dig carves
+along the aim at the digger's strength and rate; when the ore is out of reach it digs a shaft, alternating sides each bite,
+and drops into it. The ore and gems it digs up go to the stockpile. Brain hunt targets enemy brains: other teams' brain
+bodies, players' brains in PvP, and every player brain for the AI faction.
+
+**Craft.** `ShipStyle` is one of Rocket, Dropship or Crate, set on the cargo ship NPC with its size, health, bay and art.
+The dropship steers to its landing X as it descends. A crate falls under gravity, bursts open and is despawned after ten
+seconds. A piloted ship (`ShipState.Piloted`) flies on server physics from the pilot's controls, which are captured from
+the body's input. The body rides hidden inside the ship. A ship whose pilot leaves in the air lands itself.
+
+**Enemy faction** (`EnemyFaction`). Team 6. Its bodies are hostile NPCs, so players' fire hits them. Its rounds are marked
+hostile through a GlobalProjectile flag that is synced in the projectile's extra AI, so they hurt players and players'
+bodies but pass through its own. It earns 1 gold a minute. Each wave buys a dropship plus 2–4 soldiers (light or standard
+bodies, and heavies from wave 3), each armed from a widening gun list. The squad lands 30–45 tiles from the target, on the
+bunker's side, and brain-hunts; the empty dropship goes back up. Hits from rounds now push a body by a small momentum
+impulse instead of vanilla's fixed knockback, which the actor physics would have carried for tens of tiles.

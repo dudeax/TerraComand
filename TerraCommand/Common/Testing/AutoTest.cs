@@ -463,6 +463,18 @@ namespace TerraCommand.Common.Testing
 				case "spawnenemybrain": // spawnenemybrain <dx px> <dy px> : an enemy faction brain body
 					UnitSystem.SpawnFresh(P.Bottom + new Vector2(F(a[1]), F(a[2])), CloneUnit.EnemyTeam, Actors.ActorKind.Brain);
 					break;
+				case "faction": // faction setup <dx tiles> | attack [here] | budget <copper>
+					switch (a[1]) {
+						case "setup": EnemyFaction.Setup((int)(P.Center.X / 16) + I(a[2])); break;
+						case "attack": EnemyFaction.Attack(a.Length > 2 && a[2] == "here" ? P.Bottom + new Vector2(16 * 12, 0) : null); break;
+						case "budget": EnemyFaction.Budget = long.Parse(a[2]); break;
+					}
+					break;
+				case "listunits":
+					Trace($"player at {P.Bottom.ToTileCoordinates()} life {P.statLife}");
+					foreach (CloneUnit u in UnitSystem.AllUnits())
+						Trace($"unit #{u.NPC.whoAmI} team {u.Team} {u.Loadout.Kind} {u.Order} at {u.NPC.Bottom.ToTileCoordinates()} life {u.NPC.life}/{u.NPC.lifeMax} held {u.Loadout.Held.Name} friendly {u.NPC.friendly}");
+					break;
 				case "clearunits":
 					foreach (CloneUnit u in UnitSystem.AllUnits().ToList())
 						UnitSystem.DespawnUnit(u.NPC);
@@ -808,6 +820,13 @@ namespace TerraCommand.Common.Testing
 				}
 				case "unitspan": { // expect unitspan <op> <tiles> : how far units have wandered (max X - min X seen since mark)
 					Expect(Cmp(unitSpan, a[2], F(a[3])), $"{desc} (span {unitSpan:0.0} tiles)");
+					break;
+				}
+				case "enemyunits": { int n = UnitSystem.AllUnits().Count(u => u.Team == CloneUnit.EnemyTeam); Expect(Cmp(n, a[2], F(a[3])), $"{desc} (have {n})"); break; }
+				case "defeated": Expect(EnemyFaction.Defeated == (a[2] == "true"), $"{desc} (defeated {EnemyFaction.Defeated})"); break;
+				case "unitlifelost": { // expect unitlifelost <op> <n> : total life our idle bodies have lost
+					int lost = UnitSystem.AllUnits().Where(u => u.Team == P.team).Sum(u => u.NPC.lifeMax - u.NPC.life);
+					Expect(Cmp(lost, a[2], F(a[3])), $"{desc} (lost {lost})");
 					break;
 				}
 				case "enemybrains": { int n = UnitSystem.AllUnits().Count(u => u.Team == CloneUnit.EnemyTeam && u.Loadout.Kind == Actors.ActorKind.Brain); Expect(Cmp(n, a[2], F(a[3])), $"{desc} (have {n})"); break; }

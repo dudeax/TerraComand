@@ -1,0 +1,58 @@
+# The AI faction: a bunker with its brain, dropships of soldiers that hunt you, hostile fire, and winning by killing its brain.
+nospawn
+clearnpcs
+goto spawn
+flatten 160 40
+wait 30
+maxlife 500
+wait 2
+heal
+
+# it digs in 60 tiles to the right: a brick bunker, the brain and two guards
+listunits
+faction setup 60
+wait 60
+listunits
+expect enemybrains == 1
+expect enemyunits == 3
+expect defeated false
+
+# a dropship of its soldiers lands near us and they come for us; their fire is hostile
+faction budget 100000
+faction attack here
+wait 5
+listunits
+expect ships == 1
+wait 300
+listunits
+wait 400
+expect enemyunits >= 5
+screenshot enemy-landed
+listunits
+wait 600
+expect life < 500                  # they shot at us
+expect ships == 0                  # the enemy dropship went back up
+screenshot enemy-fight
+listunits
+
+# our own armed bodies fight back
+spawnunit 40 0 Scattergun
+spawnunit 60 0 Scattergun
+spawnunit 80 0 FieldRifle
+heal
+wait 300
+listunits
+wait 600
+expect enemyunits <= 3             # the landed squad is down (the bunker's three remain)
+screenshot enemy-repelled
+listunits
+
+# send our bodies to hunt its brain: when it dies, the world is won
+spawnunit 40 0 Spinner Heavy
+spawnunit 60 0 Spinner Heavy
+spawnunit 20 0 FieldRifle Heavy
+order brainhunt
+wait 3000
+expect enemybrains == 0
+expect defeated true
+screenshot enemy-won

@@ -70,7 +70,8 @@ namespace TerraCommand.Common.Combat
 		}
 
 		/// <summary>One round: its particles, each with the round's own spread and velocity variation. Used by players and idle bodies.</summary>
-		public static void Fire(IEntitySource source, Vector2 muzzle, Vector2 velocity, int type, int damage, float knockback, int owner, FirearmSpec s)
+		public static void Fire(IEntitySource source, Vector2 muzzle, Vector2 velocity, int type, int damage, float knockback, int owner, FirearmSpec s,
+			bool hostile = false)
 		{
 			for (int k = 0; k < s.ParticleCount; k++) {
 				Vector2 v = velocity;
@@ -78,7 +79,9 @@ namespace TerraCommand.Common.Combat
 					v = v.RotatedBy(MathHelper.ToRadians(Main.rand.NextFloat(-s.ParticleSpreadDeg, s.ParticleSpreadDeg) / 2f));
 				if (s.VelocityVariation > 0f)
 					v *= 1f + Main.rand.NextFloat(-s.VelocityVariation, s.VelocityVariation);
-				Projectile.NewProjectile(source, muzzle, v, type, damage, knockback, owner);
+				int pi = Projectile.NewProjectile(source, muzzle, v, type, damage, knockback, owner);
+				if (hostile)
+					EnemyFire.Mark(Main.projectile[pi]);
 			}
 		}
 	}
@@ -105,5 +108,41 @@ namespace TerraCommand.Common.Combat
 			Item.value = Item.buyPrice(silver: 5);
 			Item.rare = ItemRarityID.Blue;
 		}
+	}
+
+	/// <summary>
+	/// Rounds fired by the AI faction: hostile (they hurt players and players' bodies, not the faction's own). The flag
+	/// isn't part of vanilla's projectile sync, so it travels with the projectile's extra AI.
+	/// </summary>
+	public class EnemyFire : GlobalProjectile
+	{
+		public override bool InstancePerEntity => true;
+		public bool Enemy;
+
+		public static void Mark(Projectile p)
+		{
+			p.GetGlobalProjectile<EnemyFire>().Enemy = true;
+			Apply(p);
+			p.netUpdate = true;
+		}
+
+		static void Apply(Projectile p)
+		{
+			p.hostile = true;
+			p.friendly = false;
+		}
+
+		public override void SendExtraAI(Projectile p, Terraria.ModLoader.IO.BitWriter bits, System.IO.BinaryWriter w) => bits.WriteBit(Enemy);
+
+		public override void ReceiveExtraAI(Projectile p, Terraria.ModLoader.IO.BitReader bits, System.IO.BinaryReader r)
+		{
+			Enemy = bits.ReadBit();
+			if (Enemy)
+				Apply(p);
+		}
+
+		/// <summary>The faction's rounds pass through its own bodies.</summary>
+		public override bool? CanHitNPC(Projectile p, NPC target) =>
+			Enemy && target.ModNPC is Content.NPCs.CloneUnit u && u.Team == Content.NPCs.CloneUnit.EnemyTeam ? false : null;
 	}
 }

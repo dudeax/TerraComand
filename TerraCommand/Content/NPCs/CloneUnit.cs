@@ -38,7 +38,7 @@ namespace TerraCommand.Content.NPCs
 		Point digTile = new(-1, -1);
 		public static int OreSentUp;   // tests
 
-		int targetIndex = -1;
+		int targetIndex = -1, targetPlayer = -1;
 		int fireCooldown, reloadTicks, stuckTicks, jetTicks;
 		bool prevJump, skipImpact = true;
 		Vector2 velRequested;
@@ -201,7 +201,8 @@ namespace TerraCommand.Content.NPCs
 		{
 			var input = new ActorInput();
 			FindTarget();
-			NPC target = targetIndex >= 0 && Main.npc[targetIndex].active ? Main.npc[targetIndex] : null;
+			Entity target = targetIndex >= 0 && Main.npc[targetIndex].active ? Main.npc[targetIndex]
+				: targetPlayer >= 0 && Main.player[targetPlayer].active && !Main.player[targetPlayer].dead ? Main.player[targetPlayer] : null;
 			RigPose pose = Pose(Color.White);
 			Vector2 shoulder = RigRenderer.Shoulder(pose);
 			bool stable = Actor.Status == ActorStatus.Stable;
@@ -455,7 +456,7 @@ namespace TerraCommand.Content.NPCs
 		{
 			if (Main.GameUpdateCount % 10 != (ulong)(NPC.whoAmI % 10))
 				return;
-			targetIndex = -1;
+			targetIndex = targetPlayer = -1;
 			float best = 16 * 35;
 			foreach (NPC n in Main.ActiveNPCs) {
 				if (n.whoAmI == NPC.whoAmI || !IsEnemy(n))
@@ -466,7 +467,19 @@ namespace TerraCommand.Content.NPCs
 					targetIndex = n.whoAmI;
 				}
 			}
+			// the AI faction shoots players' bodies too (players are everyone's: other teams only in PvP)
+			foreach (Player p in Main.ActivePlayers) {
+				if (p.dead || p.team == Team || Team != EnemyTeam && !p.hostile || ShipSystem.PilotedBy(p) != null)
+					continue;
+				float d = Vector2.Distance(p.Center, NPC.Center);
+				if (d < best && Collision.CanHitLine(NPC.Center, 1, 1, p.Center, 1, 1)) {
+					best = d;
+					targetIndex = -1;
+					targetPlayer = p.whoAmI;
+				}
+			}
 		}
+
 
 		Player NearestTeamPlayer()
 		{
@@ -485,7 +498,7 @@ namespace TerraCommand.Content.NPCs
 		}
 
 		/// <summary>Fire the held weapon CC-style: from the muzzle along the aim, with magazine, reload and shake.</summary>
-		void TryAttack(NPC target, RigPose pose)
+		void TryAttack(Entity target, RigPose pose)
 		{
 			Item it = Loadout.Held;
 			if (it.IsAir || it.damage <= 0 || it.pick > 0 || it.axe > 0 || it.hammer > 0 || fireCooldown > 0 || reloadTicks > 0)
@@ -498,8 +511,8 @@ namespace TerraCommand.Content.NPCs
 				return;
 
 			if (it.CountsAsClass(DamageClass.Melee) && it.shoot <= ProjectileID.None) {
-				if (Vector2.Distance(target.Center, NPC.Center) < 16 * 3.5f) {
-					target.SimpleStrikeNPC(it.damage, Actor.FlipFactor, knockBack: it.knockBack);
+				if (target is NPC tn && Vector2.Distance(target.Center, NPC.Center) < 16 * 3.5f) {
+					tn.SimpleStrikeNPC(it.damage, Actor.FlipFactor, knockBack: it.knockBack);
 					fireCooldown = Math.Max(it.useAnimation, 10);
 				}
 				return;
@@ -531,11 +544,15 @@ namespace TerraCommand.Content.NPCs
 			Vector2 dir = aimAngle.ToRotationVector2();
 			float dev = Devices.Gaussian() * MathHelper.ToRadians(shakeDeg / 2f);
 			Vector2 muzzle = RigRenderer.GunAt(pose) + dir * 16f;
+			bool hostile = Team == EnemyTeam;   // the AI faction's rounds hurt players and their bodies
 			if (cc != null)
-				CCFirearm.Fire(NPC.GetSource_FromAI(), muzzle, dir.RotatedBy(dev) * speed, proj, it.damage, it.knockBack, Main.myPlayer, cc.Spec);
-			else
-				Projectile.NewProjectile(NPC.GetSource_FromAI(), muzzle, dir.RotatedBy(dev) * Math.Max(speed, 6f), proj,
+				CCFirearm.Fire(NPC.GetSource_FromAI(), muzzle, dir.RotatedBy(dev) * speed, proj, it.damage, it.knockBack, Main.myPlayer, cc.Spec, hostile);
+			else {
+				int pi = Projectile.NewProjectile(NPC.GetSource_FromAI(), muzzle, dir.RotatedBy(dev) * Math.Max(speed, 6f), proj,
 					it.damage, it.knockBack, Main.myPlayer);
+				if (hostile)
+					EnemyFire.Mark(Main.projectile[pi]);
+			}
 			NPC.velocity -= dir * it.knockBack * 0.06f * CC.Mass / Actor.Mass;   // recoil
 			fireCooldown = Math.Max(it.useTime, 6);
 			SoundEngine.PlaySound(it.UseSound ?? SoundID.Item11, NPC.Center);
@@ -632,7 +649,8 @@ namespace TerraCommand.Content.NPCs
 		public override bool PreDraw(SpriteBatch spriteBatch, Vector2 screenPos, Color drawColor)
 		{
 			rigPieces.Clear();
-			RigRenderer.Build(Pose(drawColor), rigPieces);
+			// the AI faction's bodies are tinted red so you can tell them apart
+			RigRenderer.Build(Pose(Team == EnemyTeam ? drawColor.MultiplyRGB(new Color(255, 165, 150)) : drawColor), rigPieces);
 			RigRenderer.Draw(spriteBatch, rigPieces);
 
 			// Order marker above the head; highlighted when the mouse hovers this body.

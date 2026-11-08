@@ -120,7 +120,9 @@ namespace TerraCommand.Content.NPCs
 
 		public override bool CheckActive() => false;   // never despawns on its own
 		public override bool? CanBeHitByItem(Player player, Item item) => false;
-		public override bool? CanBeHitByProjectile(Projectile projectile) => projectile.hostile ? null : false;
+		/// <summary>Your ships are shot down by hostile fire; the AI faction's by yours.</summary>
+		public override bool? CanBeHitByProjectile(Projectile projectile) =>
+			Team == CloneUnit.EnemyTeam ? (projectile.friendly ? null : false) : projectile.hostile ? null : false;
 		public override bool CanChat() => false;
 
 		// ------------------------------------------------------------ flight
@@ -129,6 +131,7 @@ namespace TerraCommand.Content.NPCs
 		{
 			NPC.timeLeft = 600;
 			Thrusting = false;
+			NPC.friendly = Team != CloneUnit.EnemyTeam;
 			switch (State) {
 				case ShipState.Descending:
 					Descend();
@@ -157,6 +160,8 @@ namespace TerraCommand.Content.NPCs
 					}
 					if (Main.netMode != NetmodeID.MultiplayerClient && Timer > 30)
 						ShipSystem.LoadFromBay(this);
+					if (Team == CloneUnit.EnemyTeam && Timer > 120 && Main.netMode != NetmodeID.MultiplayerClient)
+						Launch();   // the enemy's dropships go straight back up for more
 					break;
 				case ShipState.Piloted:
 					Fly();

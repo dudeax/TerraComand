@@ -178,6 +178,12 @@ namespace TerraCommand.Common.Orbital
 					amount -= it.stack;
 				}
 			}
+			SpawnShip(team, items, lz, style);
+		}
+
+		/// <summary>Authority: a ship carrying these items comes down to the landing zone (no stockpile, no payment).</summary>
+		public static int SpawnShip(int team, List<Item> items, Vector2 lz, ShipStyle style)
+		{
 			// it comes in from high above the landing zone
 			float x = Math.Clamp(lz.X, 16 * 60, Main.maxTilesX * 16 - 16 * 60);
 			float y = Math.Max(16 * 45f, lz.Y - 1500f);
@@ -186,7 +192,7 @@ namespace TerraCommand.Common.Orbital
 				x = Math.Clamp(x + (x < Main.maxTilesX * 8 ? -1 : 1) * 700f, 16 * 50, Main.maxTilesX * 16 - 16 * 50);
 			int idx = NPC.NewNPC(Entity.GetSource_NaturalSpawn(), (int)x, (int)y, ModContent.NPCType<CargoShip>());
 			if (idx < 0 || idx >= Main.maxNPCs)
-				return;
+				return -1;
 			var ship = (CargoShip)Main.npc[idx].ModNPC;
 			ship.SetStyle(style);
 			ship.TargetX = targetX;
@@ -196,6 +202,7 @@ namespace TerraCommand.Common.Orbital
 			SendCargo(idx);
 			Main.npc[idx].netUpdate = true;
 			Testing.AutoTest.Trace($"ship #{idx} ordered to {lz.ToTileCoordinates()} with {items.Sum(i => i.stack)} items");
+			return idx;
 		}
 
 		/// <summary>A new team's first delivery: two soldier bodies landing next to the brain.</summary>
@@ -216,12 +223,27 @@ namespace TerraCommand.Common.Orbital
 			if (!cargo.TryGetValue(ship.NPC.whoAmI, out var items) || items.Count == 0)
 				return;
 			int side = 1;
+			bool enemy = ship.Team == CloneUnit.EnemyTeam;
+			// the AI faction's soldiers each take one of the guns in the cargo, and go brain hunting
+			var guns = enemy ? items.Where(i => i.ModItem is not Content.Items.BodyItem).ToList() : null;
 			foreach (Item it in items) {
 				side = -side;
+				if (enemy && it.ModItem is not Content.Items.BodyItem)
+					continue;
 				Vector2 at = ship.NPC.Bottom + new Vector2(side * (ship.NPC.width / 2f + 14f + Main.rand.Next(0, 12)), -2f);
 				if (it.ModItem is Content.Items.BodyItem body) {
-					for (int i = 0; i < it.stack; i++)
-						UnitSystem.SpawnFresh(at + new Vector2(side * i * 14f, 0f), ship.Team, body.Kind, body.BuiltInWeapon);
+					for (int i = 0; i < it.stack; i++) {
+						int weapon = body.BuiltInWeapon;
+						if (enemy && weapon == 0 && guns.Count > 0) {
+							weapon = guns[0].type;
+							guns.RemoveAt(0);
+						}
+						int u = UnitSystem.SpawnFresh(at + new Vector2(side * i * 14f, 0f), ship.Team, body.Kind, weapon);
+						if (enemy && u >= 0 && Main.npc[u].ModNPC is CloneUnit cu) {
+							cu.Order = UnitOrder.BrainHunt;
+							Main.npc[u].netUpdate = true;
+						}
+					}
 					continue;
 				}
 				int n = Item.NewItem(ship.NPC.GetSource_FromAI(), at - new Vector2(8, 16), 16, 16, it.type, it.stack, false, it.prefix, noGrabDelay: true);
@@ -243,6 +265,8 @@ namespace TerraCommand.Common.Orbital
 		{
 			if (!cargo.TryGetValue(ship.NPC.whoAmI, out var items))
 				cargo[ship.NPC.whoAmI] = items = new List<Item>();
+			if (ship.Team == CloneUnit.EnemyTeam)
+				return;   // the enemy's ships take nothing of yours
 			Rectangle bay = ship.Bay;
 			bool changed = false;
 			for (int i = 0; i < Main.maxItems; i++) {

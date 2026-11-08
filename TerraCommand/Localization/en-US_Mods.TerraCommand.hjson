@@ -214,5 +214,20 @@ Configs: {
 			Label: Max bodies per team
 			Tooltip: How many idle bodies each team can have at once
 		}
+
+		EnemyFaction: {
+			Label: Enemy AI faction
+			Tooltip: An enemy brain digs in somewhere in the world and sends dropships of soldiers to hunt your brain. Destroy it to win the world.
+		}
+
+		EnemyFirstAttackMinutes: {
+			Label: Minutes before the first enemy attack
+			Tooltip: How long after the enemy brain arrives before its first dropship comes for you
+		}
+
+		EnemyAttackMinutes: {
+			Label: Minutes between enemy attacks
+			Tooltip: How often the enemy sends a dropship (if it can afford one)
+		}
 	}
 }
