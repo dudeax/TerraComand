@@ -724,6 +724,8 @@ namespace TerraCommand.Common.Testing
 						"empty" => !has,
 						"solid" => has,
 						"partial" => has && PixelTerrain.TryGet(x, y, out var d) && d.Mask != 0,
+						// blasted open: empty, or holding no more than a little settled debris
+						"open" => !has || PixelTerrain.TryGet(x, y, out var o) && System.Numerics.BitOperations.PopCount(o.Mask) >= 40,
 						_ => throw new ArgumentException("tile state must be empty|solid|partial|launchpad"),
 					};
 					Expect(ok, $"{desc} (tile {x},{y} has={has} type={Main.tile[x, y].TileType})");
@@ -768,6 +770,7 @@ namespace TerraCommand.Common.Testing
 					Expect(probeTicks > 0 && Cmp(g, a[2], F(a[3])), $"{desc} (gap {gapMin:0.0}..{gapMax:0.0} px over {probeTicks} ticks, {airFlickers} grounded/air flickers)");
 					break;
 				}
+				case "deposits": Expect(Cmp(Destruction.PixelTerrain.Deposits, a[2], F(a[3])), $"{desc} ({Destruction.PixelTerrain.Deposits} pixels settled into the terrain)"); break;
 				case "debris": Expect(Cmp(Destruction.Debris.Count, a[2], F(a[3])), $"{desc} ({Destruction.Debris.Count} grains)"); break;
 				case "floating": Expect(Cmp(floatTicks, a[2], F(a[3])), $"{desc} ({floatTicks} of {probeTicks} ticks standing with the feet over a gap)"); break;
 				case "flickers": Expect(Cmp(airFlickers, a[2], F(a[3])), $"{desc} ({airFlickers} grounded/air flickers over {probeTicks} ticks)"); break;

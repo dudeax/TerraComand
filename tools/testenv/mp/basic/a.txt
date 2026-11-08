@@ -31,7 +31,7 @@ sync launched
 # a client-owned bomb
 projectile Bomb -170 -16 0 0
 wait 240
-expect tile -10 1 empty
+expect tile -10 1 open
 sync bombed
 
 # deploy a body

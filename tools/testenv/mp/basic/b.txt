@@ -17,7 +17,7 @@ craft WorkBench               # B crafts from the shared stockpile
 wait 60
 expect stock WorkBench >= 1
 sync bombed
-expect tile -10 1 empty       # A's crater is visible here
+expect tile -10 1 open       # A's crater is visible here
 sync deployed
 expect units == 1
 aim 0 -400

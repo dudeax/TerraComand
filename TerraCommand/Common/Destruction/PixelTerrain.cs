@@ -37,6 +37,8 @@ namespace TerraCommand.Common.Destruction
 		{
 			public ulong Mask;
 			public ushort Type;
+			/// <summary>Built up from settled debris (authority only): digging it yields items in proportion to how full it is.</summary>
+			public bool Loose;
 		}
 
 		static readonly Dictionary<Point16, Damage> damage = new();
@@ -44,6 +46,21 @@ namespace TerraCommand.Common.Destruction
 		public static int DamagedTileCount => damage.Count;
 
 		public static bool TryGet(int i, int j, out Damage d) => damage.TryGetValue(new Point16(i, j), out d);
+
+		/// <summary>Is the terrain pixel at world position (x, y) solid? Per art pixel (2x2): tiles plus their carved masks.</summary>
+		public static bool IsPixelSolid(float x, float y)
+		{
+			int i = (int)Math.Floor(x / 16f), j = (int)Math.Floor(y / 16f);
+			if (!WorldGen.InWorld(i, j))
+				return true;
+			Tile t = Main.tile[i, j];
+			if (!t.HasTile || t.IsActuated || !Main.tileSolid[t.TileType] || Main.tileSolidTop[t.TileType])
+				return false;
+			int col = Math.Clamp((int)((x - i * 16) / SubSize), 0, Sub - 1), row = Math.Clamp((int)((y - j * 16) / SubSize), 0, Sub - 1);
+			if (t.IsHalfBlock && row < Sub / 2)
+				return false;
+			return !damage.TryGetValue(new Point16(i, j), out Damage d) || d.Type != t.TileType || (d.Mask & (1UL << (row * Sub + col))) == 0;
+		}
 		public static void Clear(int i, int j) => damage.Remove(new Point16(i, j));
 
 		public override void ClearWorld() => damage.Clear();
@@ -134,8 +151,8 @@ namespace TerraCommand.Common.Destruction
 					int removedHere = BitOperations.PopCount(d.Mask) - BitOperations.PopCount(before);
 					removedTotal += removedHere;
 					// the removed material flies off as loose grains (CC)
-					bool blast = (flags & CarveFlags.Explosion) != 0;
-					Debris.FromPixels(i, j, d.Mask & ~before, tile, c, blast ? 4.5f : 2f);
+					bool blast = (flags & CarveFlags.Explosion) != 0, collected = (flags & CarveFlags.DropItems) != 0;
+					Debris.FromPixels(i, j, d.Mask & ~before, tile, c, blast ? 4.5f : 2f, settles: !collected);
 
 					if (!Main.dedServ && (flags & CarveFlags.NoDust) == 0) {
 						int dusts = Math.Min(1 + removedHere / 6, 4);
@@ -144,10 +161,10 @@ namespace TerraCommand.Common.Destruction
 					}
 
 					if (BitOperations.PopCount(d.Mask) >= threshold) {
-						Debris.FromPixels(i, j, ~d.Mask, tile, c, 1f); // what's left crumbles and falls
+						Debris.FromPixels(i, j, ~d.Mask, tile, c, 1f, settles: (flags & CarveFlags.DropItems) == 0); // what's left crumbles and falls
 						damage.Remove(key);
 						if (authority)
-							Crumble(i, j, (flags & CarveFlags.DropItems) != 0);
+							Crumble(i, j, (flags & CarveFlags.DropItems) != 0 && LooseDrop(d, before));
 					}
 					else {
 						damage[key] = d;
@@ -268,7 +285,7 @@ namespace TerraCommand.Common.Destruction
 				d.Mask |= 1UL << slice[k].bit;
 			// dug material sprays out of the bite, back toward the digger
 			Vector2 tileCenter = new(i * 16 + 8, j * 16 + 8);
-			Debris.FromPixels(i, j, d.Mask & ~beforeMine, tile, tileCenter + (tileCenter - aim) * 2f, 1.8f);
+			Debris.FromPixels(i, j, d.Mask & ~beforeMine, tile, tileCenter + (tileCenter - aim) * 2f, 1.8f, settles: false); // collected as items
 
 			if (!Main.dedServ)
 				for (int k = 0; k < 3; k++)
@@ -277,15 +294,103 @@ namespace TerraCommand.Common.Destruction
 			int threshold = (int)Math.Ceiling(Sub * Sub * TerraCommandConfig.Instance.CrumbleThreshold);
 			if (BitOperations.PopCount(d.Mask) >= threshold) {
 				damage.Remove(key);
-				Crumble(i, j, drop: true);
+				Crumble(i, j, drop: LooseDrop(d, beforeMine));
 				return;
 			}
 			damage[key] = d;
-			if (Main.netMode == NetmodeID.Server) {
-				ModPacket p = PacketHandler.Create(PacketType.MaskSet);
-				p.Write(i); p.Write(j); p.Write(d.Mask); p.Write(d.Type);
-				p.Send();
+			SendMask(i, j, d, deposit: false);
+		}
+
+		/// <summary>A loose tile (built from debris) yields its item only in proportion to how full it was.</summary>
+		static bool LooseDrop(Damage d, ulong maskBefore) =>
+			!d.Loose || Main.rand.NextFloat() < (Sub * Sub - BitOperations.PopCount(maskBefore)) / (float)(Sub * Sub);
+
+		static void SendMask(int i, int j, Damage d, bool deposit)
+		{
+			if (Main.netMode != NetmodeID.Server)
+				return;
+			ModPacket p = PacketHandler.Create(PacketType.MaskSet);
+			p.Write(i); p.Write(j); p.Write(d.Mask); p.Write(d.Type); p.Write(deposit);
+			p.Send();
+		}
+
+		// ---------------------------------------------------------------- settling: loose material becomes terrain
+
+		static readonly HashSet<Point16> dirty = new();
+		static readonly HashSet<Point16> newTiles = new();
+		public static int Deposits;
+
+		/// <summary>
+		/// Authority: one art pixel of <paramref name="material"/> settles into the terrain at world position (x, y) (the
+		/// 2x2 cell containing it). It refills a carved tile's pixel, or starts a new loose tile holding just that pixel.
+		/// Returns false if it can't (solid already, liquid, a body in the way...).
+		/// </summary>
+		public static bool Deposit(float x, float y, ushort material)
+		{
+			if (Main.netMode == NetmodeID.MultiplayerClient)
+				return false;
+			int i = (int)Math.Floor(x / 16f), j = (int)Math.Floor(y / 16f);
+			if (!WorldGen.InWorld(i, j, 10))
+				return false;
+			int col = Math.Clamp((int)((x - i * 16) / SubSize), 0, Sub - 1), row = Math.Clamp((int)((y - j * 16) / SubSize), 0, Sub - 1);
+			ulong bit = 1UL << (row * Sub + col);
+			var key = new Point16(i, j);
+			Tile t = Main.tile[i, j];
+			if (t.HasTile) {
+				if (!damage.TryGetValue(key, out Damage d) || d.Type != t.TileType || (d.Mask & bit) == 0)
+					return false;   // whole tile, or that pixel's already there
+				d.Mask &= ~bit;
+				if (d.Mask == 0)
+					damage.Remove(key);
+				else
+					damage[key] = d;
+				dirty.Add(key);
+				Deposits++;
+				return true;
 			}
+			if (t.LiquidAmount > 0 || OccupiedByBody(new Vector2(col * SubSize + i * 16, row * SubSize + j * 16)))
+				return false;
+			// a new loose tile holding just this pixel
+			t.ResetToType(material);
+			t.Slope = SlopeType.Solid;
+			t.IsHalfBlock = false;
+			damage[key] = new Damage { Type = material, Mask = ~bit, Loose = true };
+			WorldGen.SquareTileFrame(i, j, resetFrame: true);
+			newTiles.Add(key);
+			dirty.Add(key);
+			Deposits++;
+			return true;
+		}
+
+		static bool OccupiedByBody(Vector2 cell)
+		{
+			var r = new Rectangle((int)cell.X, (int)cell.Y, SubSize, SubSize);
+			foreach (Player p in Main.ActivePlayers)
+				if (!p.dead && p.Hitbox.Intersects(r))
+					return true;
+			foreach (NPC n in Main.ActiveNPCs)
+				if (!n.noTileCollide && n.Hitbox.Intersects(r))
+					return true;
+			return false;
+		}
+
+		/// <summary>Sends this tick's settled pixels (new loose tiles first) to the clients.</summary>
+		public override void PostUpdateWorld()
+		{
+			if (dirty.Count == 0)
+				return;
+			if (Main.netMode == NetmodeID.Server) {
+				foreach (Point16 k in newTiles)
+					NetMessage.SendTileSquare(-1, k.X, k.Y, 1);
+				foreach (Point16 k in dirty) {
+					damage.TryGetValue(k, out Damage d);
+					if (!damage.ContainsKey(k))
+						d = new Damage { Type = Main.tile[k.X, k.Y].TileType, Mask = 0 };
+					SendMask(k.X, k.Y, d, deposit: true);
+				}
+			}
+			newTiles.Clear();
+			dirty.Clear();
 		}
 
 		static void GetDamage(Point16 key, int type, out Damage d)
@@ -299,13 +404,22 @@ namespace TerraCommand.Common.Destruction
 		{
 			int i = r.ReadInt32(), j = r.ReadInt32();
 			var d = new Damage { Mask = r.ReadUInt64(), Type = r.ReadUInt16() };
+			bool deposit = r.ReadBoolean();
 			if (Main.netMode != NetmodeID.MultiplayerClient)
 				return;
+			if (d.Mask == 0) {
+				damage.Remove(new Point16(i, j));   // filled back up: a whole tile again
+				return;
+			}
+			if (deposit) {
+				damage[new Point16(i, j)] = d;      // settled material: no debris
+				return;
+			}
 			if (WorldGen.InWorld(i, j) && Main.tile[i, j].HasTile && !Main.dedServ) {
 				WorldGen.KillTile_MakeTileDust(i, j, Main.tile[i, j]);
 				damage.TryGetValue(new Point16(i, j), out Damage old);
 				ulong newly = d.Mask & ~(old.Type == d.Type ? old.Mask : 0UL);
-				Debris.FromPixels(i, j, newly, Main.tile[i, j], new Vector2(i * 16 + 8, j * 16 + 8), 1.8f);
+				Debris.FromPixels(i, j, newly, Main.tile[i, j], new Vector2(i * 16 + 8, j * 16 + 8), 1.8f, settles: false);
 			}
 			damage[new Point16(i, j)] = d;
 		}
@@ -340,7 +454,7 @@ namespace TerraCommand.Common.Destruction
 			var masks = new List<long>(damage.Count);
 			var types = new List<int>(damage.Count);
 			foreach (var (k, d) in damage) {
-				xs.Add(k.X); ys.Add(k.Y); masks.Add((long)d.Mask); types.Add(d.Type);
+				xs.Add(k.X); ys.Add(k.Y); masks.Add((long)d.Mask); types.Add(d.Type | (d.Loose ? 1 << 16 : 0));
 			}
 			tag["x"] = xs; tag["y"] = ys; tag["mask"] = masks; tag["type"] = types;
 		}
@@ -353,7 +467,7 @@ namespace TerraCommand.Common.Destruction
 			var masks = tag.GetList<long>("mask");
 			var types = tag.GetList<int>("type");
 			for (int n = 0; n < xs.Count && n < ys.Count && n < masks.Count && n < types.Count; n++)
-				damage[new Point16(xs[n], ys[n])] = new Damage { Mask = (ulong)masks[n], Type = (ushort)types[n] };
+				damage[new Point16(xs[n], ys[n])] = new Damage { Mask = (ulong)masks[n], Type = (ushort)(types[n] & 0xFFFF), Loose = (types[n] & (1 << 16)) != 0 };
 		}
 
 		internal static void SendFull(int toClient)

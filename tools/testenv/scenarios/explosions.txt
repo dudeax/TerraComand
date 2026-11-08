@@ -5,7 +5,7 @@ flatten 50 14
 wait 30
 projectile Bomb -170 -16 0 0
 wait 200
-expect tile -10 1 empty
+expect tile -10 1 open
 expect tile -10 6 solid        # a bomb (4 tiles) doesn't reach 6 tiles down
 projectile Dynamite 170 -16 0 0
 wait 330            # dynamite has a long fuse

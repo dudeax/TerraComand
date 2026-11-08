@@ -50,7 +50,14 @@ namespace TerraCommand.Common.Combat
 
 		struct Drop { public Vector2 Pos, Vel; public int Life; }
 
-		struct Splat { public Vector2 Pos; public int Life; public byte Shape; public Color Color; }
+		/// <summary>A blood stain on the terrain: up to four art pixels (2x2 cells) of the surface it hit.</summary>
+		struct Splat
+		{
+			public Vector2 Pos;              // the cell it hit (top-left, on the 2px grid)
+			public Vector2 A, B, C;          // more stained surface cells nearby (or NaN)
+			public int Life;
+			public Color Color;
+		}
 
 		static readonly List<Chunk> chunks = new();
 		static readonly List<Corpse> corpses = new();
@@ -403,13 +410,23 @@ namespace TerraCommand.Common.Combat
 				Drop d = drops[i];
 				d.Vel.Y = Math.Min(d.Vel.Y + DropGravity, 12f);
 				d.Vel.X *= 0.99f;
-				Vector2 next = d.Pos + d.Vel;
-				if (Collision.SolidCollision(next - Vector2.One, 2, 2)) {
-					AddSplat(d.Pos);
+				// march to the exact pixel it hits: the stain goes on that surface, not where the drop was last tick
+				int n = Math.Max(1, (int)Math.Ceiling(d.Vel.Length()));
+				Vector2 step = d.Vel / n;
+				bool hit = false;
+				for (int k = 0; k < n; k++) {
+					Vector2 next = d.Pos + step;
+					if (Destruction.PixelTerrain.IsPixelSolid(next.X, next.Y)) {
+						AddSplat(next);
+						hit = true;
+						break;
+					}
+					d.Pos = next;
+				}
+				if (hit) {
 					drops.RemoveAt(i);
 					continue;
 				}
-				d.Pos = next;
 				if (--d.Life <= 0 || Collision.WetCollision(d.Pos, 1, 1)) {
 					drops.RemoveAt(i);
 					continue;
@@ -421,7 +438,7 @@ namespace TerraCommand.Common.Combat
 				for (int i = splats.Count - 1; i >= 0; i--) {
 					Splat s = splats[i];
 					s.Life -= 30;
-					if (s.Life <= 0 || !Collision.SolidCollision(s.Pos - new Vector2(3), 6, 6))
+					if (s.Life <= 0 || !Solid(s.Pos))   // its ground was blown away
 						splats.RemoveAt(i);
 					else
 						splats[i] = s;
@@ -500,12 +517,36 @@ namespace TerraCommand.Common.Combat
 			k.Pose.VelX = 0f;
 		}
 
-		static void AddSplat(Vector2 at)
+		static Vector2 Cell(Vector2 p) => new(MathF.Floor(p.X / 2f) * 2f, MathF.Floor(p.Y / 2f) * 2f);
+
+		static bool Solid(Vector2 cell) => Destruction.PixelTerrain.IsPixelSolid(cell.X + 1f, cell.Y + 1f);
+
+		/// <summary>A solid cell with open space next to it: the visible surface.</summary>
+		static bool Surface(Vector2 cell) =>
+			Solid(cell) && (!Solid(cell + new Vector2(0, -2)) || !Solid(cell + new Vector2(0, 2)) || !Solid(cell + new Vector2(-2, 0)) || !Solid(cell + new Vector2(2, 0)));
+
+		static readonly Vector2[] around = { new(-2, 0), new(2, 0), new(0, -2), new(0, 2), new(-2, -2), new(2, -2), new(-2, 2), new(2, 2), new(-4, 0), new(4, 0) };
+
+		/// <summary>Stain the surface cell that was hit, and a few surface cells next to it (blood runs along the surface).</summary>
+		static void AddSplat(Vector2 hitPoint)
 		{
+			Vector2 cell = Cell(hitPoint);
+			if (!Solid(cell))
+				return;
+			var extra = new List<Vector2>(3);
+			int start = Main.rand.Next(around.Length);
+			for (int k = 0; k < around.Length && extra.Count < Main.rand.Next(1, 4); k++) {
+				Vector2 c = cell + around[(start + k) % around.Length];
+				if (Surface(c))
+					extra.Add(c);
+			}
 			if (splats.Count >= MaxSplats)
 				splats.RemoveAt(0);
+			Vector2 none = new(float.NaN);
 			splats.Add(new Splat {
-				Pos = at, Life = 60 * 90, Shape = (byte)Main.rand.Next(256),
+				Pos = cell,
+				A = extra.Count > 0 ? extra[0] : none, B = extra.Count > 1 ? extra[1] : none, C = extra.Count > 2 ? extra[2] : none,
+				Life = 60 * 90,
 				Color = Color.Lerp(new Color(90, 6, 6), new Color(150, 16, 16), Main.rand.NextFloat()),
 			});
 			SplatsMade++;
@@ -527,13 +568,12 @@ namespace TerraCommand.Common.Combat
 			foreach (Splat s in splats) {
 				if (!view.Contains(s.Pos.ToPoint()))
 					continue;
-				float fade = Math.Min(1f, s.Life / 300f);
+				float fade = Math.Min(1f, s.Life / 300f) * 0.85f;
 				Color c = s.Color.MultiplyRGB(Lighting.GetColor(s.Pos.ToTileCoordinates())) * fade;
-				Vector2 at = (s.Pos - Main.screenPosition).Floor();
-				sb.Draw(px, at - new Vector2(1), one, c, 0f, Vector2.Zero, new Vector2(3, 2), SpriteEffects.None, 0f);
-				if ((s.Shape & 1) != 0) sb.Draw(px, at + new Vector2(-3, 0), one, c, 0f, Vector2.Zero, new Vector2(2, 2), SpriteEffects.None, 0f);
-				if ((s.Shape & 2) != 0) sb.Draw(px, at + new Vector2(2, -1), one, c, 0f, Vector2.Zero, new Vector2(2, 2), SpriteEffects.None, 0f);
-				if ((s.Shape & 4) != 0) sb.Draw(px, at + new Vector2(0, 1), one, c, 0f, Vector2.Zero, new Vector2(1, 2), SpriteEffects.None, 0f);
+				// stained terrain pixels (only those still solid)
+				foreach (Vector2 cell in new[] { s.Pos, s.A, s.B, s.C })
+					if (!float.IsNaN(cell.X) && Solid(cell))
+						sb.Draw(px, (cell - Main.screenPosition).Floor(), one, c, 0f, Vector2.Zero, 2f, SpriteEffects.None, 0f);
 			}
 			foreach (Corpse k in corpses) {
 				if (!view.Contains(k.Pose.Feet.ToPoint()))

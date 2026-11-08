@@ -18,7 +18,7 @@ carve 140 30 30
 expect damaged >= 6
 projectile Bomb -170 -16 0 0
 wait 200
-expect tile -10 1 empty
+expect tile -10 1 open
 projectile Bullet -60 -60 0 12
 projectile Bullet -80 -60 0 12
 wait 20
