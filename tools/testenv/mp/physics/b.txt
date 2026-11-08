@@ -1,0 +1,15 @@
+goto spawn
+goto rel 6 0
+maxlife 400                    # (in case pvp-style blast damage applies)
+wait 60
+heal
+sync start
+mark
+sync b-ready
+wait 182
+expect knocked yes             # thrown by A's bomb
+wait 58
+expect moved >= 1
+screenshot b-thrown
+sync blasted
+sync done

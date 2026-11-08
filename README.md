@@ -10,7 +10,24 @@ Vanilla progression, blocks and enemies stay; the rules change around them:
 | **Multiple bodies** | Use a **Clone Body** to deploy an idle body. Press **Q** to take control of the body under the cursor, or cycle to the next one. Your current body, with its items and health, stays behind as an idle unit. Idle bodies hold position or follow you (**G**) and fight with whatever they're holding. If your body dies, it drops its gear and control jumps to your nearest idle body. You only truly die when you run out of bodies. |
 | **Orbital stockpile** | Place a **Launch Pad**, then right-click it with an item or just throw items onto it. Rockets carry the items into a stockpile shared by every player in the world. Open it with **K** to **craft** from it (a station counts as available when its item is in orbit, and buckets count as water/lava/honey) or to **order a drop pod** that crashes down next to you with equipment. With the **Orbital Constructor**, blocks and walls are placed straight from orbit: right-click a block in the menu to select it. |
 
+| **Body physics** | Bodies have momentum and slide a little, gravity is heavy, and terminal speed is high. Jump is a short hop; keep holding it to burn a **jetpack** that has limited fuel and refuels after a pause. Wings, rocket boots and extra-jump items add jetpack fuel, thrust and refuel rate instead of flight; hooks still work; mounts and dashes are disabled. Collision is per pixel: bodies fit through carved holes and step over small bumps. Hitting the ground, a wall or a ceiling too fast hurts and can knock you flat. Explosions throw bodies and enemies. |
+| **Aiming & damage** | Guns, bows and magic have spread that depends on stance: steady when crouched, wild when moving, airborne or using the jetpack. Recoil climbs under sustained fire, and the reticle shows current accuracy. Headshots do ×1.75. Hits leave visible wounds, which are cosmetic (no bleeding). Violent deaths gib. Bodies don't regenerate health naturally (there's a config option), but potions, buffs and accessories still heal. |
+
 New characters start with a Launch Pad, an Orbital Constructor and 2 Clone Bodies.
+
+### Controls
+| Key | Action |
+|---|---|
+| A / D | walk (momentum) |
+| Space (hold) | hop, then jetpack |
+| S (hold, on ground) | crouch: slow, steady aim |
+| mouse | aim; reticle shows current spread |
+| Q | switch to the body under the cursor, or cycle to the next one |
+| G | toggle idle bodies between hold position and follow |
+| K | orbital menu (stockpile, fabricate, drop pods) |
+
+All feel constants (gravity, jetpack, impacts, spread, recoil, blast strength) live in
+`TerraCommand/Common/Physics/Tuning.cs`. They're first guesses and need tuning by playing.
 
 ## Design decisions (easy to change)
 - **Progression stays with the player, not the body.** Max life and mana from crystals and other permanent upgrades belong to the player. Each body only carries its items, its equipment and its current health.
@@ -71,6 +88,7 @@ Scenario commands, one per tick (tile offsets are relative to the tile under the
 ### Multiplayer testing
 ```bash
 tools/testenv/run-mp.sh tools/testenv/mp/basic --build    # dedicated server + 2 clients (~3 min)
+tools/testenv/run-mp.sh tools/testenv/mp/physics          # A's bomb throws B's body (~2 min)
 ```
 An MP scenario directory holds `server.txt` and one script per client (`a.txt`, `b.txt`, ...):
 - **Server:** the server loads a fresh copy of the baseline world and runs `server.txt` from its console with
@@ -89,6 +107,9 @@ tc selftest      # automated checks: carving, hardness, persistence, crafting, r
 ```
 In-game (singleplayer): `/tc give <itemId> <count>`, `/tc crater <radius>`, `/tc selftest`.
 
+Known harness limitation: late in long single-session suites, screenshots are sometimes dark (stale
+lighting after many world reloads). Results are unaffected; run that scenario on its own for a clean image.
+
 ## Code map
 ```
 TerraCommand/
@@ -102,12 +123,12 @@ TerraCommand/
 ```
 
 ## Roadmap
-1. **Per-pixel collision.** Players and NPCs still collide with whole tiles until a tile crumbles. Next step: detour `Collision.TileCollision`/`SolidCollision` to check the masks.
+1. **Playtest and tune the feel** (`Tuning.cs`). Then add crouch/prone poses, sharp-aim zoom, and a jetpack/fuel HUD.
 2. Loose debris: carved pixels fall as particles and settle.
 3. Smarter unit AI: dig, take cover, use ammo and mana, use any weapon properly. Direct per-unit orders via a selection box.
 4. Coin-based drop pod and body costs, and buying from NPC shops through orbit.
 5. Bosses and large enemies that tunnel or blast terrain. Gibs.
-6. Partial-tile rendering for slopes and half blocks, plus per-corner lighting.
+6. Per-corner lighting on carved tiles. Proper gib chunks (art) instead of particles.
 7. Keep per-item mod data (`ModItem` fields) in the stockpile.
 
 ## License

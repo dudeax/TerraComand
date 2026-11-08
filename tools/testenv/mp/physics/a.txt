@@ -1,0 +1,10 @@
+# A throws a bomb at B's feet; B's own client must apply the blast to B's body.
+goto spawn
+wait 60
+sync start
+sync b-ready                   # B stands 6 tiles to the right
+projectile Bomb 78 -20 0 0       # just left of B: throws B to the right
+wait 240
+sync blasted
+expect knocked no              # A was outside the blast
+sync done
