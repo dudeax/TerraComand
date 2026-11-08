@@ -48,7 +48,7 @@ namespace TerraCommand.Common.Destruction
 			if (IsExplosive(projectile))
 				Testing.AutoTest.Trace($"explosive {projectile.Name} died at {projectile.Center.ToTileCoordinates()}");
 			if (IsExplosive(projectile))
-				Physics.Explosions.Blast(projectile.Center, (Physics.Explosions.BlastRadiusTiles(projectile) + 2) * 16f, Physics.Tuning.BlastImpulse);
+				Physics.Explosions.Blast(projectile.Center, (Physics.Explosions.BlastRadiusTiles(projectile) + 2) * 16f, Physics.Tuning.BlastImpulse, projectile.damage);
 			if (Main.netMode == NetmodeID.MultiplayerClient || !TerraCommandConfig.Instance.PixelExplosions)
 				return;
 			if (cratered || !IsExplosive(projectile))

@@ -31,26 +31,7 @@ namespace TerraCommand.Common.Combat
 		public static Vector2 HitPoint(Rectangle body, Projectile proj) =>
 			new(Math.Clamp(proj.Center.X, body.Left, body.Right), Math.Clamp(proj.Center.Y, body.Top, body.Bottom));
 
-		public static int GibCount { get; private set; }
-
 		public static bool IsExplosive(Projectile p) => ProjectileID.Sets.Explosive[p.type] || p.aiStyle == ProjAIStyleID.Explosive;
-
-		/// <summary>Bursts a body into blood and chunks (cosmetic, runs on every client).</summary>
-		public static void Gib(Rectangle body, Vector2 push)
-		{
-			GibCount++;
-			if (Main.dedServ)
-				return;
-			int amount = Math.Clamp(body.Width * body.Height / 25, 25, 90);
-			for (int i = 0; i < amount; i++) {
-				var d = Dust.NewDustDirect(body.TopLeft(), body.Width, body.Height, DustID.Blood,
-					push.X + Main.rand.NextFloat(-5f, 5f), push.Y + Main.rand.NextFloat(-7f, 1f), 0, default, Main.rand.NextFloat(1.1f, 2.1f));
-				d.noGravity = false;
-			}
-			for (int i = 0; i < amount / 6; i++) // heavier chunks
-				Dust.NewDust(body.TopLeft(), body.Width, body.Height, DustID.GemRuby, push.X + Main.rand.NextFloat(-4f, 4f), push.Y - Main.rand.NextFloat(2f, 6f), 0, new Color(120, 20, 20), 1.6f);
-			SoundEngine.PlaySound(SoundID.NPCDeath1 with { Pitch = -0.3f }, body.Center.ToVector2());
-		}
 
 		/// <summary>Adds a wound mark at a point (offset from the body's centre, unflipped).</summary>
 		public static void AddWound(List<Vector2> wounds, Rectangle body, Vector2? hitPoint, bool head, int direction)
@@ -89,6 +70,7 @@ namespace TerraCommand.Common.Combat
 
 		public readonly List<Vector2> Wounds = new();
 		public int BlastedTimer;           // set by Explosions.Blast on every machine
+		public Vector2? BlastCenter;
 		Vector2? pendingHitPoint;
 		bool pendingHead;
 
@@ -122,12 +104,22 @@ namespace TerraCommand.Common.Combat
 
 		public override void HitEffect(NPC npc, NPC.HitInfo hit)
 		{
+			Vector2 push = new(hit.HitDirection * 3f, -2f);
 			if (npc.life > 0) {
-				if (hit.Damage > 0)
+				if (hit.Damage > 0) {
 					DamageRules.AddWound(Wounds, npc.Hitbox, pendingHitPoint, pendingHead, npc.direction == 0 ? 1 : npc.direction);
+					GibSystem.Spray(pendingHitPoint ?? npc.Center, new Vector2(hit.HitDirection, -0.3f), 5);
+				}
 			}
-			else if (BlastedTimer > 0 || hit.Damage >= npc.lifeMax * DamageRules.GibOverkill) {
-				DamageRules.Gib(npc.Hitbox, new Vector2(hit.HitDirection * 3f, -2f));
+			else {
+				bool blasted = BlastedTimer > 0, overkill = hit.Damage >= npc.lifeMax * DamageRules.GibOverkill;
+				Vector2? bc = blasted ? BlastCenter : null;
+				if (npc.ModNPC is Content.NPCs.CloneUnit unit)
+					GibSystem.ActorDeath(unit.Pose(Color.White), GibSystem.Decide(blasted, overkill, pendingHead, true), push, bc);
+				else {
+					DeathFx fx = GibSystem.Decide(blasted, overkill, pendingHead, DamageRules.HasHead(npc));
+					GibSystem.NpcDeath(npc, fx == DeathFx.Corpse ? DeathFx.None : fx, push, bc); // ordinary deaths: vanilla gore
+				}
 			}
 			pendingHitPoint = null;
 			pendingHead = false;
@@ -145,6 +137,8 @@ namespace TerraCommand.Common.Combat
 	{
 		public readonly List<Vector2> Wounds = new();
 		public int BlastedTimer;
+		public Vector2? BlastCenter;
+		int headshotTicks;               // the last hit was a headshot, recently
 		Vector2? pendingHitPoint;
 		bool pendingHead;
 
@@ -158,6 +152,8 @@ namespace TerraCommand.Common.Combat
 		{
 			if (BlastedTimer > 0)
 				BlastedTimer--;
+			if (headshotTicks > 0)
+				headshotTicks--;
 			if (Player.statLife >= Player.statLifeMax2 && Wounds.Count > 0)
 				Wounds.Clear();
 		}
@@ -179,19 +175,35 @@ namespace TerraCommand.Common.Combat
 		public override void OnHurt(Player.HurtInfo info)
 		{
 			Testing.AutoTest.Trace($"{Player.name} hurt {info.Damage} by {(info.DamageSource.SourceProjectileType > 0 ? Lang.GetProjectileName(info.DamageSource.SourceProjectileType).Value : info.DamageSource.SourceCustomReason ?? "?")} (life {Player.statLife}/{Player.statLifeMax2})");
-			if (info.Damage > 0)
+			if (info.Damage > 0) {
 				DamageRules.AddWound(Wounds, Player.Hitbox, pendingHitPoint, pendingHead, Player.direction);
+				GibSystem.Spray(pendingHitPoint ?? Player.Center, new Vector2(info.HitDirection, -0.3f), 5);
+			}
+			headshotTicks = pendingHead ? 10 : 0;
 			pendingHitPoint = null;
 			pendingHead = false;
 		}
 
 		public bool IsViolentDeath(double damage) => BlastedTimer > 0 || damage >= Player.statLifeMax2 * DamageRules.GibOverkill;
 
-		public override void Kill(double damage, int hitDirection, bool pvp, PlayerDeathReason damageSource)
+		/// <summary>How this body's death looks: blasted or overkilled bodies gib, headshots decapitate, else a corpse.</summary>
+		public DeathFx DeathKind(double damage) =>
+			GibSystem.Decide(BlastedTimer > 0, damage >= Player.statLifeMax2 * DamageRules.GibOverkill, headshotTicks > 0, true);
+
+		/// <summary>Leaves this body's remains where it died (locally; <paramref name="broadcast"/> for a control transfer).</summary>
+		public void LeaveRemains(double damage, int hitDirection, bool broadcast)
 		{
-			if (IsViolentDeath(damage))
-				DamageRules.Gib(Player.Hitbox, new Vector2(hitDirection * 3f, -2f));
+			DeathFx kind = DeathKind(damage);
+			Actors.RigPose pose = Player.GetModPlayer<Actors.RigPlayer>().Pose();
+			Vector2 push = new Vector2(hitDirection * 3f, -2f);
+			Vector2? bc = BlastedTimer > 0 ? BlastCenter : null;
+			GibSystem.ActorDeath(pose, kind, push, bc);
+			if (broadcast)
+				GibSystem.Broadcast(pose, kind, push, bc);
 		}
+
+		public override void Kill(double damage, int hitDirection, bool pvp, PlayerDeathReason damageSource) =>
+			LeaveRemains(damage, hitDirection, broadcast: false);   // every client runs a real death
 	}
 
 	/// <summary>Draws a player's wounds over their body.</summary>

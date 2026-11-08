@@ -111,6 +111,16 @@ namespace TerraCommand.Common.UI
 			}
 
 			var font = FontAssets.MouseText.Value;
+			// closing: the X button, K / Esc, or right-clicking outside the panel
+			var closeBtn = new Rectangle(panel.Right - Pad - 26, panel.Y + Pad - 2, 26, 26);
+			bool overClose = closeBtn.Contains(Main.MouseScreen.ToPoint());
+			Utils.DrawInvBG(sb, closeBtn, overClose ? new Color(170, 60, 50, 240) : new Color(90, 40, 40, 220));
+			Utils.DrawBorderString(sb, "X", closeBtn.Center.ToVector2() - font.MeasureString("X") * 0.45f, Color.White, 0.9f);
+			if (Clicked(closeBtn) || !hover && Main.mouseRight && Main.mouseRightRelease) {
+				Main.mouseRightRelease = false;
+				Toggle();
+				return;
+			}
 			Utils.DrawBorderString(sb, "Orbital Stockpile", new Vector2(panel.X + Pad, panel.Y + Pad), Color.Gold);
 			Utils.DrawBorderString(sb, "Fabricate", new Vector2(panel.X + Pad * 2 + stockW, panel.Y + Pad), Color.Gold);
 
@@ -200,9 +210,9 @@ namespace TerraCommand.Common.UI
 			if (canLaunch && Clicked(launchBtn))
 				ShipSystem.RequestLaunch(Main.LocalPlayer);
 
-			Utils.DrawBorderString(sb, "Stockpile: L-click add to ship cargo (Shift: whole stack), R-click a block to build with it. Throw things into a landed ship to send them up",
+			Utils.DrawBorderString(sb, "Stockpile: L-click adds to ship cargo (Shift: whole stack), R-click a block to build with it",
 				new Vector2(panel.X + Pad, panel.Bottom - 40), Color.Gray, 0.65f);
-			Utils.DrawBorderString(sb, "Fabricate: click to craft one (Shift: x10)",
+			Utils.DrawBorderString(sb, "Fabricate: click to craft one (Shift: x10).   Close: X, K or Esc",
 				new Vector2(panel.X + Pad, panel.Bottom - 22), Color.Gray, 0.65f);
 		}
 

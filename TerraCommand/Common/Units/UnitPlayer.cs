@@ -22,6 +22,12 @@ namespace TerraCommand.Common.Units
 				CycleOrders();
 			if (TerraCommandKeybinds.OrbitalMenu.JustPressed)
 				OrbitalUISystem.Toggle();
+			// Esc closes the orbital menu (instead of opening the inventory)
+			else if (OrbitalUISystem.Visible && PlayerInput.Triggers.JustPressed.Inventory) {
+				OrbitalUISystem.Toggle();
+				triggersSet.KeyStatus["Inventory"] = false;
+				PlayerInput.Triggers.JustPressed.KeyStatus["Inventory"] = false;
+			}
 		}
 
 		internal void SwitchBody()
@@ -61,8 +67,8 @@ namespace TerraCommand.Common.Units
 				return true; // no bodies left: a real death
 
 			// The body dies: it drops everything it carried, and control jumps to the nearest idle body.
-			if (Player.GetModPlayer<Combat.DamagePlayer>().IsViolentDeath(damage))
-				Combat.DamageRules.Gib(Player.Hitbox, new Vector2(hitDirection * 3f, -2f));
+			// the body's remains stay where it died (everyone sees them: this isn't a vanilla death)
+			Player.GetModPlayer<Combat.DamagePlayer>().LeaveRemains(damage, hitDirection, broadcast: true);
 			Player.DropItems();
 			Player.statLife = 1;
 			Player.immune = true;

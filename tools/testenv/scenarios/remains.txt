@@ -1,0 +1,69 @@
+# What's left when bodies die (CC style): blasts gib a CC body into its parts, a headshot kill knocks the head off,
+# other deaths leave a corpse; Terraria enemies burst into pieces of their sprite; blood splats on terrain.
+nospawn
+clearnpcs
+goto spawn
+flatten 70 20
+wait 30
+
+# an idle body worn down by ordinary hits: a corpse
+give CloneBody 3
+hold CloneBody
+aim 90 -30
+use 2
+wait 10
+expect units == 1
+hurtunit 40
+hurtunit 40
+wait 10
+hurtunit 40
+wait 30
+expect units == 0
+expect deathfx corpse
+expect corpses >= 1
+screenshot remains-corpse
+
+# an idle body caught by a bomb: it bursts into its parts
+mark
+aim 90 -30
+use 2
+wait 10
+placeunit 5
+maxlife 400                        # (our own body stands near the blast)
+wait 2
+heal
+projectile Dynamite 80 -10 0 0
+wait 320                           # dynamite fuse
+expect units == 0
+expect gibs >= 1
+expect deathfx gib
+expect chunks >= 8                 # helmet, torso, arms, legs, boots, jetpack...
+expect splats >= 5                 # blood on the ground
+screenshot remains-gibs
+
+# a Terraria enemy shot through the head on the killing shot: its head comes off
+give FlintlockPistol
+give MusketBall 100
+hold FlintlockPistol
+spawnnpc Zombie 160 0
+wait 60
+pin Zombie
+npclife Zombie 12                  # one more hit kills it
+aimnpc Zombie head
+shoot 1 0
+wait 20
+expect npcs Zombie == 0
+expect deathfx decap
+screenshot remains-decap
+
+# your own body dies with a spare one standing by: control moves over, the old body bursts (it was overkilled)
+aim 90 -30
+hold CloneBody
+use 2
+wait 10
+expect units == 1
+hurt 9999
+wait 30
+expect alive
+expect units == 0
+expect deathfx gib

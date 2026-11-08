@@ -22,13 +22,14 @@ expect npcs Zombie == 0         # the sentry shot it
 screenshot sentry
 orders                          # follow
 
-# Idle bodies follow the same physics: a long fall hurts them, a nearby blast knocks them flat.
+# Idle bodies are the same CC actor: a long fall hurts them, a nearby blast knocks them flat.
 orders                          # back to sentry
 wait 30
 expect unitlife >= 90
-liftunit 40
+liftunit 25                     # (CC: ~32 tiles would be lethal)
 wait 150
 expect unitlife < 90
+expect units == 1
 heal
 spawnnpc Zombie 0 0
 clearnpcs

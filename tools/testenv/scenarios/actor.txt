@@ -87,7 +87,7 @@ goto spawn
 fill 3 -6 12 -3 Stone
 mark
 walk right 200
-expect moved <= 2.5             # standing: blocked
+expect moved <= 3               # standing: blocked (a CC body is 14px wide)
 hold down on
 wait 40
 hold right on

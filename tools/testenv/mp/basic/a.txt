@@ -48,6 +48,11 @@ sync deployed
 sync switched                 # B takes over that body
 expect units == 1             # B's old body is now the idle one
 
+# B's body is overkilled with a spare standing by (A is the brain: it can't transfer): everyone sees it burst
+sync b-died
+wait 20
+expect deathfx gib            # broadcast: a control transfer isn't a vanilla death
+
 # equipment is picked up deliberately (F): it disappears for everyone
 spawnitem IronBroadsword 16 0
 wait 60

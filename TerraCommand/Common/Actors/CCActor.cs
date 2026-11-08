@@ -50,6 +50,8 @@ namespace TerraCommand.Common.Actors
 
 		// hitbox heights for postures (a standing Terraria body is 42)
 		public const int StandHeight = 42, CrouchHeight = 32, LyingHeight = 20;
+		/// <summary>A CC actor stands on a narrow footprint; Terraria's 20px player would bridge holes its feet should step into.</summary>
+		public const int BodyWidth = 14;
 
 		public const float AimRange = MathHelper.PiOver2;
 		public static readonly float LyingFriction = Accel(9f);     // ~0.45 friction x 20 m/s^2

@@ -33,6 +33,7 @@ namespace TerraCommand.Common.Net
 		SetOrders,         // C->S
 		// Bodies
 		StanceSync,        // C->S->C
+		DeathFx,           // C->S->C: a body's remains (gibs / corpse) after a control transfer
 		// Brain
 		BrainClaim,        // C->S: a player entered the world (becomes the brain if the team has none)
 		BrainState,        // S->C: a team's brain state (and whether this player is it)
@@ -88,6 +89,9 @@ namespace TerraCommand.Common.Net
 				case PacketType.BrainClaim:
 				case PacketType.BrainState:
 					Units.BrainSystem.Receive(type, r, from);
+					break;
+				case PacketType.DeathFx:
+					Combat.GibSystem.ReceiveDeathFx(r, from);
 					break;
 				case PacketType.StanceSync:
 					Physics.BodyPhysicsPlayer.ReceiveStance(r, from);

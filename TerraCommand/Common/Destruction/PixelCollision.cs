@@ -181,12 +181,20 @@ namespace TerraCommand.Common.Destruction
 		static void OnStepUp(On_Collision.orig_StepUp orig, ref Vector2 pos, ref Vector2 vel, int w, int h, ref float stepSpeed,
 			ref float gfxOffY, int gravDir, bool holdsMatching, int specialChecksMode)
 		{
-			orig(ref pos, ref vel, w, h, ref stepSpeed, ref gfxOffY, gravDir, holdsMatching, specialChecksMode);
-			if (gravDir != 1 || vel.X == 0f || PixelTerrain.DamagedTileCount == 0)
+			if (PixelTerrain.DamagedTileCount == 0) {
+				orig(ref pos, ref vel, w, h, ref stepSpeed, ref gfxOffY, gravDir, holdsMatching, specialChecksMode);
+				return;
+			}
+			// vanilla steps up onto whole 16px blocks: it must not see carved tiles as whole (it would lift the body onto a
+			// tile's original top, leaving it hovering over the dug-out part)
+			Point16[] tiles = Buf;
+			int n = CollectCarved(pos.X - 18, pos.Y - 18, w + 36, h + 36, tiles);
+			using (new Hidden(tiles, n))
+				orig(ref pos, ref vel, w, h, ref stepSpeed, ref gfxOffY, gravDir, holdsMatching, specialChecksMode);
+			if (gravDir != 1 || vel.X == 0f)
 				return;
 			float nx = pos.X + vel.X;
-			Point16[] tiles = Buf;
-			int n = CollectCarved(nx - 2, pos.Y - MaxStepUp, w + 4, h + MaxStepUp + 4, tiles);
+			n = CollectCarved(nx - 2, pos.Y - MaxStepUp, w + 4, h + MaxStepUp + 4, tiles);
 			if (n == 0 || !OverlapsCarved(nx, pos.Y, w, h, tiles, n))
 				return;
 			// must be standing on something

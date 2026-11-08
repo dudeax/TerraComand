@@ -72,6 +72,8 @@ namespace TerraCommand.Common.Actors
 		public Item Held;
 		public bool HeldInUse;          // vanilla is animating a swing: don't draw our copy
 		public float Kick;              // the gun jolts back along the aim when fired (px)
+		public bool Headless;           // a decapitated corpse
+		public float Sink;              // standing over a shallow dip: the body sinks onto its feet (px)
 		public Color Light;
 	}
 
@@ -90,7 +92,7 @@ namespace TerraCommand.Common.Actors
 		{
 			float lying = Lying(p);
 			float stand = MathHelper.Lerp(art.HipHeight, art.CrouchHipHeight, p.Crouch);
-			return p.Feet + new Vector2(-p.Dir * 6.5f * lying, -MathHelper.Lerp(stand, 6f, lying));
+			return p.Feet + new Vector2(-p.Dir * 6.5f * lying, -MathHelper.Lerp(stand, 6f, lying) + p.Sink * (1f - lying));
 		}
 
 		public static float Lying(in RigPose p) => Math.Clamp((Math.Abs(MathF.Sin(p.Rot)) - 0.3f) / 0.5f, 0f, 1f);
@@ -119,7 +121,7 @@ namespace TerraCommand.Common.Actors
 			return shoulder + AimWorld(p).ToRotationVector2() * 8f + new Vector2(0f, 1.5f);
 		}
 
-		public static void Build(RigPose p, List<RigPiece> outList)
+		public static void Build(RigPose p, List<RigPiece> outList, bool onlyHead = false)
 		{
 			ActorArt art = ActorArt.Get(p.Kind);
 			if (!art.Torso.IsLoaded || !art.Thigh.IsLoaded)
@@ -210,8 +212,15 @@ namespace TerraCommand.Common.Actors
 			outList.Add(new RigPiece(torso, hip, null, light, rot, new Vector2(torso.Width / 2f, torso.Height), 1f, fx));
 			Texture2D head = art.Head.Value;
 			float headTurn = p.Unstable ? 0f : Math.Clamp(-p.AimAngle * 0.45f * dir - rot * 0.4f, -0.6f, 0.6f);
-			outList.Add(new RigPiece(head, W(new Vector2(art.Neck.X * dir, art.Neck.Y)), null, light, rot + headTurn,
-				new Vector2(head.Width / 2f, head.Height), 1f, fx));
+			var headPiece = new RigPiece(head, W(new Vector2(art.Neck.X * dir, art.Neck.Y)), null, light, rot + headTurn,
+				new Vector2(head.Width / 2f, head.Height), 1f, fx);
+			if (onlyHead) {
+				outList.Clear();
+				outList.Add(headPiece);
+				return;
+			}
+			if (!p.Headless)
+				outList.Add(headPiece);
 			Leg(0, light);
 			if (holding && !p.HeldInUse)
 				Held(grip);
@@ -324,6 +333,7 @@ namespace TerraCommand.Common.Actors
 				Prone = a.Prone != ProneState.NotProne && a.Status == ActorStatus.Stable,
 				Unstable = a.Status != ActorStatus.Stable,
 				Grounded = Player.velocity.Y == 0f,
+				Sink = Player.velocity.Y == 0f && a.Status == ActorStatus.Stable ? BodyGround.FeetSink(Player.position, Player.width, Player.height) : 0f,
 				VelX = Player.velocity.X,
 				WalkDist = WalkDist,
 				Held = Player.HeldItem,

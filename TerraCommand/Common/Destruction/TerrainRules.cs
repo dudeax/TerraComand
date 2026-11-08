@@ -76,8 +76,8 @@ namespace TerraCommand.Common.Destruction
 			if (Soft.Contains(type) || Main.tileSand[type])
 				return 1f;
 			if (Main.tileBrick[type])
-				return 0.45f;
-			return 0.65f;
+				return 0.6f;
+			return 0.8f;   // a blast still bowls out a round crater in stone, just a smaller one
 		}
 
 		/// <summary>Explosive power used when comparing against tile hardness.</summary>

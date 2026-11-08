@@ -1,0 +1,50 @@
+# Bodies on pixel terrain: walking over rough blasted / dug ground, a body sits on the actual ground (no sinking,
+# floating or grounded/airborne jitter). Screenshots for checking by eye.
+nospawn
+clearnpcs
+goto spawn
+flatten 60 24
+wait 30
+fill -20 4 25 8 Stone
+fill -20 0 25 3 Dirt
+maxlife 500
+wait 2
+heal
+
+# flat ground first: the baseline
+groundprobe 120
+walk right 120
+wait 5
+expect groundgap <= 0.6
+expect flickers <= 1
+
+# rough ground: a row of small carves (pixel bumps and dips) along the path
+goto spawn
+carve 40 21 10                       # (offsets from the body's centre: the feet are 21px below it)
+carve 70 23 12
+carve 100 19 9
+carve 130 22 14
+carve 160 20 8
+carve 190 24 12
+wait 5
+screenshot terrain-rough
+groundprobe 400
+walk right 400
+wait 5
+expect floating <= 12                # stepping onto a dip's rim takes a tick or two
+expect flickers <= 8
+screenshot terrain-rough-walked
+
+# a blast crater: a round bowl, the blasted material flying off as debris that settles; walk through it
+goto spawn
+projectile Bomb 100 10 0 0
+wait 182
+expect debris >= 40
+screenshot terrain-blast
+wait 60
+screenshot terrain-crater
+groundprobe 500
+walk right 500
+wait 5
+expect floating <= 12
+expect flickers <= 10

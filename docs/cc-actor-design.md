@@ -189,3 +189,22 @@ How the pieces map:
 - **Throwables** (consumable thrown items: grenades, bombs, dynamite): held to wind up over 0.75 s, thrown on release at
   2.5–9 px/tick (CC MinThrowVel..MaxThrowVel).
 - Swords keep Terraria's swing; CC has no melee to port.
+
+## Idle bodies and remains (done)
+
+- **Idle bodies:** `CloneUnit` hosts the same `CCActor` as a player's body, server-authoritative. The NPC's velocity is the
+  actor's, vanilla NPC collision plus step-up moves it, and impacts feed CC travel-impulse damage.
+  - A simple AI fills an `ActorInput`. In Follow it walks after the nearest team player, runs when far, and jets when blocked for
+    20 ticks or when the leader is 5+ tiles above. It aims at the nearest enemy in sight and fires once the aim is on target,
+    from the muzzle with magazine, reload and shake (×2 airborne).
+  - Clients receive status, prone, flip, rotation, aim and crouch in `SendExtraAI` whenever they change, for drawing.
+  - Blasts throw units through `CCActor.Shove` and also damage them: a player's explosives can't hit "friendly" NPCs in vanilla.
+- **Remains:** `GibSystem` (cosmetic, every client).
+  - `Decide`: a blast gibs, a headshot kill decapitates, overkill (half max life in one hit) gibs, anything else leaves a
+    corpse.
+  - CC bodies gib into their actual rig pieces (`RigRenderer.Build` → tumbling, bleeding chunks).
+  - Corpses are posed rigs that fall with CC gravity, topple flat, and fade after 40 s. Decapitated ones are headless, and the
+    head flies off as a chunk.
+  - Terraria enemies are cut from their sprite frame (vanilla gore is suppressed when they are).
+  - Blood droplets splat on terrain; a splat drops off when its ground is destroyed.
+  - A control transfer isn't a vanilla death, so its remains are broadcast (`PacketType.DeathFx`).

@@ -133,6 +133,9 @@ namespace TerraCommand.Common.Destruction
 
 					int removedHere = BitOperations.PopCount(d.Mask) - BitOperations.PopCount(before);
 					removedTotal += removedHere;
+					// the removed material flies off as loose grains (CC)
+					bool blast = (flags & CarveFlags.Explosion) != 0;
+					Debris.FromPixels(i, j, d.Mask & ~before, tile, c, blast ? 4.5f : 2f);
 
 					if (!Main.dedServ && (flags & CarveFlags.NoDust) == 0) {
 						int dusts = Math.Min(1 + removedHere / 6, 4);
@@ -141,6 +144,7 @@ namespace TerraCommand.Common.Destruction
 					}
 
 					if (BitOperations.PopCount(d.Mask) >= threshold) {
+						Debris.FromPixels(i, j, ~d.Mask, tile, c, 1f); // what's left crumbles and falls
 						damage.Remove(key);
 						if (authority)
 							Crumble(i, j, (flags & CarveFlags.DropItems) != 0);
@@ -259,8 +263,12 @@ namespace TerraCommand.Common.Destruction
 			}
 			var slice = free[..n];
 			slice.Sort((x, y) => x.dist != y.dist ? x.dist.CompareTo(y.dist) : x.bit.CompareTo(y.bit));
+			ulong beforeMine = d.Mask;
 			for (int k = 0; k < Math.Min(pixels, n); k++)
 				d.Mask |= 1UL << slice[k].bit;
+			// dug material sprays out of the bite, back toward the digger
+			Vector2 tileCenter = new(i * 16 + 8, j * 16 + 8);
+			Debris.FromPixels(i, j, d.Mask & ~beforeMine, tile, tileCenter + (tileCenter - aim) * 2f, 1.8f);
 
 			if (!Main.dedServ)
 				for (int k = 0; k < 3; k++)
@@ -293,8 +301,12 @@ namespace TerraCommand.Common.Destruction
 			var d = new Damage { Mask = r.ReadUInt64(), Type = r.ReadUInt16() };
 			if (Main.netMode != NetmodeID.MultiplayerClient)
 				return;
-			if (WorldGen.InWorld(i, j) && Main.tile[i, j].HasTile && !Main.dedServ)
+			if (WorldGen.InWorld(i, j) && Main.tile[i, j].HasTile && !Main.dedServ) {
 				WorldGen.KillTile_MakeTileDust(i, j, Main.tile[i, j]);
+				damage.TryGetValue(new Point16(i, j), out Damage old);
+				ulong newly = d.Mask & ~(old.Type == d.Type ? old.Mask : 0UL);
+				Debris.FromPixels(i, j, newly, Main.tile[i, j], new Vector2(i * 16 + 8, j * 16 + 8), 1.8f);
+			}
 			damage[new Point16(i, j)] = d;
 		}
 

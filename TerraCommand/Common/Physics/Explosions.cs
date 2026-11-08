@@ -31,7 +31,9 @@ namespace TerraCommand.Common.Physics
 		}
 
 		/// <summary>Runs on every machine when an explosive dies; each applies what it has authority over.</summary>
-		public static void Blast(Vector2 center, float radius, float strength)
+		/// <param name="damage">explosion damage: CC bodies (idle units) take it with distance falloff; vanilla doesn't let a player's
+		/// explosives hurt "friendly" NPCs, but in CC a blast hurts everyone in it</param>
+		public static void Blast(Vector2 center, float radius, float strength, int damage = 0)
 		{
 			// The local player's own body (each client moves its own player).
 			if (!Main.dedServ) {
@@ -50,14 +52,15 @@ namespace TerraCommand.Common.Physics
 				Vector2 imp = Impulse(center, n.Center, radius, strength);
 				if (imp == Vector2.Zero)
 					continue;
-				float resist = n.ModNPC is CloneUnit ? 1f : Math.Min(1f, n.knockBackResist * 1.5f);
-				n.velocity += imp * resist;
-				n.netUpdate = true;
 				if (n.ModNPC is CloneUnit unit) {
-					unit.SkipImpactCheck();
-					if (imp.Length() > Tuning.KnockdownImpulse)
-						unit.KnockDown(Math.Sign(imp.X));
+					unit.Blasted(imp * Actors.CC.BlastScale);   // a CC body: the same blast physics as a controlled one
+					float near = 1f - Vector2.Distance(n.Center, center) / radius;
+					if (damage > 0 && near > 0f)
+						n.SimpleStrikeNPC(Math.Max(1, (int)(damage * near)), Math.Sign(n.Center.X - center.X), noPlayerInteraction: true);
+					continue;
 				}
+				n.velocity += imp * Math.Min(1f, n.knockBackResist * 1.5f);
+				n.netUpdate = true;
 			}
 		}
 
@@ -68,11 +71,15 @@ namespace TerraCommand.Common.Physics
 		public static void MarkBlasted(Vector2 center, float radius)
 		{
 			foreach (Player p in Main.ActivePlayers)
-				if (Vector2.Distance(p.Center, center) < radius)
+				if (Vector2.Distance(p.Center, center) < radius) {
 					p.GetModPlayer<Combat.DamagePlayer>().BlastedTimer = 15;
+					p.GetModPlayer<Combat.DamagePlayer>().BlastCenter = center;
+				}
 			foreach (NPC n in Main.ActiveNPCs)
-				if (Vector2.Distance(n.Center, center) < radius + Math.Max(n.width, n.height) / 2f)
+				if (Vector2.Distance(n.Center, center) < radius + Math.Max(n.width, n.height) / 2f) {
 					n.GetGlobalNPC<Combat.DamageGlobalNPC>().BlastedTimer = 15;
+					n.GetGlobalNPC<Combat.DamageGlobalNPC>().BlastCenter = center;
+				}
 		}
 
 		static Vector2 Impulse(Vector2 center, Vector2 target, float radius, float strength)

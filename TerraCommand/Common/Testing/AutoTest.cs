@@ -62,6 +62,47 @@ namespace TerraCommand.Common.Testing
 		static Vector2 markPos;
 		static float peakRise;
 		static int shotsLeft, shotGap, shotWait, gibsAtMark, deliveredAtMark;
+		// ground probe: how well a walking body sits on the ground (gap = ground surface - hitbox bottom, px)
+		static int groundProbe, probeTicks, airFlickers, floatTicks;
+		static float gapMin = float.MaxValue, gapMax = float.MinValue;
+		static bool lastGrounded = true;
+		public static bool ProbingGround => groundProbe > 0;
+
+		/// <summary>Called every tick by the driver while `groundprobe` runs.</summary>
+		static void GroundProbeTick()
+		{
+			if (groundProbe <= 0 || P == null)
+				return;
+			groundProbe--;
+			probeTicks++;
+			// the ground under the feet (the middle of the hitbox): the highest solid pixel, searching from 12px above them
+			float best = float.MaxValue;
+			float cx = P.position.X + P.width / 2f;
+			for (float x = cx - Actors.BodyGround.FeetHalfWidth + 0.5f; x < cx + Actors.BodyGround.FeetHalfWidth; x += 1f) {
+				for (float y = P.Bottom.Y - 12; y < P.Bottom.Y + 24; y += 0.5f) {
+					if (Collision.SolidCollision(new Vector2(x, y), 1, 1)) {
+						best = Math.Min(best, y);
+						break;
+					}
+				}
+			}
+			if (best != float.MaxValue) {
+				// a body standing over a shallow dip is drawn sunk onto its feet (BodyGround.FeetSink): that much gap is fine
+				float gap = best - P.Bottom.Y;
+				if (gap > 0f && gap <= Actors.BodyGround.MaxStepDown)
+					gap = 0f;
+				var body = P.GetModPlayer<Physics.BodyPhysicsPlayer>();
+				if (body.Grounded && gap > 1f)
+					floatTicks++;
+				if (body.Grounded) {
+					gapMin = Math.Min(gapMin, gap);
+					gapMax = Math.Max(gapMax, gap);
+				}
+				if (body.Grounded != lastGrounded && gap < 3f)
+					airFlickers++;
+				lastGrounded = body.Grounded;
+			}
+		}
 
 		static int EnvInt(string name, int def) => int.TryParse(Environment.GetEnvironmentVariable(name), out int v) ? v : def;
 
@@ -333,6 +374,7 @@ namespace TerraCommand.Common.Testing
 
 		static void Step()
 		{
+			GroundProbeTick();
 			if (waitTicks > 0) { waitTicks--; return; }
 			if (WalkTicks > 0 || JumpTicks > 0 || DownTicks > 0) return;
 			if (shotsLeft > 0) {
@@ -475,7 +517,7 @@ namespace TerraCommand.Common.Testing
 					peakRise = 0f;
 					P.GetModPlayer<Combat.AimPlayer>().ShotLog.Clear();
 					P.GetModPlayer<Combat.AimPlayer>().ConeLog.Clear();
-					gibsAtMark = Combat.DamageRules.GibCount;
+					gibsAtMark = Combat.GibSystem.Gibs;
 					deliveredAtMark = ShipSystem.Delivered;
 					break;
 				case "shoot": shotsLeft = I(a[1]); shotGap = I(a[2]); shotWait = 0; break;
@@ -608,12 +650,19 @@ namespace TerraCommand.Common.Testing
 				case "pickup": NoPickup = a[1] == "off"; break;
 				case "probe": Probe = I(a[1]); break;
 				case "screenshot": pendingShot = a[1]; shotFrames = shotWarmup; break;
+				case "groundprobe": groundProbe = I(a[1]); probeTicks = airFlickers = floatTicks = 0; gapMin = float.MaxValue; gapMax = float.MinValue; break;
 				case "claimbrain": // claimbrain [starter] : enter-world brain logic (tests otherwise start as plain soldiers)
 					Units.BrainSystem.claimInTests = true;
 					Units.BrainSystem.starterInTests = a.Length > 1 && a[1] == "starter";
 					Units.BrainSystem.OnEnterWorld(P);
 					Units.BrainSystem.claimInTests = false;
 					break;
+				case "npclife": { var n = NearestNpc(a[1]); n.life = I(a[2]); break; } // npclife <NPCName> <life>
+				case "hurtunit": { // hurtunit <damage> : hit the nearest idle body
+					var u = UnitSystem.AllUnits().OrderBy(x => Vector2.Distance(x.NPC.Center, P.Center)).First();
+					u.NPC.SimpleStrikeNPC(I(a[1]), 1, noPlayerInteraction: true);
+					break;
+				}
 				case "killunit": { // killunit : destroy the nearest idle body
 					var u = UnitSystem.AllUnits().OrderBy(x => Vector2.Distance(x.NPC.Center, P.Center)).First();
 					u.NPC.StrikeInstantKill();
@@ -708,6 +757,24 @@ namespace TerraCommand.Common.Testing
 					break;
 				}
 				case "delivered": Expect(Cmp(ShipSystem.Delivered - deliveredAtMark, a[2], F(a[3])), $"{desc} ({ShipSystem.Delivered - deliveredAtMark} since mark)"); break;
+				case "unitdist": { // unitdist op tiles : distance from the player to the nearest idle body
+					var u = UnitSystem.AllUnits().OrderBy(x => Vector2.Distance(x.NPC.Center, P.Center)).FirstOrDefault();
+					float d = u == null ? 9999f : Vector2.Distance(u.NPC.Center, P.Center) / 16f;
+					Expect(Cmp(d, a[2], F(a[3])), $"{desc} ({d:0.0} tiles, unit at {u?.NPC.Bottom.ToTileCoordinates()})");
+					break;
+				}
+				case "groundgap": { // largest |gap| between the hitbox bottom and the ground under it while grounded (px)
+					float g = Math.Max(Math.Abs(gapMin), Math.Abs(gapMax));
+					Expect(probeTicks > 0 && Cmp(g, a[2], F(a[3])), $"{desc} (gap {gapMin:0.0}..{gapMax:0.0} px over {probeTicks} ticks, {airFlickers} grounded/air flickers)");
+					break;
+				}
+				case "debris": Expect(Cmp(Destruction.Debris.Count, a[2], F(a[3])), $"{desc} ({Destruction.Debris.Count} grains)"); break;
+				case "floating": Expect(Cmp(floatTicks, a[2], F(a[3])), $"{desc} ({floatTicks} of {probeTicks} ticks standing with the feet over a gap)"); break;
+				case "flickers": Expect(Cmp(airFlickers, a[2], F(a[3])), $"{desc} ({airFlickers} grounded/air flickers over {probeTicks} ticks)"); break;
+				case "chunks": Expect(Cmp(Combat.GibSystem.ActiveChunks, a[2], F(a[3])), $"{desc} ({Combat.GibSystem.ActiveChunks} pieces)"); break;
+				case "corpses": Expect(Cmp(Combat.GibSystem.ActiveCorpses, a[2], F(a[3])), $"{desc} ({Combat.GibSystem.ActiveCorpses} corpses)"); break;
+				case "splats": Expect(Cmp(Combat.GibSystem.ActiveSplats, a[2], F(a[3])), $"{desc} ({Combat.GibSystem.ActiveSplats} splats)"); break;
+				case "deathfx": Expect(Combat.GibSystem.LastFx.ToString().ToLower() == a[2], $"{desc} (last {Combat.GibSystem.LastFx})"); break;
 				case "rounds": { Item h = P.inventory[0]; int r = h.IsAir || !Combat.Devices.IsFirearm(h) ? -1 : h.GetGlobalItem<Combat.MagazineGlobalItem>().Loaded(h); Expect(Cmp(r, a[2], F(a[3])), $"{desc} (rounds {r})"); break; }
 				case "magazine": { Item h = P.inventory[0]; int m = Combat.Devices.IsFirearm(h) ? Combat.Devices.Stats(h).Magazine : -1; Expect(Cmp(m, a[2], F(a[3])), $"{desc} (magazine {m})"); break; }
 				case "reloading": Expect(P.GetModPlayer<Combat.AimPlayer>().Reloading == (a[2] == "yes"), $"{desc} (reload ticks {P.GetModPlayer<Combat.AimPlayer>().ReloadTicks})"); break;
@@ -757,7 +824,7 @@ namespace TerraCommand.Common.Testing
 					Expect((u.KnockedTicks > 0) == (a[2] == "yes"), $"{desc} (knocked {u.KnockedTicks})");
 					break;
 				}
-				case "gibs": { int n = Combat.DamageRules.GibCount - gibsAtMark; Expect(Cmp(n, a[2], F(a[3])), $"{desc} ({n} since mark)"); break; }
+				case "gibs": { int n = Combat.GibSystem.Gibs - gibsAtMark; Expect(Cmp(n, a[2], F(a[3])), $"{desc} ({n} since mark)"); break; }
 				case "wall": { int x = t.X + I(a[2]), y = t.Y + I(a[3]); Expect(Main.tile[x, y].WallType != WallID.None, $"{desc} (wall {Main.tile[x, y].WallType})"); break; }
 				case "alive": Expect(!P.dead, $"{desc} (life {P.statLife})"); break;
 				case "life": Expect(Cmp(P.statLife, a[2], F(a[3])), $"{desc} (life {P.statLife})"); break;

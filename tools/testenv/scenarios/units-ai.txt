@@ -1,0 +1,28 @@
+# Idle bodies are CC actors with a simple AI: told to follow, they walk after you (CC speed) and use the jetpack to
+# get over what blocks them.
+nospawn
+clearnpcs
+goto spawn
+flatten 80 30
+wait 30
+give CloneBody 2
+hold CloneBody
+aim 60 -30
+use 2
+wait 10
+expect units == 1
+orders                              # follow
+wait 5
+
+# walk away: it follows on foot
+goto rel 14 0
+wait 300
+expect unitdist <= 7
+screenshot units-follow
+
+# a wall 5 tiles high in the way: it jets over
+fill 4 -5 4 -1 Stone
+goto rel 14 0
+wait 600
+expect unitdist <= 7
+screenshot units-jet

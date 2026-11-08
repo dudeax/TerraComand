@@ -41,6 +41,15 @@ namespace TerraCommand.Common.Physics
 		public float Fuel => Actor.Fuel;
 		bool Simulated => Player.whoAmI == Main.myPlayer && !Player.dead;
 
+		/// <summary>Bodies are narrower than a Terraria character (kept centred). Applied to every player on every machine.</summary>
+		public override void PreUpdate()
+		{
+			if (Player.width != CC.BodyWidth && !Player.mount.Active) {
+				Player.position.X += (Player.width - CC.BodyWidth) / 2f;
+				Player.width = CC.BodyWidth;
+			}
+		}
+
 		// ------------------------------------------------------------ gear -> jetpack
 
 		public override void PostUpdateEquips()
@@ -124,6 +133,12 @@ namespace TerraCommand.Common.Physics
 			Actor.Vel = Player.velocity; // take in outside changes (hits, hooks, blasts)
 			Actor.Control(Input);
 			Actor.Physics(Input);
+			// balanced on the edge of the hitbox with the feet over nothing: slip off it
+			if (Actor.Grounded && Actor.Status == ActorStatus.Stable && !Actor.Jetting) {
+				int slip = Actors.BodyGround.SlipDirection(Player.position, Player.width, Player.height);
+				if (slip != 0 && Math.Sign(Actor.Vel.X) != -slip)
+					Actor.Vel.X = slip * Math.Max(Math.Abs(Actor.Vel.X), 0.6f);
+			}
 			Player.velocity = Actor.Vel;
 			Player.direction = Actor.FlipFactor;
 			velRequested = Player.velocity;
@@ -155,6 +170,17 @@ namespace TerraCommand.Common.Physics
 		{
 			if (Simulated) {
 				bool grounded = Player.velocity.Y == 0f && velRequested.Y >= 0f;
+				// walking down rough ground: a few pixels' drop is a step, not a fall
+				if (!grounded && Actor.Grounded && !Actor.Jetting && Actor.Status == ActorStatus.Stable
+					&& Player.velocity.Y >= 0f && Player.velocity.Y < 1.5f && Player.grappling[0] < 0) {
+					float drop = Actors.BodyGround.DropToGround(Player.position, Player.width, Player.height);
+					if (drop >= 0f) {
+						Player.position.Y += drop;
+						Player.velocity.Y = 0f;
+						velRequested.Y = 0f;
+						grounded = true;
+					}
+				}
 				// Terraria stops a body over a couple of ticks (first shortening the move to touch the surface, then
 				// zeroing it), so speed lost over consecutive ticks is added up and judged as one impact.
 				float loss = (velRequested - Player.velocity).Length();

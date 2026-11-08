@@ -191,7 +191,7 @@ namespace TerraCommand.Content.NPCs
 			ShipSystem.Destroyed(this);
 			PixelTerrain.RequestCarve(NPC.Center, 40f, TerrainRules.ExplosivePower, CarveFlags.Explosion);
 			Common.Physics.Explosions.MarkBlasted(NPC.Center, 96f);
-			Common.Physics.Explosions.Blast(NPC.Center, 96f, Common.Physics.Tuning.BlastImpulse);
+			Common.Physics.Explosions.Blast(NPC.Center, 96f, Common.Physics.Tuning.BlastImpulse, 120);
 			if (!Main.dedServ) {
 				for (int i = 0; i < 50; i++)
 					Dust.NewDust(NPC.position, NPC.width, NPC.height, DustID.Smoke, Main.rand.NextFloat(-6, 6), Main.rand.NextFloat(-6, 2), 100, default, 2.2f);
