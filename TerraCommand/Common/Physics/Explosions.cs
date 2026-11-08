@@ -53,6 +53,11 @@ namespace TerraCommand.Common.Physics
 				float resist = n.ModNPC is CloneUnit ? 1f : Math.Min(1f, n.knockBackResist * 1.5f);
 				n.velocity += imp * resist;
 				n.netUpdate = true;
+				if (n.ModNPC is CloneUnit unit) {
+					unit.SkipImpactCheck();
+					if (imp.Length() > Tuning.KnockdownImpulse)
+						unit.KnockDown(Math.Sign(imp.X));
+				}
 			}
 		}
 

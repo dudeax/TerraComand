@@ -23,6 +23,51 @@ namespace TerraCommand.Content.NPCs
 		public int Team;
 		public UnitOrder Order = UnitOrder.Sentry;
 		int fireCooldown;
+
+		// Cortex Command body physics, same rules as a controlled body (see BodyPhysicsPlayer)
+		public int KnockedTicks;
+		int knockDir = 1;
+		Vector2 velAfterAI;
+		float impactAccum;
+		int impactTimer, jetTicks;
+		float fuel = Common.Physics.Tuning.JetBaseFuel;
+		bool skipImpact = true;
+
+		public void KnockDown(int dir)
+		{
+			knockDir = dir == 0 ? 1 : dir;
+			KnockedTicks = Math.Max(KnockedTicks, Common.Physics.Tuning.KnockdownTicks);
+			skipImpact = true;
+			NPC.netUpdate = true;
+		}
+
+		/// <summary>Speed lost to collisions since last tick (gravity accounted for), summed over a short window.</summary>
+		void TrackImpacts()
+		{
+			Vector2 expected = velAfterAI + new Vector2(0f, Common.Physics.Tuning.Gravity);
+			expected.Y = Math.Min(expected.Y, Common.Physics.Tuning.MaxFallSpeed);
+			float loss = Vector2.Distance(expected, NPC.velocity);
+			if (skipImpact) {
+				impactAccum = 0f;
+				impactTimer = 0;
+				skipImpact = false;
+			}
+			else if (loss > 2.5f) {
+				impactAccum += loss;
+				impactTimer = 3;
+			}
+			else if (impactTimer > 0 && --impactTimer == 0) {
+				float over = impactAccum - Common.Physics.Tuning.ImpactThreshold;
+				if (over > 0f) {
+					int dmg = (int)(over * over * Common.Physics.Tuning.ImpactDamageScale);
+					if (dmg > 0)
+						NPC.SimpleStrikeNPC(dmg, 0, noPlayerInteraction: true);
+					if (impactAccum > Common.Physics.Tuning.KnockdownImpact)
+						KnockDown(Math.Sign(NPC.velocity.X));
+				}
+				impactAccum = 0f;
+			}
+		}
 		int targetIndex = -1;
 		Player dummy;
 
@@ -72,9 +117,20 @@ namespace TerraCommand.Content.NPCs
 			Loadout.Life = NPC.life;
 			if (fireCooldown > 0)
 				fireCooldown--;
+			NPC.GravityMultiplier = MultipliableFloat.One * (Common.Physics.Tuning.Gravity / 0.3f);
+			NPC.MaxFallSpeedMultiplier = MultipliableFloat.One * (Common.Physics.Tuning.MaxFallSpeed / 10f);
+			if (KnockedTicks > 0)
+				KnockedTicks--;
 
 			if (Main.netMode == NetmodeID.MultiplayerClient)
 				return;
+			TrackImpacts();
+			if (KnockedTicks > 0) {
+				// on its back: no orders, grinds to a halt
+				if (NPC.velocity.Y == 0f)
+					NPC.velocity.X *= 1f - Common.Physics.Tuning.KnockedFriction;
+				return;
+			}
 
 			FindTarget();
 			NPC target = targetIndex >= 0 ? Main.npc[targetIndex] : null;
@@ -94,17 +150,32 @@ namespace TerraCommand.Content.NPCs
 					// Teleport catch-up if hopelessly far behind.
 					if (Vector2.Distance(leader.Center, NPC.Center) > 16 * 120) {
 						NPC.Bottom = leader.Bottom;
+						skipImpact = true;
 						NPC.netUpdate = true;
 					}
 				}
 			}
-			NPC.velocity.X = MathHelper.Lerp(NPC.velocity.X, wantVX, 0.15f);
+			if (onGround)
+				NPC.velocity.X = MathHelper.Lerp(NPC.velocity.X, wantVX, 0.15f);
 			if (wantVX != 0f) {
 				Collision.StepUp(ref NPC.position, ref NPC.velocity, NPC.width, NPC.height, ref NPC.stepSpeed, ref NPC.gfxOffY);
-				if (onGround && NPC.collideX) {
-					NPC.velocity.Y = -7.5f;
+				// Blocked: hop and burn the jetpack to get over it.
+				if (onGround && NPC.collideX && jetTicks == 0 && fuel >= 15f) {
+					NPC.velocity.Y = -3.5f;
+					jetTicks = 20;
 					NPC.netUpdate = true;
 				}
+			}
+			if (jetTicks > 0 && fuel >= 1f) {
+				jetTicks--;
+				fuel -= 1f;
+				NPC.velocity.Y = Math.Max(NPC.velocity.Y - NPC.gravity - Common.Physics.Tuning.JetThrust, -Common.Physics.Tuning.JetMaxRise);
+				NPC.velocity.X += Math.Sign(wantVX) * Common.Physics.Tuning.JetSteer;
+			}
+			else {
+				jetTicks = 0;
+				if (onGround)
+					fuel = Math.Min(Common.Physics.Tuning.JetBaseFuel, fuel + Common.Physics.Tuning.JetBaseRegen * 2f);
 			}
 
 			if (target != null && fireCooldown <= 0)
@@ -173,6 +244,14 @@ namespace TerraCommand.Content.NPCs
 			}
 		}
 
+		public override void PostAI()
+		{
+			velAfterAI = NPC.velocity;
+		}
+
+		/// <summary>Moved by a teleport (orders, catch-up): not an impact.</summary>
+		public void SkipImpactCheck() => skipImpact = true;
+
 		public override void OnKill()
 		{
 			Loadout.DropAll(NPC.GetSource_Death(), NPC.Hitbox);
@@ -185,6 +264,8 @@ namespace TerraCommand.Content.NPCs
 			writer.Write((byte)Team);
 			writer.Write((byte)Order);
 			writer.Write(NPC.lifeMax);
+			writer.Write((byte)Math.Min(KnockedTicks, 255));
+			writer.Write((sbyte)knockDir);
 			Loadout.Write(writer, visualsOnly: true);
 		}
 
@@ -193,6 +274,8 @@ namespace TerraCommand.Content.NPCs
 			Team = reader.ReadByte();
 			Order = (UnitOrder)reader.ReadByte();
 			NPC.lifeMax = reader.ReadInt32();
+			KnockedTicks = reader.ReadByte();
+			knockDir = reader.ReadSByte();
 			Loadout = UnitLoadout.Read(reader);
 		}
 
@@ -203,6 +286,8 @@ namespace TerraCommand.Content.NPCs
 			dummy ??= new Player();
 			Loadout.ApplyVisuals(dummy);
 			dummy.direction = NPC.direction == 0 ? 1 : NPC.direction;
+			dummy.fullRotation = KnockedTicks > 0 ? knockDir * MathHelper.PiOver2 * Math.Min(1f, KnockedTicks / 10f) : 0f;
+			dummy.fullRotationOrigin = new Vector2(dummy.width / 2f, dummy.height / 2f);
 			dummy.velocity = NPC.velocity;
 			dummy.position = NPC.Bottom - new Vector2(dummy.width / 2f, dummy.height) + new Vector2(0, NPC.gfxOffY);
 			dummy.gfxOffY = 0;

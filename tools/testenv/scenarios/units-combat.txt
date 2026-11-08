@@ -20,3 +20,23 @@ wait 600
 expect npcs Zombie == 0         # the sentry shot it
 screenshot sentry
 orders                          # follow
+
+# Idle bodies follow the same physics: a long fall hurts them, a nearby blast knocks them flat.
+orders                          # back to sentry
+wait 30
+expect unitlife >= 90
+liftunit 40
+wait 150
+expect unitlife < 90
+heal
+spawnnpc Zombie 0 0
+clearnpcs
+maxlife 400                     # our own body is near the blast too
+wait 2
+heal
+placeunit 6
+wait 10
+blastunit -24                   # a blast 1.5 tiles to its left
+wait 2
+expect unitknocked yes
+screenshot unit-knocked

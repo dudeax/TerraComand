@@ -103,8 +103,10 @@ namespace TerraCommand.Common.Combat
 			Vector2 hp = DamageRules.HitPoint(npc.Hitbox, projectile);
 			pendingHitPoint = hp;
 			pendingHead = DamageRules.HasHead(npc) && DamageRules.InHeadZone(npc.Hitbox, hp);
-			if (DamageRules.IsExplosive(projectile)) // vanilla deals blast damage before the projectile's Kill hooks
-				BlastedTimer = 15;
+			if (DamageRules.IsExplosive(projectile)) {
+				BlastedTimer = 15;            // vanilla deals blast damage before the projectile's Kill hooks
+				modifiers.Knockback *= 0f;    // explosions push through blast physics instead (Explosions.Blast)
+			}
 			if (pendingHead) {
 				modifiers.SourceDamage *= DamageRules.HeadshotMultiplier;
 				LastHeadshot = true;

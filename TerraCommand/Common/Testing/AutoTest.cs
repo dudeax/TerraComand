@@ -97,7 +97,7 @@ namespace TerraCommand.Common.Testing
 			baselinePath = Environment.GetEnvironmentVariable("TC_BASELINE");
 			speed = Math.Max(1, EnvInt("TC_SPEED", 10));
 			drawEvery = Math.Max(1, EnvInt("TC_DRAW_EVERY", 30));
-			shotWarmup = Math.Max(1, EnvInt("TC_SHOT_FRAMES", 10));
+			shotWarmup = Math.Max(1, EnvInt("TC_SHOT_FRAMES", 24));
 			Directory.CreateDirectory(outRoot);
 			summary = new StreamWriter(Path.Combine(outRoot, "summary.txt"), append: false) { AutoFlush = true };
 			Main.OnTickForThirdPartySoftwareOnly += SessionTick;
@@ -394,6 +394,27 @@ namespace TerraCommand.Common.Testing
 					P.armor[slot] = new Item(ItemType(a[1]));
 					break;
 				}
+				case "placeunit": { // placeunit <dtiles> : stand the nearest idle body next to the player
+					var u = UnitSystem.AllUnits().OrderBy(x => Vector2.Distance(x.NPC.Center, P.Center)).First();
+					u.NPC.Bottom = P.Bottom + new Vector2(F(a[1]) * 16, 0);
+					u.NPC.velocity = Vector2.Zero;
+					u.SkipImpactCheck();
+					break;
+				}
+				case "blastunit": { // blastunit <dx px> : apply blast physics (no vanilla explosive) next to the nearest idle body
+					var u = UnitSystem.AllUnits().OrderBy(x => Vector2.Distance(x.NPC.Center, P.Center)).First();
+					Vector2 c = u.NPC.Center + new Vector2(F(a[1]), 8);
+					Physics.Explosions.MarkBlasted(c, 96f);
+					Physics.Explosions.Blast(c, 96f, Physics.Tuning.BlastImpulse);
+					break;
+				}
+				case "liftunit": { // liftunit <tiles> : teleport the nearest idle body straight up
+					var u = UnitSystem.AllUnits().OrderBy(x => Vector2.Distance(x.NPC.Center, P.Center)).First();
+					u.NPC.position.Y -= F(a[1]) * 16;
+					u.NPC.velocity = Vector2.Zero;
+					u.SkipImpactCheck();
+					break;
+				}
 				case "heal": P.statLife = P.statLifeMax2; break;
 				case "maxlife": // max life comes from consumed life crystals (+20 each over the base 100)
 					P.ConsumedLifeCrystals = Math.Clamp((I(a[1]) - 100) / 20, 0, Player.LifeCrystalMax);
@@ -614,6 +635,16 @@ namespace TerraCommand.Common.Testing
 					break;
 				}
 				case "mywounds": { int n = P.GetModPlayer<Combat.DamagePlayer>().Wounds.Count; Expect(Cmp(n, a[2], F(a[3])), $"{desc} (has {n})"); break; }
+				case "unitlife": {
+					var u = UnitSystem.AllUnits().OrderBy(x => Vector2.Distance(x.NPC.Center, P.Center)).First();
+					Expect(Cmp(u.NPC.life, a[2], F(a[3])), $"{desc} (unit life {u.NPC.life}/{u.NPC.lifeMax})");
+					break;
+				}
+				case "unitknocked": {
+					var u = UnitSystem.AllUnits().OrderBy(x => Vector2.Distance(x.NPC.Center, P.Center)).First();
+					Expect((u.KnockedTicks > 0) == (a[2] == "yes"), $"{desc} (knocked {u.KnockedTicks})");
+					break;
+				}
 				case "gibs": { int n = Combat.DamageRules.GibCount - gibsAtMark; Expect(Cmp(n, a[2], F(a[3])), $"{desc} ({n} since mark)"); break; }
 				case "wall": { int x = t.X + I(a[2]), y = t.Y + I(a[3]); Expect(Main.tile[x, y].WallType != WallID.None, $"{desc} (wall {Main.tile[x, y].WallType})"); break; }
 				case "alive": Expect(!P.dead, $"{desc} (life {P.statLife})"); break;
@@ -659,7 +690,7 @@ namespace TerraCommand.Common.Testing
 				string path = Path.Combine(outDir, name + ".png");
 				using (var fs = File.Create(path))
 					tex.SaveAsPng(fs, w, h);
-				Report("SHOT", path);
+				Report("SHOT", $"{path} (day={Main.dayTime} time={Main.time:0} player={(Main.LocalPlayer.dead ? "dead" : "alive")} at {Main.LocalPlayer.Center.ToTileCoordinates()} screen={(Main.screenPosition / 16f).ToPoint()})");
 			}
 			catch (Exception e) {
 				fails++;

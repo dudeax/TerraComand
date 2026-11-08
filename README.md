@@ -46,7 +46,7 @@ saving and loads the next.
 Speed: about 16s of startup per session (Terraria loading its assets), then a few seconds per scenario. While a
 scenario runs the driver fast-forwards: `TC_SPEED` game ticks per rendered frame (default 10), and it only draws one
 frame in `TC_DRAW_EVERY` (default 30). The game logic still runs tick by tick, so results are unchanged. Before a
-screenshot it renders `TC_SHOT_FRAMES` frames at normal speed (default 10) so tiles and lighting are current.
+screenshot it renders `TC_SHOT_FRAMES` frames at normal speed (default 24) so tiles and lighting are current.
 
 Requirements (paths overridable by env vars): Terraria + tModLoader installed side by side (`TML_DIR`, default
 `/mnt/media/SteamLibrary/tModLoader`), plus `Xvfb` (`XVFB_ROOT`), `xdotool` (`XDOTOOL_ROOT`) and `ffmpeg`.

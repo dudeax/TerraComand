@@ -6,7 +6,7 @@
 # All scenarios run in ONE game session (fresh world + character each, no restart in between).
 # Results go to .testenv/runs/<timestamp>-<name>/ (summary.txt; per scenario: results.txt + screenshots);
 # .testenv/runs/latest points at the newest run. Exit code 0 = all expectations passed.
-# Tuning env vars: TC_SPEED (ticks per frame, default 10), TC_DRAW_EVERY (default 30), TC_SHOT_FRAMES (default 10).
+# Tuning env vars: TC_SPEED (ticks per frame, default 10), TC_DRAW_EVERY (default 30), TC_SHOT_FRAMES (default 24).
 # Uses its own save directory (.testenv), so real characters/worlds are never touched.
 # For multiplayer see run-mp.sh.
 set -uo pipefail
