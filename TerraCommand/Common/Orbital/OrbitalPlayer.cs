@@ -17,6 +17,12 @@ namespace TerraCommand.Common.Orbital
 				PacketHandler.Create(PacketType.FullSyncRequest).Send();
 		}
 
+		public override void ModifyStartingInventory(IReadOnlyDictionary<string, List<Item>> itemsByMod, bool mediumCoreDeath)
+		{
+			if (TerraCommandConfig.Instance.ConversionMode && itemsByMod.TryGetValue("Terraria", out var vanilla))
+				vanilla.Clear();
+		}
+
 		public override IEnumerable<Item> AddStartingItems(bool mediumCoreDeath)
 		{
 			if (mediumCoreDeath)

@@ -61,6 +61,7 @@ namespace TerraCommand.Common.Testing
 		internal static bool FireHeld => UseTicks > 0;
 		internal static readonly Dictionary<int, (int type, Vector2 pos)> Pinned = new();
 		static Vector2 markPos;
+		static int startingTools;
 		static float peakRise, unitSpan, unitMinX = float.MaxValue, unitMaxX = float.MinValue;
 		static int shotsLeft, shotGap, shotWait, gibsAtMark, deliveredAtMark;
 		// ground probe: how well a walking body sits on the ground (gap = ground surface - hitbox bottom, px)
@@ -356,6 +357,10 @@ namespace TerraCommand.Common.Testing
 			var p = new Player { name = playerName };
 			var vanilla = new List<Item> { new(ItemID.CopperShortsword), new(ItemID.CopperPickaxe), new(ItemID.CopperAxe) };
 			PlayerLoader.SetStartInventory(p, PlayerLoader.GetStartingItems(p, vanilla, mediumCoreDeath: false));
+			startingTools = p.inventory.Count(it => it.type == ItemID.CopperPickaxe || it.type == ItemID.CopperAxe || it.type == ItemID.CopperShortsword);
+			// Compatibility scenarios explicitly receive their copper tools; real characters do not.
+			for (int i = 0; i < 3; i++)
+				p.inventory[10 + i] = new Item(new[] { ItemID.CopperShortsword, ItemID.CopperPickaxe, ItemID.CopperAxe }[i]);
 			// Save, then load back from disk like the character-creation menu does, so every field the
 			// game expects (journey powers, etc.) is initialized.
 			string path = PlayerFileData.CreateAndSave(p).Path;
@@ -754,6 +759,15 @@ namespace TerraCommand.Common.Testing
 					u.NPC.StrikeInstantKill();
 					break;
 				}
+				case "motion": { // motion <fuel> <vx> <vy> <status>: establish a physical handoff regression
+					var actor = P.GetModPlayer<Physics.BodyPhysicsPlayer>().Actor;
+					actor.Fuel = F(a[1]);
+					actor.Status = Enum.Parse<Actors.ActorStatus>(a[4], ignoreCase: true);
+					actor.UnstableTicks = 0;
+					P.velocity = new Vector2(F(a[2]), F(a[3]));
+					actor.Vel = P.velocity;
+					break;
+				}
 				case "kind": P.GetModPlayer<Actors.RigPlayer>().Kind = Enum.Parse<Actors.ActorKind>(a[1], ignoreCase: true); break;
 				case "deploy": { // deploy <BodyItem> <dx px> : deploy a body of that kind next to the player
 					var body = (Content.Items.BodyItem)ContentSamples.ItemsByType[ItemType(a[1])].ModItem;
@@ -882,6 +896,10 @@ namespace TerraCommand.Common.Testing
 				case "peak": Expect(Cmp(peakRise, a[2], F(a[3])), $"{desc} (peak {peakRise:0.0} tiles above mark)"); break;
 				case "mounted": Expect(P.mount.Active == (a[2] == "yes"), $"{desc} (mount active={P.mount.Active})"); break;
 				case "stance": { var st = P.GetModPlayer<Physics.BodyPhysicsPlayer>().Stance; Expect(st.ToString().ToLower() == a[2], $"{desc} (stance {st}, height {P.height})"); break; }
+				case "startingtools": Expect(Cmp(startingTools, a[2], F(a[3])), $"{desc} (starter tools {startingTools})"); break;
+				case "velocityx": Expect(Cmp(P.velocity.X, a[2], F(a[3])), $"{desc} (velocity {P.velocity.X:0.00})"); break;
+				case "unitfuel": { float f = UnitSystem.TeamUnits(P.team).First().Actor.Fuel; Expect(Cmp(f, a[2], F(a[3])), $"{desc} (idle fuel {f:0.0})"); break; }
+				case "unitweapon": { int n = UnitSystem.TeamUnits(P.team).Count(u => u.Loadout.Held.type == ItemType(a[2])); Expect(Cmp(n, a[3], F(a[4])), $"{desc} (armed units {n})"); break; }
 				case "fuelnow": { float f = P.GetModPlayer<Physics.BodyPhysicsPlayer>().Fuel; Expect(Cmp(f, a[2], F(a[3])), $"{desc} (fuel {f:0})"); break; }
 				case "status": { var st = P.GetModPlayer<Physics.BodyPhysicsPlayer>().Actor.Status; Expect(st.ToString().ToLower() == a[2], $"{desc} (status {st}, rot {P.fullRotation:0.00})"); break; }
 				case "landedships": { int n = ShipSystem.Ships().Count(x => x.DoorOpen); Expect(Cmp(n, a[2], F(a[3])), $"{desc} (have {n})"); break; }
@@ -929,6 +947,7 @@ namespace TerraCommand.Common.Testing
 				case "holding": { Item h = P.inventory[0]; Expect(a[2] == "nothing" ? h.IsAir : h.type == ItemType(a[2]), $"{desc} (holding {(h.IsAir ? "nothing" : h.Name)})"); break; }
 				case "queue": { int n = P.inventory.Skip(1).Take(49).Count(Actors.ActorInventory.IsDevice); Expect(Cmp(n, a[2], F(a[3])), $"{desc} ({n} carried)"); break; }
 				case "mass": { float m = P.GetModPlayer<Actors.ActorInventory>().CarriedMass; Expect(Cmp(m, a[2], F(a[3])), $"{desc} (carrying {m:0.0} kg)"); break; }
+				case "worldstack": { int n = Main.item.Where(i => i.active && i.type == ItemType(a[2])).Sum(i => i.stack); Expect(Cmp(n, a[3], F(a[4])), $"{desc} ({n} in world stacks)"); break; }
 				case "worlditem": { int n = Main.item.Count(i => i.active && i.type == ItemType(a[2])); Expect(Cmp(n, a[3], F(a[4])), $"{desc} ({n} lying around)"); break; }
 				case "kind": { var k = P.GetModPlayer<Actors.RigPlayer>().Kind; Expect(k.ToString().ToLower() == a[2], $"{desc} (kind {k})"); break; }
 				case "brainstate": { var st = Units.BrainSystem.StateOf(P.team); Expect(st.ToString().ToLower() == a[2], $"{desc} (state {st})"); break; }

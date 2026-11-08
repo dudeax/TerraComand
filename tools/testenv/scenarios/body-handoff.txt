@@ -1,0 +1,21 @@
+nospawn
+clearnpcs
+goto spawn
+flatten 80 30
+wait 30
+clearinv
+deploy CloneBody 100
+wait 15
+# A knocked-over, fuel-depleted body is left behind when switching to a fresh soldier.
+motion 5 3 -1 unstable
+switch
+expect status stable
+expect fuelnow >= 89
+expect unitfuel <= 15
+# Switching straight back must recover that body's state, rather than teleporting to a stop.
+switch
+expect status unstable
+expect fuelnow <= 20
+expect velocityx >= 2.5
+wait 150
+expect status stable

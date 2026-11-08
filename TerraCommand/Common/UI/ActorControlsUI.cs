@@ -176,6 +176,10 @@ namespace TerraCommand.Common.UI
 			GameInterfaceLayer hotbar = layers.FirstOrDefault(l => l.Name == "Vanilla: Hotbar");
 			if (hotbar != null)
 				hotbar.Active = false;
+			if (TerraCommandConfig.Instance.ConversionMode)
+				foreach (GameInterfaceLayer layer in layers)
+					if (layer.Name == "Vanilla: Resource Bars" || layer.Name == "Vanilla: Map / Minimap")
+						layer.Active = false;
 			int idx = layers.FindIndex(l => l.Name == "Vanilla: Mouse Text");
 			if (idx < 0)
 				idx = layers.Count;
@@ -211,9 +215,29 @@ namespace TerraCommand.Common.UI
 			}
 		}
 
+		static void DrawCommandStatus(SpriteBatch sb, Player player)
+		{
+			BrainState brain = BrainSystem.StateOf(player.team);
+			string objective = "PROTECT YOUR BRAIN / DESTROY THE ENEMY BRAIN";
+			if (EnemyFaction.Defeated)
+				objective = "ENEMY BRAIN DESTROYED";
+			else if (EnemyFaction.Bunker.X >= 0) {
+				int distance = (int)Math.Abs(EnemyFaction.Bunker.X - player.Center.X / 16f);
+				objective = $"ENEMY BUNKER: {distance} tiles {(EnemyFaction.Bunker.X * 16 > player.Center.X ? "EAST >" : "< WEST")}";
+			}
+			var box = new Rectangle(16, 16, 440, 64);
+			sb.Draw(TextureAssets.MagicPixel.Value, box, new Color(12, 18, 22, 210));
+			sb.Draw(TextureAssets.MagicPixel.Value, new Rectangle(16, 16, 3, 64), new Color(150, 205, 95));
+			Utils.DrawBorderString(sb, $"BRAIN: {brain.ToString().ToUpperInvariant()}    RESERVES: {UnitSystem.TeamUnits(player.team).Count()}    FUNDS: {Economy.Format(Economy.Funds())}",
+				new Vector2(28, 25), new Color(170, 225, 135), 0.75f);
+			Utils.DrawBorderString(sb, objective, new Vector2(28, 49), Color.LightGray, 0.65f);
+		}
+
 		static void DrawHud(SpriteBatch sb)
 		{
 			Player p = Me;
+			if (TerraCommandConfig.Instance.ConversionMode)
+				DrawCommandStatus(sb, p);
 			var inv = p.GetModPlayer<ActorInventory>();
 			var body = p.GetModPlayer<BodyPhysicsPlayer>();
 			Vector2 head = WorldToUi(p.Top + new Vector2(0f, -6f));

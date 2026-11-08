@@ -9,6 +9,10 @@ namespace TerraCommand.Common
 		public override ConfigScope Mode => ConfigScope.ServerSide;
 		public static TerraCommandConfig Instance => ModContent.GetInstance<TerraCommandConfig>();
 
+		[Header("Conversion")]
+		[DefaultValue(true)]
+		public bool ConversionMode { get; set; } = true;
+
 		[Header("Terrain")]
 		[DefaultValue(true)]
 		public bool PixelMining { get; set; } = true;

@@ -19,7 +19,9 @@ namespace TerraCommand.Common.Units
 
 		public override void ProcessTriggers(TriggersSet triggersSet)
 		{
-			if (TerraCommandKeybinds.SwitchBody.JustPressed) {
+			if (Main.drawingPlayerChat || Main.editSign || Main.editChest || Main.mapFullscreen)
+				return;
+			if (!Actors.ActorControlState.Blocked && TerraCommandKeybinds.SwitchBody.JustPressed) {
 				var pilot = Player.GetModPlayer<Orbital.PilotPlayer>();
 				if (pilot.Ship != null)
 					pilot.Leave();   // in a ship: switching gets out

@@ -132,7 +132,7 @@ namespace TerraCommand.Common.Combat
 
 		public override void ProcessTriggers(Terraria.GameInput.TriggersSet triggersSet)
 		{
-			if (TerraCommandKeybinds.Reload.JustPressed)
+			if (!ActorControlState.Blocked && TerraCommandKeybinds.Reload.JustPressed)
 				wantReload = true;
 		}
 
@@ -216,6 +216,13 @@ namespace TerraCommand.Common.Combat
 		{
 			if (Player.whoAmI != Main.myPlayer)
 				return;
+			if (ActorControlState.Blocked) {
+				Player.controlUseItem = false;
+				throwHeld = triggerHeld = false;
+				ThrowCharge = 0;
+				SpinUp = BurstLeft = 0;
+				return;
+			}
 			Item it = Held;
 			// (the scripted test driver presses buttons in a later SetControls hook: read its intent directly)
 			bool fire = Player.controlUseItem || Testing.AutoTest.Enabled && Testing.AutoTest.FireHeld;
@@ -323,13 +330,25 @@ namespace TerraCommand.Common.Combat
 			float speed = velocity.Length();
 			float cone = CurrentShake(it);
 			float dev = Devices.Gaussian() * cone;                  // CC: shake x RandomNormalNum
-			velocity = dir.RotatedBy(dev) * speed;
-			// rounds leave the muzzle, out in front of the hands
-			Vector2 grip = RigRenderer.GunAt(Player.GetModPlayer<RigPlayer>().Pose());
+			// Sweep from the shoulder: a muzzle beyond a thin wall must not fire through it.
+			var pose = Player.GetModPlayer<RigPlayer>().Pose();
+			Vector2 grip = RigRenderer.GunAt(pose);
 			float length = TextureAssets.Item[it.type].IsLoaded ? TextureAssets.Item[it.type].Width() * 0.7f * it.scale : 20f;
-			Vector2 muzzle = grip + dir * length;
-			if (!Collision.SolidCollision(muzzle - new Vector2(2), 4, 4))
-				position = muzzle;
+			Vector2 shoulder = RigRenderer.Shoulder(pose);
+			Vector2 reach = grip + dir * length - shoulder;
+			float distance = reach.Length();
+			position = shoulder;
+			for (float step = 2; step <= distance + 2; step += 2) {
+				Vector2 point = shoulder + reach * (Math.Min(step, distance) / Math.Max(1, distance));
+				if (Destruction.PixelCollision.BoxSolid(point - Vector2.One, 2, 2))
+					break;
+				position = point;
+			}
+			// The gun is offset from the shoulder, especially when prone. Converge on the actual cursor.
+			Vector2 aim = Main.MouseWorld - position;
+			if (aim.LengthSquared() > 4f)
+				dir = Vector2.Normalize(aim);
+			velocity = dir.RotatedBy(dev) * speed;
 			if (Testing.AutoTest.Enabled) {
 				ShotLog.Add(Math.Abs(dev));
 				ConeLog.Add(cone);

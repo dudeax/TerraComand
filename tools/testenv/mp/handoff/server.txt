@@ -1,0 +1,2 @@
+nospawn
+flatten 80 20

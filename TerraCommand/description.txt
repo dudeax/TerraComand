@@ -1,7 +1,13 @@
-Terra Command is a total-conversion style overhaul inspired by the mechanics of Cortex Command.
+Terra Command turns Terraria's landscape into a Cortex Command style battlefield.
 
-- Pixel-level terrain destruction: bullets chip, explosions crater, pickaxes carve.
-- Command multiple bodies: deploy clone units and swap control between them. If your body dies, control jumps to another one.
-- Orbital stockpile: launch resources into orbit from a Launch Pad. Every player shares the stockpile, can craft inside it, build straight from it, and order drop pods to bring equipment back down.
+Start as your team's brain. A ship delivers two armed Coalition riflemen, a digger and grenades. Switch between bodies, protect the brain, buy equipment in orbit and destroy the enemy brain.
+
+- Shared actor movement: mass, momentum, walking, prone crawling, jetpacks, impacts and ragdolls. Body swaps preserve physical state.
+- Physical equipment: deliberate pickup, carried weapon queues, magazines, reloads, recoil and terrain-blocked muzzles.
+- Coalition pistol, assault rifle, compact rifle and sniper rifle data ports, alongside original devices.
+- Pixel terrain destruction, cargo ships, orbital stockpile, purchasing and unit orders.
+- Conversion mode suppresses ambient Terraria spawns and vanilla starter tools for new characters. Existing characters and worlds are preserved.
+
+This remains a partial conversion. Artwork is original; the full Cortex Command asset library and atom-based physics solver are not included.
 
 Licensed under AGPL-3.0-or-later.

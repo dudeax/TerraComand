@@ -16,6 +16,7 @@ namespace TerraCommand.Common.Combat
 	/// </summary>
 	public sealed class FirearmSpec
 	{
+		public float Mass = 0f;              // explicit CC device mass; zero uses the generic estimate
 		public int RateOfFire = 600;          // rounds per minute
 		public bool FullAuto = true;
 		public int Burst = 1;                 // rounds per trigger pull (semi-auto bursts)

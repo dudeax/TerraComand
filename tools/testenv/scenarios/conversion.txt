@@ -1,0 +1,41 @@
+# Production starting inventory is checked before the harness adds compatibility tools.
+nospawn
+clearnpcs
+goto spawn
+flatten 80 30
+wait 30
+expect startingtools == 0
+clearinv
+
+# The delivered soldiers have usable CC rifles, and the expedition has digging/explosive equipment.
+claimbrain starter
+wait 500
+expect units == 2
+expect unitweapon CoalitionAssaultRifle == 2
+expect worlditem LightDigger >= 1
+expect worldstack FragGrenade == 3
+switch
+wait 2
+expect holding CoalitionAssaultRifle
+expect magazine == 35
+aim 300 0
+use 35
+wait 2
+expect rounds < 35
+reload
+wait 115
+expect rounds == 35
+
+# Entering a menu consumes movement/jetpack/fire input while physics continues.
+menu
+hold jump on
+hold right on
+mark
+wait 40
+expect peak <= 0.3
+expect moved <= 0.2
+expect fuelnow >= 89
+hold jump off
+hold right off
+menu
+screenshot conversion-rifleman

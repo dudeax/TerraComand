@@ -120,6 +120,8 @@ namespace TerraCommand.Common.Units
 				return false;
 			got = unit.Loadout;
 			got.Life = npc.life;
+			got.Motion = Actors.ActorMotion.Capture(unit.Actor, npc.velocity);
+			Testing.AutoTest.Trace($"handoff server: leaving {mine?.Motion.Status} fuel {mine?.Motion.Fuel:0.0}; entering {got.Motion.Status} fuel {got.Motion.Fuel:0.0}");
 			at = npc.Bottom;
 			UnitOrder order = unit.Order;
 			Despawn(npc);
@@ -130,10 +132,11 @@ namespace TerraCommand.Common.Units
 
 		static void ApplySwap(Player p, UnitLoadout got, Vector2 bottom)
 		{
+			Testing.AutoTest.Trace($"handoff granted: {got.Motion.Status} fuel {got.Motion.Fuel:0.0} velocity {got.Motion.Velocity}");
 			got.ApplyTo(p);
 			p.Bottom = bottom;
-			p.velocity = Vector2.Zero;
-			p.GetModPlayer<Physics.BodyPhysicsPlayer>().SkipImpactCheck();
+			p.GetModPlayer<Physics.BodyPhysicsPlayer>().AdoptBody(got.Motion, got.Kind);
+			p.Bottom = bottom;
 			p.fallStart = (int)(p.position.Y / 16f);
 			p.immune = true;
 			p.immuneTime = 30;
@@ -236,6 +239,7 @@ namespace TerraCommand.Common.Units
 			var list = new List<TagCompound>();
 			foreach (CloneUnit u in AllUnits()) {
 				u.Loadout.Life = u.NPC.life;
+				u.Loadout.Motion = Actors.ActorMotion.Capture(u.Actor, u.NPC.velocity);
 				list.Add(new TagCompound {
 					["pos"] = u.NPC.Bottom, ["team"] = u.Team, ["order"] = (int)u.Order,
 					["lifeMax"] = u.NPC.lifeMax, ["loadout"] = u.Loadout.Save(),

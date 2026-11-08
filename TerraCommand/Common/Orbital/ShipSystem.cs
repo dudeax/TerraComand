@@ -210,9 +210,16 @@ namespace TerraCommand.Common.Orbital
 		{
 			if (IsClient)
 				return;
-			OrbitalStockpile.Change(new StockKey(ModContent.ItemType<Content.Items.CloneBody>(), 0), 2);
-			Economy.Earn(Economy.StartingFunds);   // CC: a starting budget
-			DoShip(team, new[] { (new StockKey(ModContent.ItemType<Content.Items.CloneBody>(), 0), 2) }, near + new Vector2(dir * 16 * 7, 0), payer: -2);
+			// A usable expedition, rather than two empty bodies and Terraria's copper tools.
+			var supplies = new[] {
+				(new StockKey(ModContent.ItemType<Content.Items.CoalitionTrooper>(), 0), 2),
+				(new StockKey(ModContent.ItemType<Content.Items.Devices.LightDigger>(), 0), 1),
+				(new StockKey(ModContent.ItemType<Content.Items.Devices.FragGrenade>(), 0), 3),
+			};
+			foreach (var (key, count) in supplies)
+				OrbitalStockpile.Change(key, count);
+			Economy.Earn(Economy.StartingFunds);
+			DoShip(team, supplies, near + new Vector2(dir * 16 * 7, 0), payer: -2);
 		}
 
 		// ------------------------------------------------------------ on the ground

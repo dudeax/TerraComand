@@ -10,6 +10,31 @@ Keybinds: {
 }
 
 Items: {
+	CoalitionPistol: {
+		DisplayName: Coalition Pistol
+		Tooltip: 10 rounds • semi automatic • 1 second reload
+	}
+
+	CoalitionAssaultRifle: {
+		DisplayName: Coalition Assault Rifle
+		Tooltip: 35 rounds • 800 RPM • 1.8 second reload
+	}
+
+	CoalitionCompactRifle: {
+		DisplayName: Coalition Compact Assault Rifle
+		Tooltip: 24 rounds • 1000 RPM • 1.6 second reload
+	}
+
+	CoalitionSniperRifle: {
+		DisplayName: Coalition Sniper Rifle
+		Tooltip: 8 rounds • semi automatic • 2.2 second reload
+	}
+
+	CoalitionTrooper: {
+		DisplayName: Coalition Rifleman
+		Tooltip: Deploys a soldier equipped with a Coalition Assault Rifle
+	}
+
 	LaunchPadItem: {
 		DisplayName: Launch Pad
 		Tooltip:
@@ -175,9 +200,15 @@ Configs: {
 		DisplayName: Terra Command
 
 		Headers: {
+			Conversion: Conversion
 			Terrain: Terrain
 			Bodies: Bodies
 			Units: Units
+		}
+
+		ConversionMode: {
+			Label: Full conversion
+			Tooltip: Suppresses ambient Terraria spawns and removes vanilla tools from newly created characters. The enemy faction provides combatants. Existing characters and enemies are preserved.
 		}
 
 		PixelMining: {

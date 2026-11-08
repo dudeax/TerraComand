@@ -32,6 +32,10 @@ ship 3
 wait 470
 expect shipstate waiting
 goto rel 3 0
+# The pickup ship can recover the starter grenade stack lying beside the first landing.
+# Retrieve it before testing an otherwise empty hold.
+shiphold take 0
+wait 2
 give Wood 30
 shiphold open
 wait 2

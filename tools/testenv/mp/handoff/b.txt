@@ -1,0 +1,13 @@
+goto spawn
+goto rel -6 0
+clearinv
+wait 60
+sync start
+sync returned
+expect units == 1
+expect unitweapon CoalitionAssaultRifle == 1
+switch
+wait 30
+expect holding CoalitionAssaultRifle
+expect magazine == 35
+sync b-controls

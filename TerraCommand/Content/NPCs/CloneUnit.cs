@@ -80,6 +80,8 @@ namespace TerraCommand.Content.NPCs
 		public void InitFrom(UnitLoadout loadout, int team, UnitOrder order, int lifeMax)
 		{
 			Loadout = loadout;
+			loadout.Motion.Apply(Actor, loadout.Kind);
+			NPC.velocity = Actor.Vel;
 			Team = team;
 			Order = order;
 			NPC.friendly = team != EnemyTeam;   // the AI faction's bodies are hostile: the player's shots hit them

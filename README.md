@@ -1,8 +1,13 @@
 # Terra Command
 
-A tModLoader overhaul that plays Terraria with mechanics inspired by
-[Cortex Command](https://github.com/cortex-command-community/Cortex-Command-Community-Project).
-Vanilla progression, blocks and enemies stay; the rules change around them:
+A tModLoader conversion toward [Cortex Command](https://github.com/cortex-command-community/Cortex-Command-Community-Project) in a Terraria landscape.
+Full conversion is enabled by default: ambient Terraria spawns are suppressed and new characters start without copper tools.
+The first ship brings two armed Coalition riflemen, a light digger and grenades. Buy replacements in orbit and destroy the enemy brain.
+Existing characters and worlds are preserved. Disable **Full conversion** in the mod configuration to restore vanilla spawns and starting tools.
+
+This is still a partial conversion. See [the rescue notes](docs/coalition-content.md) for the ported content, physical control handoff, and remaining engine limitations.
+
+Current systems:
 
 | Pillar | What it does now |
 |---|---|
@@ -17,7 +22,7 @@ Vanilla progression, blocks and enemies stay; the rules change around them:
 | **Weapons (CC devices)** | **Guns** have magazines: size and reload time come from the fire rate (pistols 15, assault guns 40, machine guns 100, shotguns 6, snipers 5, launchers 1). An empty gun reloads by itself, and **R** reloads early. Each round leaves the muzzle with a random spread (CC's "shake"). **Sharp aim** narrows it: aim far out and hold steady, and the camera looks ahead along the aim by the gun's reach (a sniper sees further than a pistol). Firing unsupported (in the air, jetting, knocked over) doubles the spread. Recoil pushes the body, less so when it's heavily loaded. A dotted sight line shows the aim and current spread. **Pickaxes are diggers**: they dig the first solid ground along the aim, close in front of the hands, not under the cursor. **Grenades, bombs and dynamite** are thrown CC-style: hold to wind up, release to throw (a tap just lobs it at your feet). Every CC device system has an original example, all buyable and craftable: the **Service Pistol**, **Field Rifle**, **Tri-Burst Rifle** (bursts), **Scattergun** (pellets), **Longshot** (sniper), **Spinner** (spins up before it fires), **Rocket Tube**, **Sawthrower** (ricocheting saw blades), **Light/Heavy Digger** (digging particles), **Frag/Impact/Cluster grenades**, **Sticky Charge**, **Remote Charge** with its **Remote Detonator**, **Riot Shield** (blocks rounds from the front) and **Medikit**. |
 | **Damage & remains** | Headshots do ×1.75. Hits leave visible wounds (cosmetic, no bleeding) and spray blood that splats on the terrain. A CC body caught in a blast **bursts into its parts** (helmet, torso, limbs, boots, jetpack), which tumble and bleed. A headshot kill knocks the head off and the body collapses. Any other death leaves a corpse that lies for a while. Terraria enemies burst into pieces of their own sprite when blasted, and lose their heads to a killing headshot. Explosions hurt everyone in range, idle bodies included. Bodies don't regenerate health naturally (config option), but potions, buffs and accessories still heal. |
 
-A new team starts as its brain. The first ship lands next to it with two soldier bodies, and new characters also get an Orbital Constructor.
+A new team starts as its brain. The first ship lands next to it with two armed Coalition riflemen, a light digger and three frag grenades. New characters get an Orbital Constructor. The Buy tab also includes Coalition pistol, assault rifle, compact rifle and sniper rifle data ports.
 
 ### Controls
 | Key | Action |
@@ -39,8 +44,7 @@ A new team starts as its brain. The first ship lands next to it with two soldier
 
 Body constants are in `TerraCommand/Common/Actors/CCActor.cs` (class `CC`), ported from the CC Community Project's data
 files, with sources noted in `docs/cc-actor-design.md`. Spread, recoil and blast strength are still in
-`TerraCommand/Common/Physics/Tuning.cs`. All mod keys come bound by default (applied once, the first time the mod loads) and can be rebound under Controls → Mod Controls. Unbind Terraria's own
-Smart Cursor (Ctrl), Auto Select (Shift) and Quick Mount (R) if they get in the way.
+`TerraCommand/Common/Physics/Tuning.cs`. All mod keys come bound by default (applied once, the first time the mod loads) and can be rebound under Controls → Mod Controls. Conflicting Terraria shortcuts are suppressed during actor play; saved keybindings are preserved.
 
 **Carrying (CC style).** There's no hotbar.
 - **Held and queued items:** a body holds one item in its hands. Its other weapons, tools and gadgets form a queue you rotate
@@ -58,7 +62,7 @@ Smart Cursor (Ctrl), Auto Select (Shift) and Quick Mount (R) if they get in the 
 - **Items must physically come down to be used.** Crafting and building happen in orbit, but weapons, armour and tools have to be delivered by ship, and ships cost coins from the stockpile.
 - **Units belong to a team.** Players on the same team (or everyone, with no team) share bodies.
 - **Armour gives stats only**: every body of a type looks the same.
-- No Cortex Command assets, names or art are used. Its mechanics and numbers are ported (see `docs/cc-actor-design.md`), and all art is original, generated by `tools/gen_art.py`. Actors are drawn from per-part PNGs in `TerraCommand/Content/Actors/`.
+- Coalition weapon names and data are ported from the local CC Community reference (see [provenance and adaptations](docs/coalition-content.md)). Artwork remains original, generated by `tools/gen_art.py`; CC sprite and audio assets have not been imported. Actors are drawn from per-part PNGs in `TerraCommand/Content/Actors/`.
 
 ## Building
 ```bash

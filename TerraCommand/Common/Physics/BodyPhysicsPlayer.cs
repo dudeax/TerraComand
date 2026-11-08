@@ -69,7 +69,7 @@ namespace TerraCommand.Common.Physics
 			ActorStats stats = ActorStats.Get(Player.GetModPlayer<Actors.RigPlayer>().Kind);
 			Actor.FuelMax = fuel - CC.JetTimeTicks + stats.Fuel;
 			Actor.JetForce = force / CC.JetForce * stats.JetForce;
-			Actor.Apply(stats, Player.GetModPlayer<Actors.ActorInventory>().CarriedMass);
+			Actor.Apply(stats, Actors.ActorInventory.Mass(Player));
 			Player.statLifeMax2 = (int)(Player.statLifeMax2 * stats.LifeScale);
 			Actor.MaxHealth = Player.statLifeMax2;
 
@@ -92,6 +92,13 @@ namespace TerraCommand.Common.Physics
 
 		void ReadInput()
 		{
+			if (Actors.ActorControlState.Blocked) {
+				Input = new ActorInput { Aim = Input.Aim };
+				Player.GetModPlayer<Orbital.PilotPlayer>().Capture(Input);
+				prevJump = false;
+				Player.controlDown = Player.controlUseItem = Player.controlUseTile = false;
+				return;
+			}
 			bool jump = Player.controlJump || Player.controlUp;
 			Input = new ActorInput {
 				Left = Player.controlLeft,
@@ -260,6 +267,19 @@ namespace TerraCommand.Common.Physics
 
 		/// <summary>Call after teleporting the body (no impact damage from the position/velocity jump).</summary>
 		public void SkipImpactCheck() => skipImpact = true;
+
+		public void AdoptBody(Actors.ActorMotion motion, Actors.ActorKind kind)
+		{
+			motion.Apply(Actor, kind);
+			Player.velocity = Actor.Vel;
+			Player.direction = Actor.FlipFactor;
+			height = Actor.WantedHeight();
+			ApplyHeight();
+			impactAccum = 0;
+			impactTimer = 0;
+			prevJump = false;
+			skipImpact = true;
+		}
 
 		public void KnockDown(int dir)
 		{

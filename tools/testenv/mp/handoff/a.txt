@@ -1,0 +1,21 @@
+goto spawn
+clearinv
+wait 60
+sync start
+deploy CoalitionTrooper 100
+wait 60
+expect units == 1
+motion 5 2 -1 unstable
+switch
+wait 10
+expect holding CoalitionAssaultRifle
+expect status stable
+expect fuelnow >= 89
+switch
+wait 30
+expect holding nothing
+# The server continues regenerating fuel and recovering the body during network latency.
+expect alive
+sync returned
+sync b-controls
+expect units == 1

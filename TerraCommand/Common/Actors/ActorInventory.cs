@@ -36,8 +36,10 @@ namespace TerraCommand.Common.Actors
 
 		public override void ProcessTriggers(TriggersSet triggers)
 		{
-			if (Main.playerInventory || Main.drawingPlayerChat || Main.editSign || Main.editChest)
+			if (ActorControlState.Blocked)
 				return;
+			foreach (string action in new[] { "SmartCursor", "SmartSelect", "QuickMount", "QuickHeal", "QuickMana", "QuickBuff", "Grapple" })
+				triggers.KeyStatus[action] = false;
 			// CC: mouse wheel / 1 / 2 change the held item; Terraria's hotbar selection is switched off
 			int scroll = PlayerInput.ScrollWheelDelta / 120;
 			if (scroll < 0 || triggers.KeyStatus["Hotbar2"] && !wasHotbar2)
@@ -180,9 +182,9 @@ namespace TerraCommand.Common.Actors
 
 		/// <summary>Equipment needs a deliberate pick-up (F); loose stock is still grabbed by walking over it.</summary>
 		public static bool NeedsDeliberatePickup(Item item) =>
-			!item.IsAir && !item.IsACoin && item.ammo == AmmoID.None && !item.consumable
+			!item.IsAir && (item.ModItem is Combat.CCThrowable || !item.IsACoin && item.ammo == AmmoID.None && !item.consumable
 			&& (item.damage > 0 || item.pick > 0 || item.axe > 0 || item.hammer > 0 || item.accessory
-				|| item.headSlot >= 0 || item.bodySlot >= 0 || item.legSlot >= 0 || item.ModItem is Content.Items.OrbitalConstructor);
+				|| item.headSlot >= 0 || item.bodySlot >= 0 || item.legSlot >= 0 || item.ModItem is Content.Items.OrbitalConstructor));
 
 		/// <summary>The nearest equipment item within reach of the hands, preferring what's in front.</summary>
 		int FindItemInReach()
@@ -195,12 +197,24 @@ namespace TerraCommand.Common.Actors
 				if (!it.active || !NeedsDeliberatePickup(it))
 					continue;
 				float d = Vector2.Distance(it.Center, hands);
-				if (d < Reach + Math.Max(it.width, it.height) / 2f && d < bestD) {
+				if (d < Reach + Math.Max(it.width, it.height) / 2f && d < bestD && ClearReach(hands, it.Center)) {
 					bestD = d;
 					best = i;
 				}
 			}
 			return best;
+		}
+
+		static bool ClearReach(Vector2 from, Vector2 to)
+		{
+			Vector2 delta = to - from;
+			float length = delta.Length();
+			if (length < 1f)
+				return true;
+			for (float step = 2; step < length; step += 2)
+				if (Destruction.PixelCollision.BoxSolid(from + delta * (step / length) - Vector2.One, 2, 2))
+					return false;
+			return true;
 		}
 
 		void PickUpItem(int index)
@@ -259,6 +273,8 @@ namespace TerraCommand.Common.Actors
 		{
 			if (it.IsAir || it.IsACoin)
 				return 0f;
+			if (it.ModItem is Combat.CCFirearm firearm && firearm.Spec.Mass > 0f)
+				return firearm.Spec.Mass * it.stack;
 			if (it.ammo != AmmoID.None)
 				return 0.02f * it.stack;
 			if (it.damage > 0 || it.pick > 0 || it.axe > 0 || it.hammer > 0)

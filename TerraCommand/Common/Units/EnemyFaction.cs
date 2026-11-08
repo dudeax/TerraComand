@@ -135,8 +135,8 @@ namespace TerraCommand.Common.Units
 			Bunker = new Point(x, floor);
 			Vector2 floorAt = new(x * 16 + 8, floor * 16);
 			UnitSystem.SpawnFresh(floorAt, CloneUnit.EnemyTeam, ActorKind.Brain);
-			UnitSystem.SpawnFresh(floorAt + new Vector2(-16 * 4, 0), CloneUnit.EnemyTeam, ActorKind.Soldier, ModContent.ItemType<FieldRifle>());
-			UnitSystem.SpawnFresh(floorAt + new Vector2(16 * 4, 0), CloneUnit.EnemyTeam, ActorKind.Soldier, ModContent.ItemType<FieldRifle>());
+			UnitSystem.SpawnFresh(floorAt + new Vector2(-16 * 4, 0), CloneUnit.EnemyTeam, ActorKind.Soldier, ModContent.ItemType<CoalitionAssaultRifle>());
+			UnitSystem.SpawnFresh(floorAt + new Vector2(16 * 4, 0), CloneUnit.EnemyTeam, ActorKind.Soldier, ModContent.ItemType<CoalitionAssaultRifle>());
 			brainSeen = true;
 			attackTimer = 0;
 			Budget = Item.buyPrice(gold: 4);
@@ -173,7 +173,7 @@ namespace TerraCommand.Common.Units
 			long cost = Economy.CostOf(ShipStyle.Dropship);
 			var items = new List<Item>();
 			int want = Math.Min(4, 2 + Waves / 2);
-			int[] guns = { ModContent.ItemType<FieldRifle>(), ModContent.ItemType<Scattergun>(), ModContent.ItemType<TriBurstRifle>(), ModContent.ItemType<Spinner>() };
+			int[] guns = { ModContent.ItemType<CoalitionAssaultRifle>(), ModContent.ItemType<CoalitionSniperRifle>(), ModContent.ItemType<CoalitionCompactRifle>(), ModContent.ItemType<Spinner>() };
 			for (int k = 0; k < want; k++) {
 				int body = Waves >= 3 && Main.rand.NextBool(3) ? ModContent.ItemType<HeavyBody>()
 					: Main.rand.NextBool(3) ? ModContent.ItemType<LightBody>() : ModContent.ItemType<CloneBody>();

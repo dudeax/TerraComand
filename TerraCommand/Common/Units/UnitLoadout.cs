@@ -21,6 +21,7 @@ namespace TerraCommand.Common.Units
 		public Item[] Dye = Empty(10);
 		public Item[] MiscEquips = Empty(5);
 		public Item[] MiscDyes = Empty(5);
+		public Actors.ActorMotion Motion = new();
 		public int Life = 100;
 		public int Selected;
 		public Actors.ActorKind Kind = Actors.ActorKind.Soldier;
@@ -73,6 +74,7 @@ namespace TerraCommand.Common.Units
 			l.Selected = Math.Clamp(p.selectedItem, 0, 9);
 			l.Kind = p.GetModPlayer<Actors.RigPlayer>().Kind;
 			l.CopyAppearance(p);
+			l.Motion = Actors.ActorMotion.Capture(p.GetModPlayer<Physics.BodyPhysicsPlayer>().Actor, p.velocity);
 			return l;
 		}
 
@@ -133,6 +135,7 @@ namespace TerraCommand.Common.Units
 		{
 			w.Write(visualsOnly);
 			w.Write(Life); w.Write((byte)Selected); w.Write((byte)Kind);
+			Motion.Write(w);
 			w.Write(Male); w.Write((byte)SkinVariant); w.Write((short)Hair);
 			foreach (Color c in new[] { HairColor, SkinColor, EyeColor, ShirtColor, UnderShirtColor, PantsColor, ShoeColor })
 				w.Write(c.PackedValue);
@@ -148,6 +151,7 @@ namespace TerraCommand.Common.Units
 			var l = new UnitLoadout();
 			bool visualsOnly = r.ReadBoolean();
 			l.Life = r.ReadInt32(); l.Selected = r.ReadByte(); l.Kind = (Actors.ActorKind)r.ReadByte();
+			l.Motion = Actors.ActorMotion.Read(r);
 			l.Male = r.ReadBoolean(); l.SkinVariant = r.ReadByte(); l.Hair = r.ReadInt16();
 			var cols = new Color[7];
 			for (int i = 0; i < 7; i++) cols[i] = new Color { PackedValue = r.ReadUInt32() };
@@ -170,6 +174,7 @@ namespace TerraCommand.Common.Units
 		}
 
 		public TagCompound Save() => new() {
+			["motion"] = Motion.Save(),
 			["inv"] = SaveArr(Inventory), ["armor"] = SaveArr(Armor), ["dye"] = SaveArr(Dye),
 			["misc"] = SaveArr(MiscEquips), ["miscDye"] = SaveArr(MiscDyes),
 			["life"] = Life, ["sel"] = Selected, ["kind"] = (byte)Kind, ["male"] = Male, ["skin"] = SkinVariant, ["hair"] = Hair,
@@ -179,6 +184,7 @@ namespace TerraCommand.Common.Units
 		public static UnitLoadout Load(TagCompound tag)
 		{
 			var l = new UnitLoadout();
+			l.Motion = Actors.ActorMotion.Load(tag.GetByteArray("motion"));
 			LoadArr(tag, "inv", l.Inventory); LoadArr(tag, "armor", l.Armor); LoadArr(tag, "dye", l.Dye);
 			LoadArr(tag, "misc", l.MiscEquips); LoadArr(tag, "miscDye", l.MiscDyes);
 			l.Life = tag.GetInt("life"); l.Selected = tag.GetInt("sel"); l.Kind = (Actors.ActorKind)tag.GetByte("kind"); l.Male = tag.GetBool("male");
