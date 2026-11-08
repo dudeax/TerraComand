@@ -234,7 +234,15 @@ namespace TerraCommand.Common.Actors
 				Rectangle src = Main.itemAnimations[item.type] != null ? Main.itemAnimations[item.type].GetFrame(tex) : tex.Frame();
 				float aim = AimWorld(p);
 				Color c = item.GetAlpha(light);
-				if (IsGunLike(item)) {
+				if (item.ModItem is Content.Items.Devices.RiotShield) {
+					// a shield is held upright in front of the body
+					outList.Add(new RigPiece(tex, at + aim.ToRotationVector2() * 3f, src, c, rot * 0.3f, src.Size() / 2f, item.scale, fx));
+				}
+				else if (item.consumable || !IsGunLike(item) && item.damage <= 0) {
+					// grenades and small tools sit in the hand
+					outList.Add(new RigPiece(tex, at, src, c, rot * 0.5f, src.Size() / 2f, item.scale, fx));
+				}
+				else if (IsGunLike(item)) {
 					outList.Add(new RigPiece(tex, at, src, c, aim, new Vector2(src.Width * 0.3f, src.Height * 0.55f), item.scale,
 						dir > 0 ? SpriteEffects.None : SpriteEffects.FlipVertically));
 				}
@@ -255,7 +263,8 @@ namespace TerraCommand.Common.Actors
 
 		/// <summary>Only weapons and tools are carried in the hands; everything else stays in the inventory.</summary>
 		public static bool IsHoldable(Item item) =>
-			item != null && !item.IsAir && (item.damage > 0 || item.pick > 0 || item.axe > 0 || item.hammer > 0) && !item.consumable;
+			item != null && !item.IsAir && (item.damage > 0 || item.pick > 0 || item.axe > 0 || item.hammer > 0
+				|| item.ModItem is Content.Items.Devices.RiotShield or Content.Items.Devices.RemoteDetonator or Content.Items.Devices.Medikit);
 
 		public static bool IsGunLike(Item item) =>
 			item != null && (item.useStyle == ItemUseStyleID.Shoot || item.useStyle == ItemUseStyleID.HoldUp && item.shoot > 0);

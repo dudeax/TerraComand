@@ -26,8 +26,9 @@ namespace TerraCommand.Common.Combat
 	{
 		/// <summary>Guns and launchers: ranged weapons fed from ammo (bows draw arrows one at a time: no magazine).</summary>
 		public static bool IsFirearm(Item it) =>
-			it != null && !it.IsAir && it.damage > 0 && it.shoot > ProjectileID.None && it.useAmmo != AmmoID.None
-			&& it.useAmmo != AmmoID.Arrow && it.useAmmo != AmmoID.Stake && !it.channel;
+			it != null && !it.IsAir && (it.ModItem is CCFirearm
+				|| it.damage > 0 && it.shoot > ProjectileID.None && it.useAmmo != AmmoID.None
+				&& it.useAmmo != AmmoID.Arrow && it.useAmmo != AmmoID.Stake && !it.channel);
 
 		/// <summary>Anything aimed that fires something: firearms, bows, magic (spread and sharp aim apply).</summary>
 		public static bool IsAimed(Item it) =>
@@ -47,6 +48,10 @@ namespace TerraCommand.Common.Combat
 
 		public static FirearmStats Stats(Item it)
 		{
+			if (it.ModItem is CCFirearm cc) {
+				FirearmSpec s = cc.Spec;
+				return new FirearmStats(s.Magazine, s.ReloadTicks, s.ShakeDeg, s.SharpShakeDeg, s.SharpLength, s.NoSupportFactor);
+			}
 			int t = Math.Max(1, it.useTime);
 			int mag;
 			if (it.useAmmo == AmmoID.Rocket)
@@ -121,6 +126,7 @@ namespace TerraCommand.Common.Combat
 		public readonly List<float> ConeLog = new();
 
 		public bool Reloading => ReloadTicks > 0;
+		public int SpinUp, BurstLeft;
 		Item Held => Player.inventory[ActorInventory.Held];
 		CCActor Actor => Player.GetModPlayer<BodyPhysicsPlayer>().Actor;
 
@@ -155,6 +161,10 @@ namespace TerraCommand.Common.Combat
 				return;
 			Item it = Held;
 			GunKick *= 0.7f;
+			if (it.type != lastHeldType) {
+				SpinUp = BurstLeft = 0;   // a different device in the hands
+				lastHeldType = it.type;
+			}
 			Spread = Devices.IsAimed(it) ? CurrentShake(it) : 0f;
 
 			// reloading: switching away cancels it; a full magazine needs none
@@ -178,7 +188,7 @@ namespace TerraCommand.Common.Combat
 			wantReload = false;
 		}
 
-		int reloadType;
+		int reloadType, lastHeldType;
 
 		void StartReload(Item it)
 		{
@@ -191,6 +201,8 @@ namespace TerraCommand.Common.Combat
 
 		int AmmoAvailable(Item gun)
 		{
+			if (gun.ModItem is CCFirearm)
+				return int.MaxValue;   // CC magazines refill without ammo
 			int n = 0;
 			for (int i = 0; i < 58; i++) {
 				Item a = Player.inventory[i];
@@ -210,6 +222,7 @@ namespace TerraCommand.Common.Combat
 
 			if (Devices.IsFirearm(it)) {
 				var mag = it.GetGlobalItem<MagazineGlobalItem>();
+				FirearmSpec spec = (it.ModItem as CCFirearm)?.Spec;
 				if (Reloading)
 					Player.controlUseItem = false;
 				else if (mag.Loaded(it) <= 0) {
@@ -217,6 +230,25 @@ namespace TerraCommand.Common.Combat
 					// CC: pulling the trigger on an empty gun (with no ammo to reload) just clicks
 					if (fire && !triggerHeld)
 						SoundEngine.PlaySound(SoundID.Item98 with { Volume = 0.5f, Pitch = 0.6f }, Player.Center);
+				}
+				else if (spec != null) {
+					// spin-up (CC ActivationDelay): the trigger must be held a moment before the first round flies
+					if (spec.ActivationDelay > 0) {
+						SpinUp = fire ? Math.Min(spec.ActivationDelay, SpinUp + 1) : Math.Max(0, SpinUp - 2);
+						if (fire && SpinUp < spec.ActivationDelay) {
+							Player.controlUseItem = false;
+							if (SpinUp % 8 == 1)
+								SoundEngine.PlaySound(SoundID.Item22 with { Volume = 0.5f, Pitch = -0.5f + SpinUp / (float)spec.ActivationDelay }, Player.Center);
+						}
+					}
+					// bursts: one pull fires the whole burst, then the trigger must be released
+					if (spec.Burst > 1) {
+						if (fire && !triggerHeld && BurstLeft == 0)
+							BurstLeft = spec.Burst;
+						Player.controlUseItem = BurstLeft > 0;
+						if (Player.controlUseItem)
+							Player.releaseUseItem = true;
+					}
 				}
 			}
 			else if (Devices.IsThrowable(it)) {
@@ -305,6 +337,8 @@ namespace TerraCommand.Common.Combat
 			if (Devices.IsFirearm(it)) {
 				var mag = it.GetGlobalItem<MagazineGlobalItem>();
 				mag.Rounds = Math.Max(0, mag.Loaded(it) - 1);
+				if (BurstLeft > 0)
+					BurstLeft--;
 			}
 			// recoil pushes the whole body (heavier bodies barely notice); the gun jolts back
 			if (Player.whoAmI == Main.myPlayer) {
@@ -331,6 +365,8 @@ namespace TerraCommand.Common.Combat
 				var aim = player.GetModPlayer<AimPlayer>();
 				if (aim.Reloading || item.GetGlobalItem<MagazineGlobalItem>().Loaded(item) <= 0)
 					return false;
+				if (item.ModItem is CCFirearm cc && cc.Spec.ActivationDelay > 0 && aim.SpinUp < cc.Spec.ActivationDelay)
+					return false;   // still spinning up
 			}
 			return true;
 		}

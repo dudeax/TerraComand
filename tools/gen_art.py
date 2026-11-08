@@ -133,5 +133,67 @@ def ship():
     c.rect(4, 30, 9, 33, DARK); c.rect(5, 32, 8, 33, BLK)  # nozzle
     c.save("Content/NPCs/CargoShip.png")
 
+def devices():
+    # original CC-style devices (facing right). Guns: body, barrel, grip, magazine, stock.
+    d = "Content/Items/Devices/"
+    GUN=(70,74,82,255); GUN_D=(40,42,48,255); GUN_L=(120,126,136,255); WOOD=(120,84,52,255); OLV=(96,108,70,255)
+    ORG=(210,120,40,255); RED2=(190,50,40,255)
+    def gun(name, w, h, body, barrel, grip, mag=None, stock=None, accent=None, extra=None):
+        c = C(w, h)
+        bx0, by0, bx1, by1 = body
+        c.rect(bx0, by0, bx1, by1, GUN); c.rect(bx0, by0, bx1, by0, GUN_L); c.rect(bx0, by1, bx1, by1, GUN_D)
+        x0, y, x1 = barrel
+        c.rect(x0, y, x1, y, GUN_D)
+        gx, gy0, gy1 = grip
+        c.rect(gx, gy0, gx + 1, gy1, GUN_D)
+        if mag: c.rect(*mag, GUN_D)
+        if stock: c.rect(*stock, WOOD if accent is None else accent)
+        if extra: extra(c)
+        c.save(d + name + ".png")
+    gun("ServicePistol", 9, 6, (1, 1, 7, 2), (7, 1, 8), (2, 3, 5), mag=(4, 3, 4, 4))
+    gun("FieldRifle", 20, 7, (4, 1, 14, 3), (14, 2, 19), (6, 4, 6), mag=(9, 4, 10, 6), stock=(0, 1, 3, 3), accent=OLV)
+    gun("TriBurstRifle", 20, 7, (4, 1, 15, 3), (15, 2, 19), (6, 4, 6), mag=(10, 4, 11, 5), stock=(0, 2, 3, 3),
+        extra=lambda c: (c.set(12, 1, ORG), c.set(13, 1, ORG)))
+    gun("Scattergun", 19, 6, (4, 1, 11, 3), (11, 1, 18), (5, 4, 5), stock=(0, 1, 3, 3),
+        extra=lambda c: (c.rect(11, 2, 18, 2, GUN_D), c.rect(12, 3, 15, 3, WOOD)))
+    gun("Longshot", 26, 7, (6, 2, 15, 3), (15, 2, 25), (8, 4, 6), mag=(11, 4, 11, 5), stock=(0, 2, 5, 4),
+        extra=lambda c: (c.rect(8, 0, 13, 1, GUN_D), c.set(13, 0, CYAN)))
+    gun("Spinner", 22, 8, (3, 2, 12, 5), (12, 3, 21), (5, 6, 7), mag=(7, 6, 10, 7),
+        extra=lambda c: (c.rect(12, 2, 21, 2, GUN_D), c.rect(12, 4, 21, 4, GUN_D), c.rect(12, 2, 13, 5, GUN_L)))
+    gun("RocketTube", 22, 7, (2, 1, 20, 4), (20, 2, 21), (8, 5, 6),
+        extra=lambda c: (c.rect(2, 1, 20, 1, OLV), c.rect(20, 1, 21, 4, GUN_D), c.rect(0, 2, 1, 3, GUN_D), c.set(11, 0, RED2)))
+    def saw_extra(c):
+        c.rect(13, 0, 18, 5, GUN_L); c.rect(14, 1, 17, 4, GUN_D)   # the blade housing
+        for (x, y) in ((13, 0), (18, 0), (13, 5), (18, 5)): c.set(x, y, (200, 200, 210, 255))
+    gun("Sawthrower", 19, 7, (2, 1, 13, 4), (13, 2, 13), (5, 5, 6), stock=(0, 2, 1, 3), accent=ORG, extra=saw_extra)
+    def digger_extra(tip):
+        def f(c):
+            c.rect(10, 1, 12, 4, (90, 150, 190, 255)); c.rect(13, 1, 13 + tip, 4, (200, 210, 220, 255))
+            c.set(13 + tip, 2, CYAN); c.set(13 + tip, 3, CYAN)
+        return f
+    gun("LightDigger", 16, 6, (2, 1, 10, 4), (10, 2, 10), (4, 5, 5), extra=digger_extra(1))
+    gun("HeavyDigger", 19, 7, (2, 1, 11, 5), (11, 2, 11), (4, 6, 6), mag=(7, 6, 8, 6), extra=digger_extra(4))
+    def grenade(name, body, band, cap):
+        c = C(6, 7)
+        c.rect(1, 2, 4, 6, body); c.rect(0, 3, 5, 5, body); c.rect(1, 4, 4, 4, band)
+        c.rect(2, 0, 3, 1, cap); c.set(4, 1, GUN_D)
+        c.save(d + name + ".png")
+    grenade("FragGrenade", OLV, (60, 70, 44, 255), GUN_L)
+    grenade("ImpactGrenade", (170, 60, 50, 255), (220, 200, 60, 255), GUN_L)
+    grenade("ClusterGrenade", (90, 90, 110, 255), ORG, GUN_L)
+    c = C(7, 5); c.rect(0, 1, 6, 4, (70, 90, 60, 255)); c.rect(1, 2, 5, 3, (100, 140, 80, 255)); c.set(3, 0, RED2); c.save(d + "StickyCharge.png")
+    c = C(8, 5); c.rect(0, 1, 7, 4, GUN); c.rect(1, 2, 6, 3, GUN_D); c.set(6, 1, RED2); c.set(1, 0, GUN_L); c.save(d + "RemoteCharge.png")
+    c = C(5, 8); c.rect(0, 2, 4, 7, GUN); c.rect(1, 3, 3, 4, GUN_D); c.set(2, 5, RED2); c.rect(3, 0, 3, 1, GUN_L); c.save(d + "RemoteDetonator.png")
+    c = C(8, 16); c.rect(0, 0, 7, 15, (60, 66, 80, 255)); c.rect(1, 1, 6, 14, (110, 120, 140, 255))
+    c.rect(1, 3, 6, 5, (170, 220, 240, 160)); c.rect(1, 10, 6, 10, (240, 220, 60, 255)); c.save(d + "RiotShield.png")
+    c = C(8, 7); c.rect(0, 1, 7, 6, (230, 230, 230, 255)); c.rect(0, 1, 7, 1, (200, 200, 200, 255))
+    c.rect(3, 2, 4, 5, RED2); c.rect(2, 3, 5, 4, RED2); c.rect(3, 0, 4, 0, GUN); c.save(d + "Medikit.png")
+    # projectiles
+    c = C(7, 7)
+    c.rect(1, 1, 5, 5, (190, 196, 206, 255)); c.rect(2, 2, 4, 4, (120, 126, 136, 255)); c.set(3, 3, GUN_D)
+    for (x, y) in ((3, 0), (0, 3), (6, 3), (3, 6), (0, 0), (6, 6), (6, 0), (0, 6)): c.set(x, y, (230, 232, 240, 255))
+    c.save("Content/Projectiles/SawBlade.png")
+    c = C(1, 1); c.set(0, 0, (120, 220, 255, 255)); c.save("Content/Projectiles/DigParticle.png")
+
 if __name__ == "__main__":
-    body_item(); wand(); unit_fallback(); icon(); jetpack(); soldier(); brainbot(); ship()
+    body_item(); wand(); unit_fallback(); icon(); jetpack(); soldier(); brainbot(); ship(); devices()

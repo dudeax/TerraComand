@@ -65,6 +65,43 @@ namespace TerraCommand.Common.Physics
 		}
 
 		/// <summary>
+		/// A CC explosive going off (runs on every machine; each applies what it has authority over): the terrain is blown
+		/// out, everything in the radius is marked (deaths gib), hurt with distance falloff - the thrower included, as in CC -
+		/// and thrown by the blast.
+		/// </summary>
+		public static void Detonate(Vector2 center, float radius, int damage, int owner, float power = -1f)
+		{
+			MarkBlasted(center, radius);
+			bool authority = Main.netMode != NetmodeID.MultiplayerClient;
+			if (authority) {
+				Destruction.PixelTerrain.RequestCarve(center, radius * 0.6f, power < 0 ? Destruction.TerrainRules.ExplosivePower : (int)power,
+					Destruction.CarveFlags.Explosion);
+				foreach (NPC n in Main.ActiveNPCs) {
+					if (n.friendly || n.dontTakeDamage)
+						continue;
+					float near = 1f - Vector2.Distance(n.Center, center) / (radius + Math.Max(n.width, n.height) / 2f);
+					if (near > 0f)
+						n.SimpleStrikeNPC(Math.Max(1, (int)(damage * near)), Math.Sign(n.Center.X - center.X), knockBack: 0f);
+				}
+			}
+			if (!Main.dedServ) {
+				Player lp = Main.LocalPlayer;
+				float near = 1f - Vector2.Distance(lp.Center, center) / radius;
+				if (lp.active && !lp.dead && near > 0f)
+					lp.Hurt(Terraria.DataStructures.PlayerDeathReason.ByCustomReason(Terraria.Localization.NetworkText.FromLiteral($"{lp.name} was blown up.")),
+						Math.Max(1, (int)(damage * near)), Math.Sign(lp.Center.X - center.X), knockback: 0f);
+				Terraria.Audio.SoundEngine.PlaySound(SoundID.Item14, center);
+				for (int i = 0; i < 30; i++)
+					Dust.NewDust(center - new Vector2(radius / 3f), (int)(radius / 1.5f), (int)(radius / 1.5f), DustID.Smoke, Main.rand.NextFloat(-5, 5), Main.rand.NextFloat(-5, 5), 100, default, 2f);
+				for (int i = 0; i < 20; i++) {
+					var d = Dust.NewDustDirect(center - new Vector2(radius / 4f), (int)(radius / 2f), (int)(radius / 2f), DustID.Torch, Main.rand.NextFloat(-6, 6), Main.rand.NextFloat(-6, 6), 100, default, 2.5f);
+					d.noGravity = true;
+				}
+			}
+			Blast(center, radius, Tuning.BlastImpulse, damage);
+		}
+
+		/// <summary>
 		/// Marks everything inside a blast (on every machine) so that deaths in the next moments gib. Must run
 		/// before vanilla applies the explosion's damage, i.e. from PreKill.
 		/// </summary>

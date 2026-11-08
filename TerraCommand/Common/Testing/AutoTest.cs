@@ -789,6 +789,9 @@ namespace TerraCommand.Common.Testing
 					break;
 				}
 				case "deposits": Expect(Cmp(Destruction.PixelTerrain.Deposits, a[2], F(a[3])), $"{desc} ({Destruction.PixelTerrain.Deposits} pixels settled into the terrain)"); break;
+				case "shrapnel": Expect(Cmp(Content.Projectiles.Shrapnel.Spawned, a[2], F(a[3])), $"{desc} ({Content.Projectiles.Shrapnel.Spawned} shrapnel so far)"); break;
+				case "blocked": Expect(Cmp(Combat.ShieldPlayer.Blocked, a[2], F(a[3])), $"{desc} ({Combat.ShieldPlayer.Blocked} blocked)"); break;
+				case "spinup": { int sp = P.GetModPlayer<Combat.AimPlayer>().SpinUp; Expect(Cmp(sp, a[2], F(a[3])), $"{desc} (spin {sp})"); break; }
 				case "debris": Expect(Cmp(Destruction.Debris.Count, a[2], F(a[3])), $"{desc} ({Destruction.Debris.Count} grains)"); break;
 				case "floating": Expect(Cmp(floatTicks, a[2], F(a[3])), $"{desc} ({floatTicks} of {probeTicks} ticks standing with the feet over a gap)"); break;
 				case "flickers": Expect(Cmp(airFlickers, a[2], F(a[3])), $"{desc} ({airFlickers} grounded/air flickers over {probeTicks} ticks)"); break;

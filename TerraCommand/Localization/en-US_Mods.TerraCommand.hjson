@@ -32,6 +32,101 @@ Items: {
 			Press the Switch Body key to take control of it
 			'''
 	}
+
+	ClusterGrenade: {
+		DisplayName: Cluster Grenade
+		Tooltip: ""
+	}
+
+	Detonator: {
+		DisplayName: Detonator
+		Tooltip: ""
+	}
+
+	FieldRifle: {
+		DisplayName: Field Rifle
+		Tooltip: ""
+	}
+
+	FragGrenade: {
+		DisplayName: Frag Grenade
+		Tooltip: ""
+	}
+
+	HeavyDigger: {
+		DisplayName: Heavy Digger
+		Tooltip: ""
+	}
+
+	ImpactGrenade: {
+		DisplayName: Impact Grenade
+		Tooltip: ""
+	}
+
+	LightDigger: {
+		DisplayName: Light Digger
+		Tooltip: ""
+	}
+
+	Longshot: {
+		DisplayName: Longshot
+		Tooltip: ""
+	}
+
+	Medikit: {
+		DisplayName: Medikit
+		Tooltip: ""
+	}
+
+	RemoteCharge: {
+		DisplayName: Remote Charge
+		Tooltip: ""
+	}
+
+	RiotShield: {
+		DisplayName: Riot Shield
+		Tooltip: ""
+	}
+
+	RocketTube: {
+		DisplayName: Rocket Tube
+		Tooltip: ""
+	}
+
+	Sawthrower: {
+		DisplayName: Sawthrower
+		Tooltip: ""
+	}
+
+	Scattergun: {
+		DisplayName: Scattergun
+		Tooltip: ""
+	}
+
+	ServicePistol: {
+		DisplayName: Service Pistol
+		Tooltip: ""
+	}
+
+	Spinner: {
+		DisplayName: Spinner
+		Tooltip: ""
+	}
+
+	StickyCharge: {
+		DisplayName: Sticky Charge
+		Tooltip: ""
+	}
+
+	TriBurstRifle: {
+		DisplayName: Tri Burst Rifle
+		Tooltip: ""
+	}
+
+	RemoteDetonator: {
+		DisplayName: Remote Detonator
+		Tooltip: ""
+	}
 }
 
 Tiles.LaunchPad.MapEntry: Launch Pad
@@ -44,6 +139,15 @@ NPCs: {
 Projectiles: {
 	LaunchRocket.DisplayName: Cargo Rocket
 	DropPod.DisplayName: Drop Pod
+	Bomblet.DisplayName: Bomblet
+	ClusterGrenadeProjectile.DisplayName: Cluster Grenade Projectile
+	DigParticle.DisplayName: Dig Particle
+	FragGrenadeProjectile.DisplayName: Frag Grenade Projectile
+	ImpactGrenadeProjectile.DisplayName: Impact Grenade Projectile
+	RemoteChargeProjectile.DisplayName: Remote Charge Projectile
+	SawBlade.DisplayName: Saw Blade
+	Shrapnel.DisplayName: Shrapnel
+	StickyChargeProjectile.DisplayName: Sticky Charge Projectile
 }
 
 Configs: {

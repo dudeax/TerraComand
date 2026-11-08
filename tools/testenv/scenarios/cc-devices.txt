@@ -1,0 +1,146 @@
+# Every CC device system, through its original example item.
+nospawn
+clearnpcs
+goto spawn
+flatten 70 24
+wait 30
+maxlife 400
+wait 2
+heal
+clearinv
+aim 300 -10
+
+# semi-auto pistol: one round per pull, 12 in the magazine
+give ServicePistol
+hold ServicePistol
+wait 5
+expect magazine == 12
+shoot 3 20
+wait 20
+expect rounds == 9
+
+# burst fire: one pull, three rounds
+give TriBurstRifle
+hold TriBurstRifle
+wait 5
+use 2
+wait 30
+expect rounds == 21
+
+# multi-particle rounds: one shotgun shot is eight pellets
+give Scattergun
+hold Scattergun
+wait 5
+use 2
+wait 1
+expect projectiles Bullet >= 8
+expect rounds == 5
+wait 60
+
+# spin-up: a short pull only spins the barrels; held, it fires
+give Spinner
+hold Spinner
+wait 5
+use 20
+wait 2
+expect rounds == 150
+use 80
+wait 5
+expect rounds < 150
+wait 60
+
+# explosive rounds
+give RocketTube
+hold RocketTube
+wait 5
+use 2
+wait 2
+expect projectiles RocketI >= 1
+wait 120
+
+# ricocheting saw blades that cut terrain
+fill 6 -6 7 -1 Stone
+give Sawthrower
+hold Sawthrower
+aim 200 -12
+wait 5
+use 2
+wait 3
+expect projectiles SawBlade >= 1
+wait 60
+expect damaged >= 1
+screenshot devices-saw
+
+# a digger eats along the aim and the material drops as items
+fill -6 -4 -5 -1 Dirt
+give LightDigger
+hold LightDigger
+aim -200 -12
+wait 5
+use 60
+wait 20
+expect tile -5 -2 open
+screenshot devices-digger
+wait 30
+
+# thrown devices: frag (timed, shrapnel), impact, sticky, cluster, remote + detonator
+give FragGrenade 2
+hold FragGrenade
+aim 200 -60
+use 20
+wait 200
+expect shrapnel >= 10                # it burst into shrapnel
+wait 60
+give ImpactGrenade 2
+hold ImpactGrenade
+aim 120 -40
+use 20
+wait 40
+expect projectiles ImpactGrenadeProjectile == 0
+wait 30
+give ClusterGrenade 2
+hold ClusterGrenade
+aim 150 -80
+use 20
+wait 122
+expect projectiles Bomblet >= 3
+wait 120
+give StickyCharge 2
+hold StickyCharge
+aim 200 -12
+use 20
+wait 60
+expect projectiles StickyChargeProjectile == 1
+wait 160
+expect projectiles StickyChargeProjectile == 0
+give RemoteCharge 2
+give RemoteDetonator
+hold RemoteCharge
+aim 200 -12
+use 20
+wait 120
+expect projectiles RemoteChargeProjectile == 1
+hold RemoteDetonator
+use 2
+wait 20
+expect projectiles RemoteChargeProjectile == 0
+
+# a held shield stops fire from the front
+give RiotShield
+hold RiotShield
+aim 200 0
+wait 10
+heal
+shotat BulletDeadeye 70 -30 -12 0 20     # (inside the saw-test wall at 6..7 tiles)
+wait 40
+expect blocked >= 1
+expect life == 400
+screenshot devices-shield
+
+# a medikit patches a body up
+hurt 120
+give Medikit
+hold Medikit
+use 2
+wait 60
+expect life >= 330
