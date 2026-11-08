@@ -12,7 +12,7 @@ using TerraCommand.Common.Physics;
 
 namespace TerraCommand.Common.Actors
 {
-	public enum ActorKind : byte { Soldier, Brain }
+	public enum ActorKind : byte { Soldier, Brain, Light, Heavy, Crab, Turret }
 
 	/// <summary>
 	/// One actor type's part sprites and proportions (px). Parts are original art (tools/gen_art.py), drawn facing right:
@@ -36,12 +36,26 @@ namespace TerraCommand.Common.Actors
 		{
 			if (all.TryGetValue(kind, out ActorArt a))
 				return a;
-			string dir = kind == ActorKind.Brain ? "Brain" : "Soldier";
+			string dir = kind.ToString();
 			Asset<Texture2D> R(string n) => ModContent.Request<Texture2D>($"TerraCommand/Content/Actors/{dir}/{n}");
+			if (kind == ActorKind.Crab) {
+				all[kind] = a = new ActorArt { Torso = R("Body"), Thigh = R("Thigh"), Shin = R("Shin"), HipHeight = 10f, ThighLen = 6f, ShinLen = 6f, HasJetpack = false };
+				return a;
+			}
+			if (kind == ActorKind.Turret) {
+				all[kind] = a = new ActorArt { Torso = R("Base"), Head = R("Head"), HasJetpack = false, HipHeight = 0f };
+				return a;
+			}
 			a = new ActorArt {
 				Head = R("Head"), Torso = R("Torso"), Thigh = R("Thigh"), Shin = R("Shin"), Foot = R("Foot"),
 				UpperArm = R("UpperArm"), Forearm = R("Forearm"),
 			};
+			if (kind == ActorKind.Heavy) {
+				a.Shoulder = new(1f, -15f);
+				a.Neck = new(1f, -17f);
+				a.FootAnkle = new(3f, 1f);
+				a.JetpackAt = new(-8f, -10f);
+			}
 			if (kind == ActorKind.Brain) {
 				a.Shoulder = new(0f, -12f);
 				a.Neck = new(0f, -18f);
@@ -109,6 +123,10 @@ namespace TerraCommand.Common.Actors
 		/// <summary>The front shoulder (world): aiming is measured from here, so the muzzle line passes through the cursor.</summary>
 		public static Vector2 Shoulder(in RigPose p)
 		{
+			if (p.Kind == ActorKind.Crab)
+				return p.Feet + new Vector2(2f * p.Dir, -18f).RotatedBy(p.Rot);
+			if (p.Kind == ActorKind.Turret)
+				return p.Feet + new Vector2(0f, -16f);
 			ActorArt art = ActorArt.Get(p.Kind);
 			return Hip(p, art) + new Vector2(art.Shoulder.X * p.Dir, art.Shoulder.Y).RotatedBy(p.Rot);
 		}
@@ -124,6 +142,14 @@ namespace TerraCommand.Common.Actors
 		public static void Build(RigPose p, List<RigPiece> outList, bool onlyHead = false)
 		{
 			ActorArt art = ActorArt.Get(p.Kind);
+			if (p.Kind == ActorKind.Crab) {
+				BuildCrab(p, art, outList);
+				return;
+			}
+			if (p.Kind == ActorKind.Turret) {
+				BuildTurret(p, art, outList);
+				return;
+			}
 			if (!art.Torso.IsLoaded || !art.Thigh.IsLoaded)
 				return;
 			int dir = p.Dir;
@@ -265,6 +291,91 @@ namespace TerraCommand.Common.Actors
 		public static bool IsHoldable(Item item) =>
 			item != null && !item.IsAir && (item.damage > 0 || item.pick > 0 || item.axe > 0 || item.hammer > 0
 				|| item.ModItem is Content.Items.Devices.RiotShield or Content.Items.Devices.RemoteDetonator or Content.Items.Devices.Medikit);
+
+		/// <summary>A four-legged drone: a low body, legs stepping on the walk cycle a quarter apart, the gun mounted on top.</summary>
+		static void BuildCrab(RigPose p, ActorArt art, List<RigPiece> outList)
+		{
+			if (!art.Torso.IsLoaded || !art.Thigh.IsLoaded)
+				return;
+			int dir = p.Dir;
+			float rot = p.Rot;
+			Vector2 body = p.Feet + new Vector2(0f, -12f + p.Sink);
+			SpriteEffects fx = dir > 0 ? SpriteEffects.None : SpriteEffects.FlipHorizontally;
+			Color light = p.Light, back = p.Light.MultiplyRGB(new Color(165, 165, 165));
+			Vector2 W(Vector2 local) => body + local.RotatedBy(rot);
+			bool moving = Math.Abs(p.VelX) > 0.05f && p.Grounded;
+			void Leg(float hipX, float phase, Color c)
+			{
+				Vector2 hip = W(new Vector2(hipX, 3f));
+				Vector2 foot;
+				if (moving && !p.Unstable) {
+					LimbPath path = LimbPaths.Walk;
+					float prog = (p.WalkDist / (path.Length * 0.6f) + phase) % 1f;
+					Vector2 at = path.At(prog * path.Length, out _) * 0.6f;
+					bool backwards = Math.Sign(p.VelX) != dir;
+					foot = new Vector2(hip.X + at.X * (backwards ? -dir : dir), body.Y + at.Y);
+				}
+				else
+					foot = hip + new Vector2(hipX * 0.5f, 9f).RotatedBy(p.Unstable ? rot : 0f);
+				if (p.Grounded && !p.Unstable) {
+					float ground = GroundBelow(new Vector2(foot.X, hip.Y), 16f);
+					if (foot.Y > ground)
+						foot.Y = ground;
+				}
+				Vector2 knee = Ik(hip, foot, art.ThighLen, art.ShinLen, new Vector2(0f, -1f).RotatedBy(rot));
+				foot = knee + (foot - knee).SafeNormalize(Vector2.UnitY) * art.ShinLen;
+				Bone(art.Thigh.Value, hip, knee, c);
+				Bone(art.Shin.Value, knee, foot, c);
+			}
+			void Bone(Texture2D tex, Vector2 from, Vector2 to, Color c)
+			{
+				float r = (to - from).ToRotation() - MathHelper.PiOver2;
+				outList.Add(new RigPiece(tex, from, null, c, r, new Vector2(tex.Width / 2f, 1f), 1f, fx));
+			}
+			Leg(-6f * dir, 0.25f, back);
+			Leg(6f * dir, 0.75f, back);
+			Texture2D bt = art.Torso.Value;
+			outList.Add(new RigPiece(bt, body, null, light, rot, bt.Size() / 2f, 1f, fx));
+			Leg(-4f * dir, 0f, light);
+			Leg(8f * dir, 0.5f, light);
+			if (p.Held != null && !p.Held.IsAir && !p.Unstable)
+				Mounted(p, W(new Vector2(2f * dir, -6f)), light, outList);
+		}
+
+		/// <summary>A turret: a squat base, and a head that swivels to the aim with the gun on it.</summary>
+		static void BuildTurret(RigPose p, ActorArt art, List<RigPiece> outList)
+		{
+			if (!art.Torso.IsLoaded || !art.Head.IsLoaded)
+				return;
+			SpriteEffects fx = p.Dir > 0 ? SpriteEffects.None : SpriteEffects.FlipHorizontally;
+			Texture2D bt = art.Torso.Value, ht = art.Head.Value;
+			Vector2 baseAt = p.Feet - new Vector2(0f, bt.Height / 2f);
+			outList.Add(new RigPiece(bt, baseAt, null, p.Light, p.Rot, bt.Size() / 2f, 1f, SpriteEffects.None));
+			Vector2 pivot = p.Feet + new Vector2(0f, -16f).RotatedBy(p.Rot);
+			float aim = AimWorld(p);
+			float headRot = p.Dir > 0 ? aim : aim - MathHelper.Pi;
+			outList.Add(new RigPiece(ht, pivot, null, p.Light, headRot, ht.Size() / 2f, 1f, fx));
+			if (p.Held != null && !p.Held.IsAir && !p.Unstable)
+				Mounted(p, pivot + aim.ToRotationVector2() * 4f, p.Light, outList);
+		}
+
+		/// <summary>A gun on a mount (drones, turrets), pointing along the aim.</summary>
+		static void Mounted(RigPose p, Vector2 at, Color light, List<RigPiece> outList)
+		{
+			Item item = p.Held;
+			Main.instance.LoadItem(item.type);
+			Texture2D tex = TextureAssets.Item[item.type].Value;
+			Rectangle src = Main.itemAnimations[item.type] != null ? Main.itemAnimations[item.type].GetFrame(tex) : tex.Frame();
+			outList.Add(new RigPiece(tex, at, src, item.GetAlpha(light), AimWorld(p), new Vector2(src.Width * 0.3f, src.Height * 0.55f), item.scale,
+				p.Dir > 0 ? SpriteEffects.None : SpriteEffects.FlipVertically));
+		}
+
+		/// <summary>Where a body's gun sits (world): the front hand for humanoids, the mount for drones and turrets.</summary>
+		public static Vector2 GunAt(in RigPose p) => p.Kind switch {
+			ActorKind.Crab => p.Feet + new Vector2(2f * p.Dir, -18f).RotatedBy(p.Rot),
+			ActorKind.Turret => p.Feet + new Vector2(0f, -16f) + AimWorld(p).ToRotationVector2() * 4f,
+			_ => Grip(p),
+		};
 
 		public static bool IsGunLike(Item item) =>
 			item != null && (item.useStyle == ItemUseStyleID.Shoot || item.useStyle == ItemUseStyleID.HoldUp && item.shoot > 0);

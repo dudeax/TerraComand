@@ -686,7 +686,12 @@ namespace TerraCommand.Common.Testing
 					u.NPC.StrikeInstantKill();
 					break;
 				}
-				case "kind": P.GetModPlayer<Actors.RigPlayer>().Kind = a[1] == "brain" ? Actors.ActorKind.Brain : Actors.ActorKind.Soldier; break;
+				case "kind": P.GetModPlayer<Actors.RigPlayer>().Kind = Enum.Parse<Actors.ActorKind>(a[1], ignoreCase: true); break;
+				case "deploy": { // deploy <BodyItem> <dx px> : deploy a body of that kind next to the player
+					var body = (Content.Items.BodyItem)ContentSamples.ItemsByType[ItemType(a[1])].ModItem;
+					UnitSystem.RequestDeploy(P, P.Bottom + new Vector2(F(a[2]), 0f), body.Kind, body.BuiltInWeapon);
+					break;
+				}
 				case "dumptex": { // dumptex : save the player skin sheets (Players[0, i]) as PNGs into the run folder
 					for (int i = 0; i < Terraria.GameContent.TextureAssets.Players.GetLength(1); i++) {
 						var asset = Terraria.GameContent.TextureAssets.Players[0, i];

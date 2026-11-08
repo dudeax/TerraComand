@@ -133,6 +133,63 @@ def ship():
     c.rect(4, 30, 9, 33, DARK); c.rect(5, 32, 8, 33, BLK)  # nozzle
     c.save("Content/NPCs/CargoShip.png")
 
+def body_items():
+    # packed bodies: a capsule with the body type inside
+    def capsule(name, inner):
+        c = C(11, 15)
+        c.rect(1, 0, 9, 14, (60, 90, 120, 255)); c.rect(2, 1, 8, 13, (140, 210, 230, 180))
+        inner(c)
+        c.rect(1, 0, 9, 0, STEEL); c.rect(1, 14, 9, 14, STEEL)
+        c.save("Content/Items/" + name + ".png")
+    def light(c):
+        c.rect(4, 3, 6, 5, SKIN); c.rect(4, 6, 6, 10, (170, 150, 104, 255)); c.rect(4, 11, 4, 12, BLK); c.rect(6, 11, 6, 12, BLK)
+    def heavy(c):
+        c.rect(3, 2, 7, 5, (110, 116, 126, 255)); c.set(6, 3, (230, 80, 60, 255)); c.rect(3, 6, 7, 10, (110, 116, 126, 255))
+        c.rect(3, 11, 4, 12, BLK); c.rect(6, 11, 7, 12, BLK)
+    def crab(c):
+        c.rect(3, 7, 7, 9, (200, 170, 60, 255)); c.set(6, 8, (60, 200, 230, 255))
+        for x in (2, 4, 6, 8): c.rect(x, 10, x, 12, BLK)
+        c.rect(5, 5, 8, 6, (70, 74, 82, 255))
+    def turret(c):
+        c.rect(3, 9, 7, 12, (110, 116, 126, 255)); c.rect(4, 6, 6, 8, (70, 74, 82, 255)); c.rect(6, 7, 8, 7, (40, 42, 48, 255))
+    capsule("LightBody", light); capsule("HeavyBody", heavy); capsule("CrabDrone", crab); capsule("TurretKit", turret)
+
+def actor_variants():
+    # Light soldier: tan fatigues, open-face helmet, slim; Heavy: grey plate armour, bulkier parts.
+    TAN=(170,150,104,255); TAN_D=(118,102,70,255); TAN_L=(206,190,146,255); BLUE=(70,110,170,255)
+    d = "Content/Actors/Light/"
+    t = C(6, 8); t.rect(0, 0, 5, 7, OUT); t.rect(1, 1, 4, 5, TAN); t.rect(3, 1, 4, 3, TAN_L); t.rect(1, 0, 4, 0, TAN_D)
+    t.rect(1, 6, 4, 6, OUT); t.set(3, 6, BLUE); t.rect(1, 7, 4, 7, TAN_D); t.save(d + "Torso.png")
+    h = C(6, 6); h.rect(0, 0, 5, 5, OUT); h.rect(1, 1, 4, 2, TAN); h.rect(1, 1, 3, 1, TAN_L); h.rect(0, 2, 5, 2, TAN_D)
+    h.rect(3, 3, 4, 4, SKIN); h.set(4, 3, OUT); h.rect(1, 3, 2, 5, TAN_D); h.save(d + "Head.png")
+    th = C(2, 4); th.rect(0, 0, 1, 3, TAN); th.rect(0, 0, 0, 3, TAN_D); th.save(d + "Thigh.png")
+    sh = C(2, 4); sh.rect(0, 0, 1, 3, TAN_D); sh.rect(0, 0, 1, 0, TAN_L); sh.save(d + "Shin.png")
+    f = C(3, 2); f.rect(0, 0, 2, 1, BOOT); f.rect(0, 0, 1, 0, BOOT_L); f.save(d + "Foot.png")
+    ua = C(2, 4); ua.rect(0, 0, 1, 3, TAN); ua.save(d + "UpperArm.png")
+    fa = C(2, 4); fa.rect(0, 0, 1, 2, TAN_D); fa.rect(0, 3, 1, 3, SKIN); fa.save(d + "Forearm.png")
+    GR=(110,116,126,255); GR_D=(70,74,84,255); GR_L=(160,168,180,255)
+    d = "Content/Actors/Heavy/"
+    t = C(7, 9); t.rect(0, 0, 6, 8, OUT); t.rect(1, 1, 5, 6, GR); t.rect(3, 1, 5, 4, GR_L); t.rect(1, 0, 5, 0, GR_D)
+    t.rect(1, 7, 5, 7, OUT); t.set(4, 7, (220, 170, 40, 255)); t.rect(1, 8, 5, 8, GR_D); t.save(d + "Torso.png")
+    h = C(7, 6); h.rect(0, 0, 6, 5, OUT); h.rect(1, 1, 5, 4, GR); h.rect(1, 1, 4, 1, GR_L)
+    h.rect(4, 2, 6, 3, (230, 80, 60, 255)); h.rect(1, 5, 5, 5, GR_D); h.save(d + "Head.png")
+    th = C(3, 4); th.rect(0, 0, 2, 3, GR); th.rect(0, 0, 0, 3, GR_D); th.save(d + "Thigh.png")
+    sh = C(3, 4); sh.rect(0, 0, 2, 3, GR_D); sh.rect(0, 0, 2, 0, GR_L); sh.save(d + "Shin.png")
+    f = C(4, 2); f.rect(0, 0, 3, 1, GR_D); f.rect(0, 0, 2, 0, GR); f.save(d + "Foot.png")
+    ua = C(3, 4); ua.rect(0, 0, 2, 3, GR); ua.rect(0, 0, 2, 0, GR_L); ua.save(d + "UpperArm.png")
+    fa = C(2, 4); fa.rect(0, 0, 1, 2, GR_D); fa.rect(0, 3, 1, 3, OUT); fa.save(d + "Forearm.png")
+    # Crab drone: a flat armoured body, thin legs
+    YEL2=(200,170,60,255); YEL_D=(140,116,40,255)
+    d = "Content/Actors/Crab/"
+    b = C(11, 5); b.rect(0, 1, 10, 4, OUT); b.rect(1, 1, 9, 3, YEL2); b.rect(2, 0, 8, 0, OUT); b.rect(2, 1, 8, 1, (230, 210, 120, 255))
+    b.rect(7, 2, 8, 2, (60, 200, 230, 255)); b.rect(1, 4, 9, 4, YEL_D); b.save(d + "Body.png")
+    th = C(1, 4); th.rect(0, 0, 0, 3, YEL_D); th.save(d + "Thigh.png")
+    sh = C(1, 4); sh.rect(0, 0, 0, 3, OUT); sh.save(d + "Shin.png")
+    # Turret: a squat base and a swivelling head
+    d = "Content/Actors/Turret/"
+    b = C(9, 5); b.rect(0, 2, 8, 4, GR_D); b.rect(1, 1, 7, 2, GR); b.rect(3, 0, 5, 0, GR_L); b.rect(0, 4, 8, 4, OUT); b.save(d + "Base.png")
+    h = C(6, 4); h.rect(0, 0, 5, 3, OUT); h.rect(1, 1, 4, 2, GR); h.set(4, 1, (230, 80, 60, 255)); h.save(d + "Head.png")
+
 def devices():
     # original CC-style devices (facing right). Guns: body, barrel, grip, magazine, stock.
     d = "Content/Items/Devices/"
@@ -196,4 +253,4 @@ def devices():
     c = C(1, 1); c.set(0, 0, (120, 220, 255, 255)); c.save("Content/Projectiles/DigParticle.png")
 
 if __name__ == "__main__":
-    body_item(); wand(); unit_fallback(); icon(); jetpack(); soldier(); brainbot(); ship(); devices()
+    body_item(); wand(); unit_fallback(); icon(); jetpack(); soldier(); brainbot(); ship(); devices(); actor_variants(); body_items()

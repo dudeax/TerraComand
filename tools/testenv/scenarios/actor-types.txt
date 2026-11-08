@@ -1,0 +1,67 @@
+# Actor types: soldier, light, heavy, crab drone, turret - their builds (speed, jetpack, height) and that they fight.
+nospawn
+clearnpcs
+goto spawn
+flatten 90 30
+wait 30
+maxlife 300
+wait 2
+heal
+
+# as the player: a light body outruns a soldier, a heavy one is slower; light jets higher than heavy
+kind light
+wait 5
+mark
+walk right 120
+wait 1
+expect moved >= 6.5
+kind heavy
+wait 30
+mark
+walk right 120
+wait 1
+expect moved <= 5.8
+goto spawn
+wait 30
+mark
+jump 90
+wait 90
+expect peak >= 4
+kind light
+wait 200
+mark
+jump 120
+wait 120
+expect peak >= 8
+expect peak <= 30
+screenshot types-light
+
+# a drone is short and has no jetpack; a turret doesn't move
+kind crab
+wait 30
+expect height <= 24
+mark
+jump 30
+wait 30
+expect peak <= 0.3
+screenshot types-crab-player
+kind turret
+wait 30
+mark
+walk right 60
+wait 1
+expect moved <= 0.2
+kind soldier
+wait 30
+
+# idle bodies of each type, deployed from their items (drones and turrets come armed)
+deploy CrabDrone 80
+deploy TurretKit -80
+deploy HeavyBody 140
+deploy LightBody -140
+wait 30
+expect units == 4
+screenshot types-units
+spawnnpc Zombie 300 0
+wait 300
+expect npcs Zombie == 0          # the drone and turret shot it

@@ -146,18 +146,22 @@ namespace TerraCommand.Content.NPCs
 
 		void UpdateBodyStats()
 		{
-			bool brain = Loadout.Kind == ActorKind.Brain;
-			Actor.FuelMax = brain ? 0f : CC.JetTimeTicks;
-			Actor.SpeedScale = brain ? 0.6f : 1f;
-			Actor.CanRun = !brain;
+			ActorStats stats = ActorStats.Get(Loadout.Kind);
 			Actor.MaxHealth = NPC.lifeMax;
-			if (Main.GameUpdateCount % 60 == (ulong)(NPC.whoAmI % 60)) {
+			if (Main.GameUpdateCount % 60 == (ulong)(NPC.whoAmI % 60) || Actor.StandHeight != stats.StandHeight) {
 				float m = 0f;
 				foreach (Item it in Loadout.Inventory)
 					m += ActorInventory.ItemMass(it);
 				for (int i = 0; i < 10; i++)
 					m += ActorInventory.ItemMass(Loadout.Armor[i]);
-				Actor.Mass = CC.Mass + m;
+				Actor.FuelMax = stats.Fuel;
+				Actor.JetForce = stats.JetForce;
+				Actor.Apply(stats, m);
+				// the hitbox fits the body type (drones and turrets are short), feet kept in place
+				if (NPC.height != stats.StandHeight) {
+					NPC.position.Y += NPC.height - stats.StandHeight;
+					NPC.height = stats.StandHeight;
+				}
 			}
 		}
 
@@ -303,11 +307,12 @@ namespace TerraCommand.Content.NPCs
 
 			int proj = it.shoot;
 			float speed = it.shootSpeed;
-			if (it.useAmmo == AmmoID.Bullet) { proj = ProjectileID.Bullet; speed += 5f; }
+			CCFirearm cc = it.ModItem as CCFirearm;
+			if (cc == null && it.useAmmo == AmmoID.Bullet) { proj = ProjectileID.Bullet; speed += 5f; }
 			else if (it.useAmmo == AmmoID.Arrow) { proj = ProjectileID.WoodenArrowFriendly; speed += 3f; }
 			else if (it.useAmmo == AmmoID.Rocket) { proj = ProjectileID.RocketI; speed += 2f; }
-			if (proj <= ProjectileID.None || ContentSamples.ProjectilesByType[proj].aiStyle is not (1 or 2 or 16))
-				return; // weapons with special behaviour need a player to use them
+			if (cc == null && (proj <= ProjectileID.None || ContentSamples.ProjectilesByType[proj].aiStyle is not (1 or 2 or 16)))
+				return; // Terraria weapons with special behaviour need a player to use them
 
 			// CC shake: sharp aim narrows it, firing from the air doubles it
 			float shakeDeg = 3f;
@@ -325,9 +330,12 @@ namespace TerraCommand.Content.NPCs
 				shakeDeg *= 2f;
 			Vector2 dir = aimAngle.ToRotationVector2();
 			float dev = Devices.Gaussian() * MathHelper.ToRadians(shakeDeg / 2f);
-			Vector2 muzzle = RigRenderer.Grip(pose) + dir * 16f;
-			Projectile.NewProjectile(NPC.GetSource_FromAI(), muzzle, dir.RotatedBy(dev) * Math.Max(speed, 6f), proj,
-				it.damage, it.knockBack, Main.myPlayer);
+			Vector2 muzzle = RigRenderer.GunAt(pose) + dir * 16f;
+			if (cc != null)
+				CCFirearm.Fire(NPC.GetSource_FromAI(), muzzle, dir.RotatedBy(dev) * speed, proj, it.damage, it.knockBack, Main.myPlayer, cc.Spec);
+			else
+				Projectile.NewProjectile(NPC.GetSource_FromAI(), muzzle, dir.RotatedBy(dev) * Math.Max(speed, 6f), proj,
+					it.damage, it.knockBack, Main.myPlayer);
 			NPC.velocity -= dir * it.knockBack * 0.06f * CC.Mass / Actor.Mass;   // recoil
 			fireCooldown = Math.Max(it.useTime, 6);
 			SoundEngine.PlaySound(it.UseSound ?? SoundID.Item11, NPC.Center);

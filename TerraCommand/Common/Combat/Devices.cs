@@ -325,7 +325,7 @@ namespace TerraCommand.Common.Combat
 			float dev = Devices.Gaussian() * cone;                  // CC: shake x RandomNormalNum
 			velocity = dir.RotatedBy(dev) * speed;
 			// rounds leave the muzzle, out in front of the hands
-			Vector2 grip = RigRenderer.Grip(Player.GetModPlayer<RigPlayer>().Pose());
+			Vector2 grip = RigRenderer.GunAt(Player.GetModPlayer<RigPlayer>().Pose());
 			float length = TextureAssets.Item[it.type].IsLoaded ? TextureAssets.Item[it.type].Width() * 0.7f * it.scale : 20f;
 			Vector2 muzzle = grip + dir * length;
 			if (!Collision.SolidCollision(muzzle - new Vector2(2), 4, 4))
@@ -407,7 +407,7 @@ namespace TerraCommand.Common.Combat
 				var aim = p.GetModPlayer<AimPlayer>();
 				CCActor a = p.GetModPlayer<BodyPhysicsPlayer>().Actor;
 				Vector2 dir = (a.Flipped ? MathHelper.Pi + a.AimAngle : -a.AimAngle).ToRotationVector2();
-				Vector2 from = RigRenderer.Grip(p.GetModPlayer<RigPlayer>().Pose());
+				Vector2 from = RigRenderer.GunAt(p.GetModPlayer<RigPlayer>().Pose());
 				float len = 60f + Devices.SharpLength(p.inventory[ActorInventory.Held]) * (0.4f + 0.6f * a.SharpAim);
 				Texture2D px = TextureAssets.MagicPixel.Value;
 				// a line of dots along the aim, fanning into two as the spread widens

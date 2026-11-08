@@ -201,14 +201,13 @@ namespace TerraCommand.Common.Orbital
 		{
 			if (!cargo.TryGetValue(ship.NPC.whoAmI, out var items) || items.Count == 0)
 				return;
-			int bodyType = ModContent.ItemType<Content.Items.CloneBody>();
 			int side = 1;
 			foreach (Item it in items) {
 				side = -side;
 				Vector2 at = ship.NPC.Bottom + new Vector2(side * (ship.NPC.width / 2f + 14f + Main.rand.Next(0, 12)), -2f);
-				if (it.type == bodyType) {
+				if (it.ModItem is Content.Items.BodyItem body) {
 					for (int i = 0; i < it.stack; i++)
-						UnitSystem.SpawnFresh(at + new Vector2(side * i * 14f, 0f), ship.Team);
+						UnitSystem.SpawnFresh(at + new Vector2(side * i * 14f, 0f), ship.Team, body.Kind, body.BuiltInWeapon);
 					continue;
 				}
 				int n = Item.NewItem(ship.NPC.GetSource_FromAI(), at - new Vector2(8, 16), 16, 16, it.type, it.stack, false, it.prefix, noGrabDelay: true);
@@ -241,7 +240,7 @@ namespace TerraCommand.Common.Orbital
 				if (u.Loadout.Kind == Actors.ActorKind.Brain || !bay.Intersects(u.NPC.Hitbox))
 					continue;
 				// the body goes up (as a body, to be ordered again), with everything it carried
-				items.Add(new Item(ModContent.ItemType<Content.Items.CloneBody>()));
+				items.Add(new Item(Content.Items.BodyItem.ItemFor(u.Loadout.Kind)));
 				foreach (Item[] arr in new[] { u.Loadout.Inventory, u.Loadout.Armor, u.Loadout.MiscEquips })
 					foreach (Item it in arr)
 						if (!it.IsAir)

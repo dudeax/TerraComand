@@ -59,6 +59,25 @@ namespace TerraCommand.Common.Actors
 		public const float BlastScale = 0.5f;
 	}
 
+	/// <summary>What sets the actor types apart (CC: each actor's Mass, health, jetpack and limbs).</summary>
+	public sealed class ActorStats
+	{
+		public float Mass = CC.Mass, LifeScale = 1f, Fuel = CC.JetTimeTicks, JetForce = CC.JetForce, Speed = 1f;
+		public bool CanRun = true, CanJet = true, CanCrouch = true, Moves = true;
+		public int StandHeight = CC.StandHeight;
+
+		static readonly ActorStats soldier = new(), brain = new() { Fuel = 0, CanJet = false, Speed = 0.6f, CanRun = false },
+			light = new() { Mass = 110f, LifeScale = 0.8f, Fuel = 110f, JetForce = 2900f, Speed = 1.15f },
+			heavy = new() { Mass = 200f, LifeScale = 1.6f, Fuel = 60f, JetForce = 5800f, Speed = 0.85f },
+			crab = new() { Mass = 120f, LifeScale = 1.2f, Fuel = 0, CanJet = false, CanRun = false, CanCrouch = false, Speed = 0.9f, StandHeight = 22 },
+			turret = new() { Mass = 300f, LifeScale = 2f, Fuel = 0, CanJet = false, CanRun = false, CanCrouch = false, Moves = false, Speed = 0f, StandHeight = 26 };
+
+		public static ActorStats Get(ActorKind k) => k switch {
+			ActorKind.Brain => brain, ActorKind.Light => light, ActorKind.Heavy => heavy,
+			ActorKind.Crab => crab, ActorKind.Turret => turret, _ => soldier,
+		};
+	}
+
 	public enum ActorStatus : byte { Stable, Unstable, Dying, Dead }
 
 	public enum MoveState : byte { Stand, Walk, Run, Crouch, Prone, Crawl, Jump, NoMove }
@@ -106,7 +125,20 @@ namespace TerraCommand.Common.Actors
 
 		/// <summary>Leg speed scale and whether this body can run (the brain robot is slow).</summary>
 		public float SpeedScale = 1f;
-		public bool CanRun = true;
+		public bool CanRun = true, CanCrouch = true;
+		public int StandHeight = CC.StandHeight;
+
+		/// <summary>Takes on an actor type's build (mass, legs, jetpack, height). Carried mass is added by the host.</summary>
+		public void Apply(ActorStats s, float carriedMass)
+		{
+			Mass = s.Mass + carriedMass;
+			SpeedScale = s.Speed;
+			CanRun = s.CanRun;
+			CanCrouch = s.CanCrouch;
+			StandHeight = s.StandHeight;
+			if (!s.CanJet)
+				FuelMax = 0f;
+		}
 
 		/// <summary>Max health for impulse damage (CC damage is a fraction of max health).</summary>
 		public float MaxHealth = 100f;
@@ -114,8 +146,9 @@ namespace TerraCommand.Common.Actors
 		// ------------------------------------------------------------ controls -> states
 
 		/// <summary>Runs before physics each tick: movement state, facing, aim, crouch, prone and jetpack (CC PreControllerUpdate).</summary>
-		public void Control(in ActorInput input)
+		public void Control(in ActorInput inputIn)
 		{
+			ActorInput input = inputIn;
 			bool active = Status == ActorStatus.Stable;
 
 			// aim: mouse sets the angle directly; aiming behind turns the body around
@@ -156,6 +189,10 @@ namespace TerraCommand.Common.Actors
 
 			// prone / crouch / walk / run / crawl
 			bool moving = (input.Left || input.Right) && active;
+			if (!CanCrouch) {
+				input.Prone = false;   // drones and turrets don't crouch or lie down
+				input.Crouch = false;
+			}
 			if (input.Prone && Prone == ProneState.NotProne && active) {
 				Prone = ProneState.GoProne;
 				ProneTicks = 0;
@@ -432,9 +469,9 @@ namespace TerraCommand.Common.Actors
 		public int WantedHeight()
 		{
 			if (Status == ActorStatus.Stable && Prone == ProneState.NotProne)
-				return (int)MathF.Round(MathHelper.Lerp(CC.StandHeight, CC.CrouchHeight, CrouchAmount));
+				return (int)MathF.Round(MathHelper.Lerp(StandHeight, Math.Min(StandHeight, CC.CrouchHeight), CrouchAmount));
 			float lying = Math.Abs(MathF.Sin(Rot));
-			return (int)MathF.Round(MathHelper.Lerp(CC.StandHeight, CC.LyingHeight, Math.Clamp((lying - 0.3f) / 0.5f, 0f, 1f)));
+			return (int)MathF.Round(MathHelper.Lerp(StandHeight, Math.Min(StandHeight, CC.LyingHeight), Math.Clamp((lying - 0.3f) / 0.5f, 0f, 1f)));
 		}
 	}
 

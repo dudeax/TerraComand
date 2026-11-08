@@ -45,8 +45,14 @@ namespace TerraCommand.Common.Units
 		}
 
 		/// <summary>Authority: a fresh, empty soldier body (delivered by a ship).</summary>
-		public static int SpawnFresh(Vector2 bottom, int team) =>
-			Spawn(bottom, new UnitLoadout { Life = 100, Kind = Actors.ActorKind.Soldier }, team, UnitOrder.Sentry, 100);
+		public static int SpawnFresh(Vector2 bottom, int team, Actors.ActorKind kind = Actors.ActorKind.Soldier, int weapon = 0)
+		{
+			int life = (int)(100 * Actors.ActorStats.Get(kind).LifeScale);
+			var l = new UnitLoadout { Life = life, Kind = kind };
+			if (weapon > 0)
+				l.Inventory[0] = new Item(weapon);
+			return Spawn(bottom, l, team, UnitOrder.Sentry, life);
+		}
 
 		/// <summary>Authority: remove an idle body (e.g. loaded into a ship).</summary>
 		public static void DespawnUnit(NPC npc) => Despawn(npc);
@@ -61,18 +67,22 @@ namespace TerraCommand.Common.Units
 
 		// ------------------------------------------------------------ deploy a new body
 
-		public static void RequestDeploy(Player p, Vector2 bottom)
+		public static void RequestDeploy(Player p, Vector2 bottom, Actors.ActorKind kind = Actors.ActorKind.Soldier, int weapon = 0)
 		{
 			var loadout = UnitLoadout.NewBodyFor(p);
+			loadout.Kind = kind;
+			if (weapon > 0)
+				loadout.Inventory[0] = new Item(weapon);
+			loadout.Life = (int)(p.statLifeMax2 * Actors.ActorStats.Get(kind).LifeScale);
 			if (IsClient) {
 				ModPacket pk = PacketHandler.Create(PacketType.DeployUnit);
 				pk.WriteVector2(bottom);
-				pk.Write(p.statLifeMax2);
+				pk.Write(loadout.Life);
 				loadout.Write(pk);
 				pk.Send();
 				return;
 			}
-			Spawn(bottom, loadout, p.team, UnitOrder.Sentry, p.statLifeMax2);
+			Spawn(bottom, loadout, p.team, UnitOrder.Sentry, loadout.Life);
 		}
 
 		// ------------------------------------------------------------ swapping

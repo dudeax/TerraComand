@@ -127,6 +127,26 @@ Items: {
 		DisplayName: Remote Detonator
 		Tooltip: ""
 	}
+
+	CrabDrone: {
+		DisplayName: Crab Drone
+		Tooltip: ""
+	}
+
+	HeavyBody: {
+		DisplayName: Heavy Body
+		Tooltip: ""
+	}
+
+	LightBody: {
+		DisplayName: Light Body
+		Tooltip: ""
+	}
+
+	TurretKit: {
+		DisplayName: Turret Kit
+		Tooltip: ""
+	}
 }
 
 Tiles.LaunchPad.MapEntry: Launch Pad

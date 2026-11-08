@@ -28,7 +28,7 @@ namespace TerraCommand.Common.Physics
 		Vector2 velRequested;
 		float impactAccum;
 		int impactTimer;
-		int height = CC.StandHeight;
+		int height = CC.StandHeight;   // the hitbox height right now (per posture and body type)
 
 		// ---- API used by aiming, explosions, units and tests
 		public bool Grounded => Actor.Grounded;
@@ -64,12 +64,13 @@ namespace TerraCommand.Common.Physics
 			foreach (ExtraJump jump in ExtraJumpLoader.OrderedJumps)
 				if (Player.GetJumpState(jump).Enabled)
 					fuel += 15f;
-			bool brain = Player.GetModPlayer<Actors.RigPlayer>().Kind == Actors.ActorKind.Brain;
-			Actor.FuelMax = brain ? 0f : fuel;   // the brain robot has no jetpack: it walks, slowly
-			Actor.JetForce = force;
-			Actor.SpeedScale = brain ? 0.6f : 1f;
-			Actor.Mass = CC.Mass + Player.GetModPlayer<Actors.ActorInventory>().CarriedMass;
-			Actor.CanRun = !brain;
+			// the body type (soldier, light, heavy, drone, turret, brain): its mass, legs, jetpack and toughness;
+			// gear adds to its own jetpack tank
+			ActorStats stats = ActorStats.Get(Player.GetModPlayer<Actors.RigPlayer>().Kind);
+			Actor.FuelMax = fuel - CC.JetTimeTicks + stats.Fuel;
+			Actor.JetForce = force / CC.JetForce * stats.JetForce;
+			Actor.Apply(stats, Player.GetModPlayer<Actors.ActorInventory>().CarriedMass);
+			Player.statLifeMax2 = (int)(Player.statLifeMax2 * stats.LifeScale);
 			Actor.MaxHealth = Player.statLifeMax2;
 
 			// vanilla mobility off: it's legs and a jetpack now
@@ -277,7 +278,7 @@ namespace TerraCommand.Common.Physics
 			Actor.Prone = ProneState.NotProne;
 			Actor.Rot = Actor.AngVel = 0f;
 			Actor.Fuel = Actor.FuelMax;
-			height = CC.StandHeight;
+			height = Actor.StandHeight;
 			skipImpact = true;
 		}
 
@@ -375,7 +376,7 @@ namespace TerraCommand.Common.Physics
 		{
 			On_Player.ResizeHitbox += (orig, self) => {
 				orig(self);
-				if (self.TryGetModPlayer(out BodyPhysicsPlayer bp) && bp.height != CC.StandHeight)
+				if (self.TryGetModPlayer(out BodyPhysicsPlayer bp) && bp.height != Player.defaultHeight)
 					bp.ApplyHeight();
 			};
 			MonoModHooks.Add(typeof(Player).GetProperty(nameof(Player.HeightOffsetHitboxCenter)).GetGetMethod(),
