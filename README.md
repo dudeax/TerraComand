@@ -10,7 +10,7 @@ Vanilla progression, blocks and enemies stay; the rules change around them:
 | **Multiple bodies** | Use a **Clone Body** to deploy an idle body. Press **Q** to take control of the body under the cursor, or cycle to the next one. Your current body, with its items and health, stays behind as an idle unit. Idle bodies hold position or follow you (**G**) and fight with whatever they're holding. If your body dies, it drops its gear and control jumps to your nearest idle body. You only truly die when you run out of bodies. |
 | **Orbital stockpile** | Place a **Launch Pad**, then right-click it with an item or just throw items onto it. Rockets carry the items into a stockpile shared by every player in the world. Open it with **K** to **craft** from it (a station counts as available when its item is in orbit, and buckets count as water/lava/honey) or to **order a drop pod** that crashes down next to you with equipment. With the **Orbital Constructor**, blocks and walls are placed straight from orbit: right-click a block in the menu to select it. |
 
-| **Body physics** | Bodies have momentum and slide a little, gravity is heavy, and terminal speed is high. Jump is a short hop; keep holding it to burn a **jetpack** that has limited fuel and refuels after a pause. Wings, rocket boots and extra-jump items add jetpack fuel, thrust and refuel rate instead of flight; hooks still work; mounts and dashes are disabled. Collision is per pixel: bodies fit through carved holes and step over small bumps. Hitting the ground, a wall or a ceiling too fast hurts and can knock you flat. Explosions throw bodies and enemies. |
+| **Cortex Command bodies** | The body you control is a CC actor, built from CC's own numbers (see `docs/cc-actor-design.md`). It has CC gravity (about a quarter of Terraria's). It walks on its legs slowly and steadily: 0.8 px/tick, or 1.6 running. Jumping is the **jetpack**: a burst on press, then thrust that weakens as the 1.5 s tank drains and refills when you stop. The torso leans while walking and bends forward when crouched. Going prone dives you onto your belly to crawl. Moving too fast (thrown by a blast, falling about 20 tiles) throws the body off its feet. It then ragdolls, takes impact damage when it hits something, and gets back up after a second. A fall of about 32 tiles is lethal. Wings, rocket boots and extra jumps add jetpack fuel and thrust. Hooks still work; mounts and dashes are disabled. Collision is per pixel. |
 | **Aiming & damage** | Guns, bows and magic have spread that depends on stance: steady when crouched, wild when moving, airborne or using the jetpack. Recoil climbs under sustained fire, and the reticle shows current accuracy. Headshots do ×1.75. Hits leave visible wounds, which are cosmetic (no bleeding). Violent deaths gib. Bodies don't regenerate health naturally (there's a config option), but potions, buffs and accessories still heal. |
 
 New characters start with a Launch Pad, an Orbital Constructor and 2 Clone Bodies.
@@ -18,16 +18,20 @@ New characters start with a Launch Pad, an Orbital Constructor and 2 Clone Bodie
 ### Controls
 | Key | Action |
 |---|---|
-| A / D | walk (momentum) |
-| Space (hold) | hop, then jetpack |
-| S (hold, on ground) | crouch: slow, steady aim |
-| mouse | aim; reticle shows current spread |
+| A / D | walk |
+| Shift (hold) | run |
+| W or Space | jetpack: burst on press, thrust while held |
+| Ctrl (hold) | crouch: lower, steadier aim; walking crouched is slower |
+| S (hold) | prone: dive flat; A/D to crawl. Also drops through platforms |
+| mouse | aim (the body turns to face it); reticle shows current spread |
 | Q | switch to the body under the cursor, or cycle to the next one |
 | G | toggle idle bodies between hold position and follow |
 | K | orbital menu (stockpile, fabricate, drop pods) |
 
-All feel constants (gravity, jetpack, impacts, spread, recoil, blast strength) live in
-`TerraCommand/Common/Physics/Tuning.cs`. They're first guesses and need tuning by playing.
+Body constants are in `TerraCommand/Common/Actors/CCActor.cs` (class `CC`), ported from the CC Community Project's data
+files, with sources noted in `docs/cc-actor-design.md`. Spread, recoil and blast strength are still in
+`TerraCommand/Common/Physics/Tuning.cs`. Crouch (Ctrl) and Run (Shift) can be rebound under Controls → Mod Controls.
+Unbind Terraria's own Smart Cursor (Ctrl) and Auto Select (Shift) if they get in the way.
 
 ## Design decisions (easy to change)
 - **Progression stays with the player, not the body.** Max life and mana from crystals and other permanent upgrades belong to the player. Each body only carries its items, its equipment and its current health.
@@ -113,6 +117,9 @@ lighting after many world reloads). Results are unaffected; run that scenario on
 ## Code map
 ```
 TerraCommand/
+  Common/Actors/       CCActor: the Cortex Command body (states, gait/limb paths, jetpack, balance spring, stability, impacts)
+                       ActorRig: draws the body as a CC rig (lean/tumble about the hip, head and arms on the aim, held item, jetpack)
+  Common/Physics/      BodyPhysicsPlayer (hosts the CCActor on the player, disables vanilla movement), Explosions, Tuning
   Common/Destruction/  PixelTerrain (masks, carving, sync, save), TerrainRules (hardness/softness),
                        PixelTerrainGlobalTile (partial-tile drawing), DestructionGlobalProjectile, PixelMining
   Common/Orbital/      OrbitalStockpile (shared inventory), OrbitalCrafting, OrbitalNet (launch/craft/order/build requests)
@@ -123,7 +130,10 @@ TerraCommand/
 ```
 
 ## Roadmap
-1. **Playtest and tune the feel** (`Tuning.cs`). Then add crouch/prone poses, sharp-aim zoom, and a jetpack/fuel HUD.
+1. **Play exactly like Cortex Command** (`docs/cc-actor-design.md`). Phase 1 (movement) and phase 2 (the CC body rig drawn
+   from Terraria skin and armor) are done. Next: CC controls and carried inventory (pie menu, pick up and drop),
+   then CC devices (magazines, reload, sharp aim with camera look-ahead, diggers), then clone bodies on the same actor with
+   limb gibbing.
 2. Loose debris: carved pixels fall as particles and settle.
 3. Smarter unit AI: dig, take cover, use ammo and mana, use any weapon properly. Direct per-unit orders via a selection box.
 4. Coin-based drop pod and body costs, and buying from NPC shops through orbit.

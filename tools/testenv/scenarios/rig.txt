@@ -1,0 +1,65 @@
+# The CC body rig: screenshots of each pose (check by eye: tools zoom the screen centre), plus held-item basics.
+nospawn
+clearnpcs
+goto spawn
+flatten 60 24
+wait 60
+give Minishark
+give MusketBall 999
+hold Minishark
+aim 200 0
+wait 10
+screenshot rig-stand-level
+aim 150 -150
+wait 10
+screenshot rig-aim-up
+aim 150 150
+wait 10
+screenshot rig-aim-down
+aim -200 -40
+wait 10
+screenshot rig-face-left
+aim 200 0
+walk right 80
+wait 30
+screenshot rig-walk
+wait 50
+hold run on
+walk right 80
+wait 30
+screenshot rig-run
+hold run off
+wait 50
+hold crouch on
+wait 20
+screenshot rig-crouch
+hold crouch off
+hold down on
+wait 40
+screenshot rig-prone
+hold down off
+wait 40
+jump 30
+wait 15
+screenshot rig-jetpack
+wait 120
+maxlife 400
+wait 2
+heal
+projectile Bomb 50 -10 0 0
+wait 190
+screenshot rig-thrown
+wait 30
+screenshot rig-down
+wait 150
+hold CopperPickaxe
+aim 200 -60
+wait 10
+screenshot rig-pickaxe
+hold Minishark
+aim 200 0
+use 30
+wait 5
+screenshot rig-firing
+wait 30
+expect alive

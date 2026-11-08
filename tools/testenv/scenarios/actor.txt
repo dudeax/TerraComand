@@ -1,0 +1,135 @@
+# Cortex Command actor movement (docs/cc-actor-design.md): CC speeds, jetpack, stability and impacts.
+# 1 tile = 16 px; CC walk 2.5 m/s = 0.83 px/tick, run 4.7 m/s = 1.57 px/tick, crawl 1.8 m/s = 0.6 px/tick.
+nospawn
+clearnpcs
+goto spawn
+flatten 120 40
+wait 60
+
+# walking: slow and steady
+mark
+walk right 120
+wait 1
+expect moved >= 4.5             # ~6 tiles in 2 s
+expect moved <= 7
+wait 30
+# running (Shift)
+hold run on
+mark
+walk right 120
+hold run off
+expect moved >= 9               # ~11 tiles in 2 s
+expect moved <= 13
+wait 60
+
+# jetpack: a tap is only a small burst; holding burns the tank (1.5 s) and the body comes back down
+mark
+jump 1
+wait 40
+expect peak <= 1.5
+expect fuelnow >= 60
+wait 60
+expect fuelnow >= 85            # refills at 1.5x
+mark
+jump 84
+expect fuelnow <= 10            # the tank lasts about 1.5 s
+wait 36
+expect peak >= 3
+wait 120
+expect rose <= 0.5              # back on the ground
+screenshot jetpack
+
+# falls: 8 tiles is fine, 25 tiles throws the body off its feet and hurts
+heal
+goto rel 0 -8
+wait 90
+expect life == 100
+expect status stable
+goto rel 0 -25
+wait 120                        # CC gravity: a 25 tile fall takes ~1.4 s
+expect status unstable
+expect life < 70
+expect alive
+screenshot ragdoll
+wait 120
+expect status stable            # back on its feet
+heal
+
+# prone (S) and crawling
+hold down on
+wait 40
+expect stance prone
+expect height <= 22
+mark
+hold right on
+wait 150
+hold right off
+expect moved >= 2
+expect moved <= 6.5
+screenshot prone
+hold down off
+wait 60
+expect stance stand
+expect height == 42
+
+# crouch (Ctrl)
+hold crouch on
+wait 20
+expect stance crouch
+expect height <= 34
+screenshot crouch
+hold crouch off
+wait 20
+expect height == 42
+
+# A 2-tile (32px) high tunnel: too low to walk into; a prone body crawls in, and can't stand up inside
+goto spawn
+fill 3 -6 12 -3 Stone
+mark
+walk right 200
+expect moved <= 2.5             # standing: blocked
+hold down on
+wait 40
+hold right on
+wait 300
+hold right off
+expect moved >= 5               # crawled into the tunnel
+hold down off
+wait 30
+expect height <= 32             # no room to stand up
+screenshot tunnel
+hold down on
+hold left on
+wait 450
+hold left off
+hold down off
+wait 40
+expect stance stand             # out in the open again
+expect height == 42
+
+# wings and rocket boots are jetpack upgrades; mounts don't work
+expect fuel <= 95
+equip AngelWings
+wait 5
+expect fuel >= 130
+give SlimySaddle
+wait 10
+hold SlimySaddle
+use 4
+wait 10
+expect mounted no
+
+# a nearby bomb throws the body off its feet, a few body lengths (not across the map)
+goto spawn
+maxlife 300
+wait 2
+heal
+wait 60
+mark
+projectile Bomb 40 -10 0 0
+wait 182                         # bomb fuse is 180 ticks
+expect knocked yes
+screenshot blast
+wait 200
+expect moved <= -1.5
+expect moved >= -14

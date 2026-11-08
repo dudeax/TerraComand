@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using Microsoft.Xna.Framework;
 using Terraria;
 using Terraria.Audio;
@@ -6,59 +7,59 @@ using Terraria.DataStructures;
 using Terraria.ID;
 using Terraria.Localization;
 using Terraria.ModLoader;
+using TerraCommand.Common.Actors;
+using TerraCommand.Common.Net;
 
 namespace TerraCommand.Common.Physics
 {
+	public enum Stance : byte { Stand, Crouch, Prone }
+
 	/// <summary>
-	/// Cortex Command style movement for the body a player controls: momentum walking, heavy gravity, a short
-	/// hop plus a fuel-limited jetpack, crouching, impact damage and knockdowns. Vanilla flight, double jumps,
-	/// dashes, mounts and fall damage are disabled; wings / rocket boots / extra-jump accessories become jetpack
-	/// upgrades instead.
+	/// The body a player controls is a Cortex Command actor (<see cref="CCActor"/>): CC controls (A/D walk, W jetpack,
+	/// Ctrl crouch, S prone, Shift run, mouse aim), CC gravity, leg-driven walking, burst-and-thrust jetpack, a torso that
+	/// leans and can be thrown off its feet, and travel-impulse damage. Vanilla movement is switched off: vanilla (with the
+	/// pixel collision) only moves the hitbox through the terrain. Wings / rocket boots / extra jumps upgrade the jetpack.
 	/// </summary>
 	public class BodyPhysicsPlayer : ModPlayer
 	{
-		public float Fuel = Tuning.JetBaseFuel, FuelMax = Tuning.JetBaseFuel, FuelRegen = Tuning.JetBaseRegen, Thrust = Tuning.JetThrust;
-		public bool Jetting, Crouching;
-		public int KnockedTicks;
-		int knockDir = 1;
-		Vector2 velBefore;
-		int sinceBurn = 999;
+		public readonly CCActor Actor = new();
+		public ActorInput Input;
+		bool prevJump, skipImpact = true;
+		Vector2 velRequested;
 		float impactAccum;
 		int impactTimer;
-		bool skipImpact = true;
+		int height = CC.StandHeight;
 
-		/// <summary>
-		/// Standing on something, as of the end of the last update (after collision). During the update
-		/// vanilla has already added gravity, so velocity.Y == 0 isn't a reliable test there.
-		/// </summary>
-		public bool Grounded { get; private set; } = true;
+		// ---- API used by aiming, explosions, units and tests
+		public bool Grounded => Actor.Grounded;
+		public bool Jetting => Actor.Jetting;
+		public bool Prone => Actor.Prone != ProneState.NotProne && Actor.Status == ActorStatus.Stable;
+		public bool Crouching => !Prone && Actor.CrouchAmount > 0.5f && Actor.Status == ActorStatus.Stable;
+		public Stance Stance => Prone ? Stance.Prone : Crouching ? Stance.Crouch : Stance.Stand;
+		public int KnockedTicks => Actor.Status == ActorStatus.Unstable ? Math.Max(1, CC.StableRecoverTicks - Actor.UnstableTicks) : 0;
+		public float FuelMax => Actor.FuelMax;
+		public float Fuel => Actor.Fuel;
+		bool Simulated => Player.whoAmI == Main.myPlayer && !Player.dead;
 
 		// ------------------------------------------------------------ gear -> jetpack
 
 		public override void PostUpdateEquips()
 		{
-			float fuel = Tuning.JetBaseFuel, regen = Tuning.JetBaseRegen, thrust = Tuning.JetThrust;
+			float fuel = CC.JetTimeTicks, force = CC.JetForce;
 			if (Player.wingTimeMax > 0) {
-				fuel += Player.wingTimeMax * 0.6f;
-				thrust += Player.wingTimeMax / 900f;
-				regen += 0.2f;
+				fuel += Player.wingTimeMax * 0.5f;
+				force *= 1f + Player.wingTimeMax / 600f;
 			}
-			if (Player.rocketBoots > 0) {
+			if (Player.rocketBoots > 0)
 				fuel += 20f + Player.rocketTimeMax * 2f;
-				regen += 0.1f;
-			}
-			foreach (ExtraJump jump in ExtraJumpLoader.OrderedJumps) {
-				if (Player.GetJumpState(jump).Enabled) {
-					fuel += 12f;
-					regen += 0.15f;
-				}
-			}
-			FuelMax = fuel;
-			FuelRegen = regen;
-			Thrust = thrust;
-			Fuel = Math.Min(Fuel, FuelMax);
+			foreach (ExtraJump jump in ExtraJumpLoader.OrderedJumps)
+				if (Player.GetJumpState(jump).Enabled)
+					fuel += 15f;
+			Actor.FuelMax = fuel;
+			Actor.JetForce = force;
+			Actor.MaxHealth = Player.statLifeMax2;
 
-			// vanilla mobility off: it's all jetpack now
+			// vanilla mobility off: it's legs and a jetpack now
 			Player.wingTimeMax = 0;
 			Player.wingTime = 0;
 			Player.rocketTimeMax = 0;
@@ -66,149 +67,166 @@ namespace TerraCommand.Common.Physics
 			Player.blockExtraJumps = true;
 			Player.dashType = 0;
 			Player.noFallDmg = true;
-			Player.jumpSpeedBoost += Tuning.JumpSpeedBoost;
 			if (Player.mount.Active)
 				Player.mount.Dismount(Player);
+
+			if (Player.whoAmI == Main.myPlayer)
+				ReadInput();
+			// vanilla must not walk or jump the body itself (Down stays: it drops through platforms)
+			Player.controlLeft = Player.controlRight = Player.controlJump = Player.controlUp = false;
 		}
 
-		// ------------------------------------------------------------ controls
-
-		public override void SetControls()
+		void ReadInput()
 		{
-			if (KnockedTicks > 0) {
-				Player.controlLeft = Player.controlRight = Player.controlJump = Player.controlUp = Player.controlDown = false;
-				Player.controlUseItem = Player.controlUseTile = Player.controlHook = false;
-			}
+			bool jump = Player.controlJump || Player.controlUp;
+			Input = new ActorInput {
+				Left = Player.controlLeft,
+				Right = Player.controlRight,
+				Jump = jump,
+				JumpStart = jump && !prevJump,
+				Prone = Player.controlDown,
+				Crouch = TerraCommandKeybinds.Crouch?.Current == true || Testing.AutoTest.Enabled && Testing.AutoTest.HoldCrouch,
+				Fast = TerraCommandKeybinds.Run?.Current == true || Testing.AutoTest.Enabled && Testing.AutoTest.HoldRun,
+				Aim = Main.MouseWorld - Player.Center,
+			};
+			if (Testing.AutoTest.Enabled && Testing.AutoTest.AimOffset == null)
+				Input.Aim = new Vector2(Actor.FlipFactor * 100f, 0f);
+			// mouse distance is CC's analog aim magnitude: far from the body = sharp aim
+			float reach = Math.Min(Main.screenWidth, Main.screenHeight) * 0.5f;
+			Input.SharpAim = Input.Aim.Length() > reach * 0.1f;
+			prevJump = jump;
 		}
 
 		// ------------------------------------------------------------ movement
 
+		public override void PostUpdateRunSpeeds()
+		{
+			// the actor applies gravity and leg forces itself; vanilla's walk/fall rules are neutralised
+			Player.gravity = 0f;
+			Player.maxFallSpeed = 20f;
+			Player.runAcceleration = 0f;
+			Player.runSlowdown = 0f;
+			Player.maxRunSpeed = Player.accRunSpeed = 20f;
+		}
+
 		public override void PreUpdateMovement()
 		{
-			velBefore = Player.velocity;
-			Crouching = Player.controlDown && Grounded && KnockedTicks == 0;
-			Player.gravity = Tuning.Gravity;
-			Player.maxFallSpeed = Tuning.MaxFallSpeed;
-
-			bool hooked = Player.grappling[0] >= 0 || Player.pulley || Player.mount.Active;
-			Jetting = false;
-			if (Player.controlJump && !Grounded && Player.jump == 0 && Fuel >= 1f && !hooked && KnockedTicks == 0) {
-				Jetting = true;
-				Fuel -= 1f;
-				sinceBurn = 0;
-				// cancel this tick's gravity and push up
-				Player.velocity.Y = Math.Max(Player.velocity.Y - Player.gravity - Thrust, -Tuning.JetMaxRise);
-				if (Player.controlLeft)
-					Player.velocity.X -= Tuning.JetSteer;
-				if (Player.controlRight)
-					Player.velocity.X += Tuning.JetSteer;
+			bool hooked = Player.grappling[0] >= 0 || Player.pulley;
+			if (!Simulated || hooked) {
+				velRequested = Player.velocity;
+				return;
+			}
+			Actor.Vel = Player.velocity; // take in outside changes (hits, hooks, blasts)
+			Actor.Control(Input);
+			Actor.Physics(Input);
+			Player.velocity = Actor.Vel;
+			Player.direction = Actor.FlipFactor;
+			velRequested = Player.velocity;
+			if (Actor.Jetting)
 				JetEffects();
-			}
-			else {
-				// Refuel only after a short pause, and never while still holding jump in the air
-				// (otherwise tapping the last drops of fuel would let you hover forever).
-				sinceBurn++;
-				bool holdingInAir = Player.controlJump && !Grounded;
-				if (sinceBurn > Tuning.JetRefuelDelay && !holdingInAir)
-					Fuel = Math.Min(FuelMax, Fuel + FuelRegen * (Grounded ? 2f : 1f));
-			}
 		}
 
 		void JetEffects()
 		{
 			if (Main.dedServ)
 				return;
-			Vector2 nozzle = Player.Center + new Vector2(-Player.direction * 7f, 6f);
-			var d = Dust.NewDustDirect(nozzle - new Vector2(3), 6, 6, DustID.Torch, -Player.velocity.X * 0.3f, 4f, 100, default, 1.5f);
-			d.noGravity = true;
+			Vector2 thrust = Actor.JetDirection(Input);
+			Vector2 nozzle = Player.GetModPlayer<Actors.RigPlayer>().NozzleWorld();
+			for (int i = 0; i < 2; i++) {
+				var d = Dust.NewDustDirect(nozzle - new Vector2(3), 6, 6, DustID.Torch, -thrust.X * 4f, -thrust.Y * 4f, 100, default, 1.4f);
+				d.noGravity = true;
+			}
 			if (Main.rand.NextBool(2))
-				Dust.NewDust(nozzle - new Vector2(3), 6, 6, DustID.Smoke, 0f, 2f, 150, default, 1.1f);
-			if (Player.miscCounter % 9 == 0)
+				Dust.NewDust(nozzle - new Vector2(3), 6, 6, DustID.Smoke, -thrust.X * 2f, -thrust.Y * 2f, 150, default, 1.1f);
+			if (Input.JumpStart)
+				SoundEngine.PlaySound(SoundID.Item13 with { Volume = 0.7f }, Player.Center);
+			else if (Player.miscCounter % 9 == 0)
 				SoundEngine.PlaySound(SoundID.Item24 with { Volume = 0.5f }, Player.Center);
 		}
 
-		public override void PostUpdateRunSpeeds()
-		{
-			// vanilla resets these after PreUpdateMovement; this hook runs before the vertical clamp
-			Player.gravity = Tuning.Gravity;
-			Player.maxFallSpeed = Tuning.MaxFallSpeed;
-			// keep accessory speed bonuses, relative to vanilla's base of 3
-			Player.maxRunSpeed = Player.maxRunSpeed / 3f * Tuning.WalkSpeed;
-			Player.accRunSpeed = Math.Max(Player.maxRunSpeed, Player.accRunSpeed / 3f * Tuning.WalkSpeed);
-			if (Crouching) {
-				Player.maxRunSpeed = Player.accRunSpeed = Tuning.CrouchSpeed;
-			}
-			if (KnockedTicks > 0) {
-				Player.runAcceleration = 0f;
-				Player.runSlowdown = Grounded ? Tuning.KnockedFriction : Tuning.AirDrag;
-			}
-			else if (Grounded) {
-				Player.runAcceleration = Player.runAcceleration / 0.08f * Tuning.WalkAccel;
-				Player.runSlowdown = Tuning.GroundFriction;
-			}
-			else {
-				Player.runAcceleration = Tuning.AirAccel;
-				Player.runSlowdown = Tuning.AirDrag;
-			}
-		}
-
-		// ------------------------------------------------------------ impacts
+		// ------------------------------------------------------------ after collision
 
 		public override void PostUpdate()
 		{
-			Grounded = Player.velocity.Y == 0f;
-			if (KnockedTicks > 0) {
-				KnockedTicks--;
-				Player.fullRotation = knockDir * MathHelper.PiOver2 * Math.Min(1f, KnockedTicks / 10f);
-				Player.fullRotationOrigin = new Vector2(Player.width / 2f, Player.height / 2f);
-				if (KnockedTicks == 0)
-					Player.fullRotation = 0f;
+			if (Simulated) {
+				bool grounded = Player.velocity.Y == 0f && velRequested.Y >= 0f;
+				// Terraria stops a body over a couple of ticks (first shortening the move to touch the surface, then
+				// zeroing it), so speed lost over consecutive ticks is added up and judged as one impact.
+				float loss = (velRequested - Player.velocity).Length();
+				if (skipImpact || Player.grappling[0] >= 0) {
+					impactAccum = 0f;
+					impactTimer = 0;
+				}
+				else if (loss > 0.5f) {
+					impactAccum += loss;
+					impactTimer = 2;
+				}
+				else if (impactTimer > 0 && --impactTimer == 0) {
+					Impact(impactAccum);
+					impactAccum = 0f;
+				}
+				Actor.AfterMove(Player.velocity, grounded);
+				skipImpact = false;
+				UpdateHeight();
 			}
-
-			if (Player.whoAmI != Main.myPlayer || Player.dead) {
+			else
 				skipImpact = true;
-				return;
-			}
-			// A sudden loss of speed (hitting ground/wall/ceiling) hurts. Vanilla stops a body over a couple of
-			// ticks (first shortening the move to touch the surface, then zeroing it), so speed lost over
-			// consecutive ticks is added up and judged as one impact. Teleports/swaps/shoves are skipped.
-			float loss = Vector2.Distance(velBefore, Player.velocity);
-			if (skipImpact || Player.grappling[0] >= 0) {
-				impactAccum = 0f;
-				impactTimer = 0;
-			}
-			else if (loss > 2.5f) {
-				impactAccum += loss;
-				impactTimer = 3;
-			}
-			else if (impactTimer > 0 && --impactTimer == 0) {
-				Impact(impactAccum, velBefore);
-				impactAccum = 0f;
-			}
-			skipImpact = false;
 		}
 
-		void Impact(float speedLost, Vector2 direction)
+		void Impact(float speedLost)
 		{
-			Testing.AutoTest.Trace($"impact {speedLost:0.0}");
-			if (speedLost <= Tuning.ImpactThreshold)
-				return;
-			float over = speedLost - Tuning.ImpactThreshold;
-			int dmg = (int)(over * over * Tuning.ImpactDamageScale);
-			if (dmg > 0)
+			float damage = Actor.ImpactDamage(speedLost);
+			Testing.AutoTest.TraceIf(Actor.LastImpulse > 1200f, $"impact {Actor.LastImpulse:0} Ns status {Actor.Status} damage {damage:0.00}");
+			if (Actor.LastImpulse > CC.ImpulseDamageThreshold * 0.5f)
+				SoundEngine.PlaySound(SoundID.NPCHit1 with { Volume = 0.6f, Pitch = -0.4f }, Player.Center);
+			if (damage > 0f) {
+				int dmg = Math.Max(1, (int)(damage * Player.statLifeMax2));
 				Player.Hurt(PlayerDeathReason.ByCustomReason(NetworkText.FromLiteral($"{Player.name} hit the ground too hard.")),
 					dmg, 0, dodgeable: false, knockback: 0f);
-			if (speedLost > Tuning.KnockdownImpact)
-				KnockDown(Math.Sign(direction.X == 0 ? Player.direction : direction.X));
+			}
 		}
+
+		/// <summary>The hitbox follows the posture (standing, crouched, lying); getting taller needs headroom.</summary>
+		void UpdateHeight()
+		{
+			int want = Actor.WantedHeight();
+			if (want > Player.height) {
+				// grow as far as the space above allows
+				int fit = Player.height;
+				for (int h = want; h > Player.height; h -= 2)
+					if (Fits(h)) {
+						fit = h;
+						break;
+					}
+				want = fit;
+			}
+			height = want;
+			ApplyHeight();
+		}
+
+		bool Fits(int h) =>
+			!Collision.SolidCollision(new Vector2(Player.position.X, Player.position.Y + Player.height - h), Player.width, h - 2);
+
+		/// <summary>Sets the hitbox height, keeping the feet where they are.</summary>
+		public void ApplyHeight()
+		{
+			if (Player.mount.Active || Player.portableStoolInfo.IsInUse)
+				return;
+			if (Player.height != height) {
+				Player.position.Y += Player.height - height;
+				Player.height = height;
+			}
+		}
+
+		// ------------------------------------------------------------ shoves
 
 		/// <summary>Call after teleporting the body (no impact damage from the position/velocity jump).</summary>
 		public void SkipImpactCheck() => skipImpact = true;
 
 		public void KnockDown(int dir)
 		{
-			knockDir = dir == 0 ? 1 : dir;
-			KnockedTicks = Math.Max(KnockedTicks, Tuning.KnockdownTicks);
+			if (Player.whoAmI == Main.myPlayer)
+				Actor.Shove(new Vector2(dir * 0.5f, -0.5f), knockOver: true);
 		}
 
 		/// <summary>Shove this body (local player only; other players are moved by their own client).</summary>
@@ -218,18 +236,115 @@ namespace TerraCommand.Common.Physics
 			if (Player.whoAmI != Main.myPlayer)
 				return;
 			Player.velocity += impulse;
+			Actor.Shove(Vector2.Zero, knockOver: impulse.Length() > 2f);
 			skipImpact = true; // the shove itself isn't an impact
-			if (impulse.Length() > Tuning.KnockdownImpulse)
-				KnockDown(Math.Sign(impulse.X));
 		}
 
-		public override void OnRespawn() => KnockedTicks = 0;
+		public override void OnRespawn()
+		{
+			Actor.Status = ActorStatus.Stable;
+			Actor.Prone = ProneState.NotProne;
+			Actor.Rot = Actor.AngVel = 0f;
+			Actor.Fuel = Actor.FuelMax;
+			height = CC.StandHeight;
+			skipImpact = true;
+		}
 
 		/// <summary>Explosions push through the blast physics (Explosions.Blast) instead of vanilla knockback.</summary>
 		public override void ModifyHitByProjectile(Projectile proj, ref Player.HurtModifiers modifiers)
 		{
 			if (ProjectileID.Sets.Explosive[proj.type] || proj.aiStyle == ProjAIStyleID.Explosive)
 				modifiers.Knockback *= 0f;
+		}
+
+		// ------------------------------------------------------------ multiplayer: other clients see the posture
+
+		byte syncedStatus, syncedProne, syncedCrouch;
+		sbyte syncedRot, syncedAim;
+		bool syncedFlip;
+
+		public override void CopyClientState(ModPlayer targetCopy)
+		{
+			var t = (BodyPhysicsPlayer)targetCopy;
+			t.syncedStatus = (byte)Actor.Status;
+			t.syncedProne = (byte)Actor.Prone;
+			t.syncedCrouch = (byte)(Actor.CrouchAmount * 10);
+			t.syncedRot = QuantRot(Actor.Rot);
+			t.syncedFlip = Actor.Flipped;
+			t.syncedAim = QuantRot(Actor.AimAngle);
+		}
+
+		static sbyte QuantRot(float r) => (sbyte)Math.Clamp((int)MathF.Round(MathHelper.WrapAngle(r) * 32f), -127, 127);
+
+		public override void SendClientChanges(ModPlayer clientPlayer)
+		{
+			var c = (BodyPhysicsPlayer)clientPlayer;
+			if (c.syncedStatus != (byte)Actor.Status || c.syncedProne != (byte)Actor.Prone || c.syncedCrouch != (byte)(Actor.CrouchAmount * 10)
+				|| Math.Abs(c.syncedRot - QuantRot(Actor.Rot)) > 2 || c.syncedFlip != Actor.Flipped
+				|| Math.Abs(c.syncedAim - QuantRot(Actor.AimAngle)) > 2)
+				SyncPlayer(-1, Main.myPlayer, false);
+		}
+
+		public override void SyncPlayer(int toWho, int fromWho, bool newPlayer)
+		{
+			if (Main.netMode == NetmodeID.SinglePlayer)
+				return;
+			ModPacket p = PacketHandler.Create(PacketType.StanceSync);
+			p.Write((byte)Player.whoAmI);
+			p.Write((byte)Actor.Status);
+			p.Write((byte)Actor.Prone);
+			p.Write((byte)(Actor.CrouchAmount * 10));
+			p.Write(QuantRot(Actor.Rot));
+			p.Write(Actor.Flipped);
+			p.Write((byte)height);
+			p.Write(QuantRot(Actor.AimAngle));
+			p.Send(toWho, fromWho);
+		}
+
+		public static void ReceiveStance(BinaryReader r, int from)
+		{
+			int who = r.ReadByte();
+			var status = (ActorStatus)r.ReadByte();
+			var prone = (ProneState)r.ReadByte();
+			float crouch = r.ReadByte() / 10f;
+			float rot = r.ReadSByte() / 32f;
+			bool flip = r.ReadBoolean();
+			int h = r.ReadByte();
+			float aim = r.ReadSByte() / 32f;
+			if (Main.netMode == NetmodeID.Server)
+				who = from;
+			Player p = Main.player[who];
+			if (who == Main.myPlayer || !p.active)
+				return;
+			var bp = p.GetModPlayer<BodyPhysicsPlayer>();
+			bp.Actor.Status = status;
+			bp.Actor.Prone = prone;
+			bp.Actor.CrouchAmount = crouch;
+			bp.Actor.Rot = rot;
+			bp.Actor.Flipped = flip;
+			bp.Actor.AimAngle = aim;
+			bp.height = Math.Clamp(h, CC.LyingHeight, CC.StandHeight);
+			bp.ApplyHeight();
+			if (Main.netMode == NetmodeID.Server)
+				bp.SyncPlayer(-1, who, false);
+		}
+
+		// ------------------------------------------------------------ vanilla hitbox hooks
+
+		/// <summary>
+		/// Vanilla resets the hitbox to 42 high every tick (ResizeHitbox) and puts Center 21px below the top;
+		/// re-apply the posture height and keep Center in the middle of the shorter box.
+		/// </summary>
+		public override void Load()
+		{
+			On_Player.ResizeHitbox += (orig, self) => {
+				orig(self);
+				if (self.TryGetModPlayer(out BodyPhysicsPlayer bp) && bp.height != CC.StandHeight)
+					bp.ApplyHeight();
+			};
+			MonoModHooks.Add(typeof(Player).GetProperty(nameof(Player.HeightOffsetHitboxCenter)).GetGetMethod(),
+				(Func<Func<Player, float>, Player, float>)((orig, self) =>
+					self.mount.Active || self.portableStoolInfo.IsInUse ? orig(self) : orig(self) + (self.height - Player.defaultHeight) / 2f));
 		}
 	}
 

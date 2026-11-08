@@ -13,7 +13,12 @@ namespace TerraCommand.Common.Physics
 		public const float GroundFriction = 0.15f;
 		public const float AirAccel = 0.025f;        // little air control: momentum carries you
 		public const float AirDrag = 0.004f;
-		public const float CrouchSpeed = 0.9f;
+
+		// stances: hold down to crouch; hold down while walking to go prone and crawl (CC style)
+		public const int CrouchHeight = 30;          // hitbox height (standing is 42)
+		public const int ProneHeight = 20;
+		public const float CrawlSpeed = 0.8f;
+		public const float CrouchDrawDrop = 8f;      // the sprite sinks this far when crouched (bent-leg frame)
 
 		// jumping: a short hop; the jetpack does the real climbing
 		public const float JumpSpeedBoost = -1.8f;   // vanilla jumpSpeed 5.01
@@ -37,7 +42,7 @@ namespace TerraCommand.Common.Physics
 		// aiming (radians): spread = base (+fast weapon) * stance; recoil adds per shot and decays per tick
 		public const float AimBaseSpread = 0.035f;
 		public const float AimFastWeaponSpread = 0.03f; // weapons with useTime < 10
-		public const float AimCrouched = 0.35f, AimMoving = 1.6f, AimAirborne = 2.2f, AimJetting = 2.8f;
+		public const float AimProne = 0.2f, AimCrouched = 0.35f, AimMoving = 1.6f, AimAirborne = 2.2f, AimJetting = 2.8f;
 		public const float RecoilPerShot = 0.04f, RecoilMax = 0.3f, RecoilDecay = 0.95f, RecoilDecayCrouched = 0.88f;
 		public const float KickGrounded = 0.04f, KickAirborne = 0.18f;   // x weapon knockback
 

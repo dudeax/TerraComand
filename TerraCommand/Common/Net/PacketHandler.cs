@@ -30,6 +30,8 @@ namespace TerraCommand.Common.Net
 		SwapRequest,       // C->S
 		SwapGranted,       // S->C
 		SetOrders,         // C->S
+		// Bodies
+		StanceSync,        // C->S->C
 	}
 
 	public static class PacketHandler
@@ -75,6 +77,9 @@ namespace TerraCommand.Common.Net
 				case PacketType.OrderDropPod:
 				case PacketType.BuildRequest:
 					OrbitalNet.HandleRequest(type, r, from);
+					break;
+				case PacketType.StanceSync:
+					Physics.BodyPhysicsPlayer.ReceiveStance(r, from);
 					break;
 				case PacketType.DeployUnit:
 				case PacketType.SwapRequest:

@@ -6,9 +6,9 @@ heal
 sync start
 mark
 sync b-ready
-wait 182
-expect knocked yes             # thrown by A's bomb
-wait 58
+wait 200                       # A's bomb: 180 tick fuse, plus client timing slack
+expect knocked yes             # thrown by A's bomb (a thrown body stays down at least a second)
+wait 40
 expect moved >= 1
 screenshot b-thrown
 sync blasted

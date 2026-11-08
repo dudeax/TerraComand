@@ -2,6 +2,8 @@ Keybinds: {
 	SwitchBody.DisplayName: Switch Body (hovered or next)
 	CycleOrders.DisplayName: Toggle Unit Orders (hold / follow)
 	OrbitalMenu.DisplayName: Orbital Command Menu
+	Crouch.DisplayName: Crouch
+	Run.DisplayName: Run
 }
 
 Items: {

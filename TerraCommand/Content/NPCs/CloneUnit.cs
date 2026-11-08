@@ -281,7 +281,8 @@ namespace TerraCommand.Content.NPCs
 
 		// ------------------------------------------------------------ drawing
 
-		public override bool PreDraw(SpriteBatch spriteBatch, Vector2 screenPos, Color drawColor)
+		/// <summary>A player object posed and dressed like this body, for drawing it.</summary>
+		public Player VisualBody()
 		{
 			dummy ??= new Player();
 			Loadout.ApplyVisuals(dummy);
@@ -296,7 +297,12 @@ namespace TerraCommand.Content.NPCs
 			dummy.UpdateMiscCounter();
 			dummy.UpdateDyes();
 			dummy.PlayerFrame();
+			return dummy;
+		}
 
+		public override bool PreDraw(SpriteBatch spriteBatch, Vector2 screenPos, Color drawColor)
+		{
+			VisualBody();
 			spriteBatch.End();
 			Main.PlayerRenderer.DrawPlayers(Main.Camera, new[] { dummy });
 			spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, Main.DefaultSamplerState, DepthStencilState.None,

@@ -36,6 +36,8 @@ namespace TerraCommand.Common.Combat
 				return Tuning.AimJetting;
 			if (!body.Grounded)
 				return Tuning.AimAirborne;
+			if (body.Prone)
+				return Tuning.AimProne;
 			if (body.Crouching)
 				return Tuning.AimCrouched;
 			return Math.Abs(Player.velocity.X) > 0.6f ? Tuning.AimMoving : 1f;
@@ -47,7 +49,7 @@ namespace TerraCommand.Common.Combat
 		{
 			Item held = Player.HeldItem;
 			Spread = IsAimed(held) ? WeaponSpread(held) * StanceMultiplier() : 0f;
-			Recoil *= Player.GetModPlayer<BodyPhysicsPlayer>().Crouching ? Tuning.RecoilDecayCrouched : Tuning.RecoilDecay;
+			Recoil *= Player.GetModPlayer<BodyPhysicsPlayer>().Stance != Stance.Stand ? Tuning.RecoilDecayCrouched : Tuning.RecoilDecay;
 		}
 	}
 

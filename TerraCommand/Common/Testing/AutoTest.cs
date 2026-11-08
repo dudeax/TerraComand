@@ -55,12 +55,19 @@ namespace TerraCommand.Common.Testing
 		internal static bool NoPickup;
 		internal static int WalkDir, WalkTicks, JumpTicks, DownTicks;
 		internal static bool HoldDown, HoldJump, HoldLeft, HoldRight;   // `hold <down|jump|left|right> on|off`
+		internal static bool HoldCrouch, HoldRun;                        // `hold <crouch|run> on|off` (mod keybinds)
 		internal static readonly Dictionary<int, (int type, Vector2 pos)> Pinned = new();
 		static Vector2 markPos;
 		static float peakRise;
 		static int shotsLeft, shotGap, shotWait, gibsAtMark;
 
 		static int EnvInt(string name, int def) => int.TryParse(Environment.GetEnvironmentVariable(name), out int v) ? v : def;
+
+		public static void TraceIf(bool cond, string msg)
+		{
+			if (cond)
+				Trace(msg);
+		}
 
 		/// <summary>Logs a line to the test results when the driver is active (no-op otherwise).</summary>
 		public static void Trace(string msg)
@@ -74,6 +81,9 @@ namespace TerraCommand.Common.Testing
 			if (Probe <= 0)
 				return;
 			Probe--;
+			var ac = p.GetModPlayer<Physics.BodyPhysicsPlayer>().Actor;
+			Report("PROBE", $"{where}: actor move={ac.Move} prone={ac.Prone} status={ac.Status} grounded={ac.Grounded} vel={p.velocity.X:0.00},{p.velocity.Y:0.00} rot={ac.Rot:0.00} h={p.height} " +
+				$"legs={ac.Legs[0].Segment}/{ac.Legs[0].Planted},{ac.Legs[1].Segment}/{ac.Legs[1].Planted}");
 			Report("PROBE", $"{where}: target={Player.tileTargetX},{Player.tileTargetY} mouseWorld={Main.MouseWorld.ToTileCoordinates()} " +
 				$"held={p.HeldItem.Name} ctrlUse={p.controlUseItem} release={p.releaseUseItem} anim={p.itemAnimation} time={p.itemTime} " +
 				$"mouseInterface={p.mouseInterface} noBuilding={p.noBuilding} focus={Main.hasFocus} playerTile={p.Bottom.ToTileCoordinates()} " +
@@ -197,7 +207,7 @@ namespace TerraCommand.Common.Testing
 			shotFrames = 0;
 			AimOffset = null;
 			UseTicks = Probe = WalkTicks = JumpTicks = DownTicks = shotsLeft = 0;
-			NoSpawns = NoPickup = HoldDown = HoldJump = HoldLeft = HoldRight = false;
+			NoSpawns = NoPickup = HoldDown = HoldJump = HoldLeft = HoldRight = HoldCrouch = HoldRun = false;
 			Pinned.Clear();
 			waitingSync = null;
 			scenarioDone = false;
@@ -481,6 +491,8 @@ namespace TerraCommand.Common.Testing
 						case "jump": HoldJump = on; break;
 						case "left": HoldLeft = on; break;
 						case "right": HoldRight = on; break;
+						case "crouch": HoldCrouch = on; break;
+						case "run": HoldRun = on; break;
 						default: throw new ArgumentException("hold what? " + a[1]);
 					}
 					break;
@@ -517,6 +529,14 @@ namespace TerraCommand.Common.Testing
 						a.Length > 6 ? I(a[6]) : 20, 0f, Main.myPlayer);
 					break;
 				}
+				case "shotat": { // shotat <type> <dx> <dy> <vx> <vy> [damage] : hostile projectile, offsets from the player's feet
+					int type = int.TryParse(a[1], out int id) ? id : ProjectileID.Search.GetId(a[1]);
+					int i = Projectile.NewProjectile(P.GetSource_FromThis(), P.Bottom + new Vector2(F(a[2]), F(a[3])), new Vector2(F(a[4]), F(a[5])), type,
+						a.Length > 6 ? I(a[6]) : 20, 0f, Main.myPlayer);
+					Main.projectile[i].hostile = true;
+					Main.projectile[i].friendly = false;
+					break;
+				}
 				case "spawnnpc": {
 					int idx = NPC.NewNPC(P.GetSource_FromThis(), (int)(P.Center.X + F(a[2])), (int)(P.Center.Y + F(a[3])), NPCID.Search.GetId(a[1]));
 					Pinned.Remove(idx); // a reused slot isn't the NPC that was pinned
@@ -551,6 +571,16 @@ namespace TerraCommand.Common.Testing
 				case "pickup": NoPickup = a[1] == "off"; break;
 				case "probe": Probe = I(a[1]); break;
 				case "screenshot": pendingShot = a[1]; shotFrames = shotWarmup; break;
+				case "dumptex": { // dumptex : save the player skin sheets (Players[0, i]) as PNGs into the run folder
+					for (int i = 0; i < Terraria.GameContent.TextureAssets.Players.GetLength(1); i++) {
+						var asset = Terraria.GameContent.TextureAssets.Players[0, i];
+						if (asset == null) continue;
+						var tex = asset.Value;
+						using var fs = File.Create(Path.Combine(outDir, $"players_0_{i}.png"));
+						tex.SaveAsPng(fs, tex.Width, tex.Height);
+					}
+					break;
+				}
 				case "expect": RunExpect(a); break;
 				default: throw new ArgumentException("unknown command " + a[0]);
 			}
@@ -614,6 +644,10 @@ namespace TerraCommand.Common.Testing
 				}
 				case "peak": Expect(Cmp(peakRise, a[2], F(a[3])), $"{desc} (peak {peakRise:0.0} tiles above mark)"); break;
 				case "mounted": Expect(P.mount.Active == (a[2] == "yes"), $"{desc} (mount active={P.mount.Active})"); break;
+				case "stance": { var st = P.GetModPlayer<Physics.BodyPhysicsPlayer>().Stance; Expect(st.ToString().ToLower() == a[2], $"{desc} (stance {st}, height {P.height})"); break; }
+				case "fuelnow": { float f = P.GetModPlayer<Physics.BodyPhysicsPlayer>().Fuel; Expect(Cmp(f, a[2], F(a[3])), $"{desc} (fuel {f:0})"); break; }
+				case "status": { var st = P.GetModPlayer<Physics.BodyPhysicsPlayer>().Actor.Status; Expect(st.ToString().ToLower() == a[2], $"{desc} (status {st}, rot {P.fullRotation:0.00})"); break; }
+				case "height": Expect(Cmp(P.height, a[2], F(a[3])), $"{desc} (height {P.height})"); break;
 				case "knocked": Expect((P.GetModPlayer<Physics.BodyPhysicsPlayer>().KnockedTicks > 0) == (a[2] == "yes"), desc); break;
 				case "fuel": { float f = P.GetModPlayer<Physics.BodyPhysicsPlayer>().FuelMax; Expect(Cmp(f, a[2], F(a[3])), $"{desc} (max fuel {f:0})"); break; }
 				case "spread": {

@@ -1,4 +1,4 @@
-# Per-pixel collision: bodies fit through carved openings and walk over pixel-rough ground.
+# Per-pixel collision (CC walking is slow: ~0.8 px/tick): bodies fit through carved openings and walk over pixel-rough ground.
 # (A body is 20x42 px. Tile offsets are relative to the tile under the player's feet; row 0 = ground.)
 nospawn
 goto spawn
@@ -12,7 +12,7 @@ carverect 64 -44 96 0
 wait 5
 expect tile 4 -3 partial
 mark
-walk right 60
+walk right 200
 wait 5
 expect moved >= 8               # walked through the doorway
 screenshot doorway
@@ -20,7 +20,7 @@ screenshot doorway
 # An intact wall still blocks.
 fill 3 -6 3 -1 Stone
 mark
-walk right 120
+walk right 200
 expect moved <= 2.5
 
 # Rough ground: a dirt block with its top 10px carved off leaves a 6px bump, stepped over without jumping.
@@ -30,6 +30,6 @@ carverect -96 -16 -80 -6
 wait 5
 expect tile -6 -1 partial
 mark
-walk left 90
+walk left 200
 expect moved <= -5
 screenshot bump

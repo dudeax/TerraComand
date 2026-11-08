@@ -103,5 +103,13 @@ def icon():
     c.rect(29, 15, 31, 17, SKIN); c.rect(28, 18, 32, 22, GREEN); c.rect(28, 23, 29, 25, DARK); c.rect(31, 23, 32, 25, DARK); c.rect(33, 19, 37, 19, DARK)
     c.save("icon.png")
 
+def jetpack():
+    # a CC-style backpack jetpack worn on the torso's back (drawn facing right: the pack is on the left)
+    c = C(5, 9)
+    c.rect(0, 0, 4, 6, DARK); c.rect(1, 1, 3, 5, STEEL); c.rect(1, 1, 3, 1, LIGHT)
+    c.set(2, 3, YEL)
+    c.rect(1, 7, 3, 8, BLK); c.set(2, 8, (90, 90, 96, 255))   # nozzle
+    c.save("Content/Actors/Jetpack.png")
+
 if __name__ == "__main__":
-    pad_tile(); pad_item(); body_item(); wand(); remote(); pod(); rocket(); unit_fallback(); icon()
+    pad_tile(); pad_item(); body_item(); wand(); remote(); pod(); rocket(); unit_fallback(); icon(); jetpack()

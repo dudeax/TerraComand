@@ -39,7 +39,7 @@ namespace TerraCommand.Common.Physics
 				if (Vector2.Distance(lp.Center, center) < radius)
 					Testing.AutoTest.Trace($"blast catches local player: active={lp.active} dead={lp.dead} life={lp.statLife}");
 				if (lp.active && !lp.dead)
-					lp.GetModPlayer<BodyPhysicsPlayer>().ApplyImpulse(Impulse(center, lp.Center, radius, strength));
+					lp.GetModPlayer<BodyPhysicsPlayer>().ApplyImpulse(Impulse(center, lp.Center, radius, strength) * Actors.CC.BlastScale);
 			}
 			// NPCs and idle bodies: the server / singleplayer.
 			if (Main.netMode == NetmodeID.MultiplayerClient)
