@@ -1,0 +1,71 @@
+# CC AI modes: sentry, go-to, patrol, follow, box-select, gold dig, brain hunt.
+nospawn
+clearnpcs
+goto spawn
+flatten 120 30
+wait 30
+spawnunit 48 0
+spawnunit 96 0
+spawnunit 144 0
+wait 60
+expect units == 3
+expect unitorder sentry == 3
+pieshow 4 1
+wait 3
+screenshot orders-pie
+pieshow -1
+
+# box-select the far one and send it to patrol; the others stay on sentry
+select 120 -60 48 80
+order patrol
+wait 2
+expect unitorder patrol == 1
+expect unitorder sentry == 2
+mark
+wait 600
+expect unitspan >= 12
+screenshot orders-patrol
+
+# select all, go to a point 25 tiles left: they walk there and hold
+select 0 0 0 0
+order goto -400 0
+wait 5
+expect unitorder goto == 3
+wait 700
+expect unitorder sentry == 3
+expect unitfar <= 32
+screenshot orders-goto
+
+# select all and follow
+select 0 0 0 0
+order follow
+wait 2
+expect unitorder follow == 3
+goto spawn
+wait 600
+expect unitfar <= 10
+
+# gold dig: a seam of ore in the ground nearby, a digger in hand: the ore goes up to orbit
+order sentry
+clearunits
+spawnunit 32 0 LightDigger
+wait 30
+settile 8 2 Iron
+settile 9 2 Iron
+settile 8 3 Iron
+settile 9 3 Iron
+order golddig
+wait 2400
+expect oresent >= 2
+expect stock IronOre >= 2
+screenshot orders-golddig
+
+# brain hunt: an enemy brain body to the right; hunters close on it
+clearunits
+spawnunit 32 0 FieldRifle
+spawnunit 48 0 FieldRifle
+spawnenemybrain 600 0
+wait 30
+order brainhunt
+wait 900
+expect enemybrains == 0

@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -145,22 +146,32 @@ namespace TerraCommand.Common.Units
 
 		// ------------------------------------------------------------ orders
 
-		public static void RequestOrders(Player p, UnitOrder order)
+		/// <summary>Give orders to some of the team's bodies (an empty list: all of them).</summary>
+		public static void RequestOrders(Player p, UnitOrder order, Vector2 waypoint = default, IReadOnlyCollection<int> units = null)
 		{
+			units ??= Array.Empty<int>();
 			if (IsClient) {
 				ModPacket pk = PacketHandler.Create(PacketType.SetOrders);
 				pk.Write((byte)p.team);
 				pk.Write((byte)order);
+				pk.WriteVector2(waypoint);
+				pk.Write((short)units.Count);
+				foreach (int u in units)
+					pk.Write((short)u);
 				pk.Send();
 				return;
 			}
-			SetOrders(p.team, order);
+			SetOrders(p.team, order, waypoint, units);
 		}
 
-		static void SetOrders(int team, UnitOrder order)
+		static void SetOrders(int team, UnitOrder order, Vector2 waypoint, IReadOnlyCollection<int> units)
 		{
 			foreach (CloneUnit u in TeamUnits(team)) {
+				if (units.Count > 0 && !units.Contains(u.NPC.whoAmI))
+					continue;
 				u.Order = order;
+				// go-to: the point; patrol: the beat is around where the body stands now
+				u.Waypoint = order == UnitOrder.GoTo ? waypoint : order == UnitOrder.Patrol ? u.NPC.Bottom : Vector2.Zero;
 				u.NPC.netUpdate = true;
 			}
 		}
@@ -204,8 +215,13 @@ namespace TerraCommand.Common.Units
 				case PacketType.SetOrders: {
 					int team = r.ReadByte();
 					var order = (UnitOrder)r.ReadByte();
+					Vector2 wp = r.ReadVector2();
+					int n = Math.Min((int)r.ReadInt16(), Main.maxNPCs);
+					var list = new List<int>(n);
+					for (int k = 0; k < n; k++)
+						list.Add(r.ReadInt16());
 					if (Main.netMode == NetmodeID.Server && team == Main.player[from].team)
-						SetOrders(team, order);
+						SetOrders(team, order, wp, list);
 					break;
 				}
 			}
@@ -232,7 +248,8 @@ namespace TerraCommand.Common.Units
 		{
 			pending.Clear();
 			foreach (var t in tag.GetList<TagCompound>("units"))
-				pending.Add(new PendingUnit(t.Get<Vector2>("pos"), t.GetInt("team"), (UnitOrder)t.GetInt("order"),
+				pending.Add(new PendingUnit(t.Get<Vector2>("pos"), t.GetInt("team"),
+					(UnitOrder)t.GetInt("order") == UnitOrder.GoTo ? UnitOrder.Sentry : (UnitOrder)t.GetInt("order"),   // (the point isn't kept)
 					t.GetInt("lifeMax"), UnitLoadout.Load(t.GetCompound("loadout"))));
 		}
 

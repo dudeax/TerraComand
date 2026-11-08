@@ -10,6 +10,7 @@ using Terraria.DataStructures;
 using Terraria.ID;
 using Terraria.IO;
 using Terraria.ModLoader;
+using TerraCommand.Content.NPCs;
 using TerraCommand.Common.Destruction;
 using TerraCommand.Common.Orbital;
 using TerraCommand.Common.UI;
@@ -60,7 +61,7 @@ namespace TerraCommand.Common.Testing
 		internal static bool FireHeld => UseTicks > 0;
 		internal static readonly Dictionary<int, (int type, Vector2 pos)> Pinned = new();
 		static Vector2 markPos;
-		static float peakRise;
+		static float peakRise, unitSpan, unitMinX = float.MaxValue, unitMaxX = float.MinValue;
 		static int shotsLeft, shotGap, shotWait, gibsAtMark, deliveredAtMark;
 		// ground probe: how well a walking body sits on the ground (gap = ground surface - hitbox bottom, px)
 		static int groundProbe, probeTicks, airFlickers, floatTicks;
@@ -322,6 +323,12 @@ namespace TerraCommand.Common.Testing
 				}
 				if (!serverMode && P != null)
 					peakRise = Math.Max(peakRise, (markPos.Y - P.Bottom.Y) / 16f);
+				foreach (CloneUnit u in UnitSystem.AllUnits()) {
+						unitMinX = Math.Min(unitMinX, u.NPC.Center.X);
+						unitMaxX = Math.Max(unitMaxX, u.NPC.Center.X);
+					}
+					if (unitMaxX >= unitMinX)
+						unitSpan = (unitMaxX - unitMinX) / 16f;
 
 				Step();
 			}
@@ -448,6 +455,18 @@ namespace TerraCommand.Common.Testing
 					P.armor[slot] = new Item(ItemType(a[1]));
 					break;
 				}
+				case "spawnunit": { // spawnunit <dx px> <dy px> [held item] [kind] : a fresh idle body on the player's team
+					var kind = a.Length > 4 ? Enum.Parse<Actors.ActorKind>(a[4], ignoreCase: true) : Actors.ActorKind.Soldier;
+					UnitSystem.SpawnFresh(P.Bottom + new Vector2(F(a[1]), F(a[2])), P.team, kind, a.Length > 3 ? ItemType(a[3]) : 0);
+					break;
+				}
+				case "spawnenemybrain": // spawnenemybrain <dx px> <dy px> : an enemy faction brain body
+					UnitSystem.SpawnFresh(P.Bottom + new Vector2(F(a[1]), F(a[2])), CloneUnit.EnemyTeam, Actors.ActorKind.Brain);
+					break;
+				case "clearunits":
+					foreach (CloneUnit u in UnitSystem.AllUnits().ToList())
+						UnitSystem.DespawnUnit(u.NPC);
+					break;
 				case "placeunit": { // placeunit <dtiles> : stand the nearest idle body next to the player
 					var u = UnitSystem.AllUnits().OrderBy(x => Vector2.Distance(x.NPC.Center, P.Center)).First();
 					u.NPC.Bottom = P.Bottom + new Vector2(F(a[1]) * 16, 0);
@@ -515,6 +534,9 @@ namespace TerraCommand.Common.Testing
 				case "mark":
 					markPos = P.Bottom;
 					peakRise = 0f;
+					unitSpan = 0f;
+					unitMinX = float.MaxValue;
+					unitMaxX = float.MinValue;
 					P.GetModPlayer<Combat.AimPlayer>().ShotLog.Clear();
 					P.GetModPlayer<Combat.AimPlayer>().ConeLog.Clear();
 					gibsAtMark = Combat.GibSystem.Gibs;
@@ -538,7 +560,7 @@ namespace TerraCommand.Common.Testing
 				case "pickup" when a.Length == 1: P.GetModPlayer<Actors.ActorInventory>().PickUp(); break;
 				case "next": P.GetModPlayer<Actors.ActorInventory>().Next(); break;
 				case "reload": P.GetModPlayer<Combat.AimPlayer>().Reload(); break;
-				case "pieshow": UI.ActorControlsUI.ShowForTest(I(a[1])); break;
+				case "pieshow": UI.ActorControlsUI.ShowForTest(I(a[1]), a.Length > 2 ? I(a[2]) : 0); break;
 				case "pie": if (!UI.ActorControlsUI.Activate(string.Join(' ', a.Skip(1)))) throw new ArgumentException("pie slice unavailable: " + string.Join(' ', a.Skip(1))); break;
 				case "prev": P.GetModPlayer<Actors.ActorInventory>().Prev(); break;
 				case "spawnitem": { // spawnitem <item> <dx px> <dy px> : an item lying in the world near the player
@@ -618,6 +640,18 @@ namespace TerraCommand.Common.Testing
 				case "mouseitem": Main.mouseItem = new Item(ItemType(a[1]), a.Length > 2 ? I(a[2]) : 1); break;
 				case "switch": P.GetModPlayer<UnitPlayer>().SwitchBody(); break;
 				case "orders": P.GetModPlayer<UnitPlayer>().CycleOrders(); break;
+				case "order": { // order <mode> [dx dy] : order the selected (or all) units; go-to takes a point relative to the player
+					var mode = Enum.Parse<UnitOrder>(a[1], ignoreCase: true);
+					var up = P.GetModPlayer<UnitPlayer>();
+					if (mode == UnitOrder.GoTo)
+						UnitSystem.RequestOrders(P, mode, P.Bottom + new Vector2(F(a[2]), F(a[3])), up.OrderTargets());
+					else
+						up.Order(mode);
+					break;
+				}
+				case "select": // select <dx> <dy> <w> <h> : box-select units in a rectangle relative to the player's centre
+					P.GetModPlayer<UnitPlayer>().SelectIn(new Rectangle((int)(P.Center.X + F(a[1])), (int)(P.Center.Y + F(a[2])), (int)F(a[3]), (int)F(a[4])));
+					break;
 				case "menu": OrbitalUISystem.Toggle(); break;
 				case "menutab": OrbitalUISystem.buying = a[1] == "buy"; break;
 				case "buildkey": P.GetModPlayer<OrbitalPlayer>().BuildKey = new StockKey(ItemType(a[1]), 0); break;
@@ -742,6 +776,23 @@ namespace TerraCommand.Common.Testing
 					break;
 				}
 				case "units": { int n = UnitSystem.AllUnits().Count(); Expect(Cmp(n, a[2], F(a[3])), $"{desc} (have {n})"); break; }
+				case "unitorder": { // expect unitorder <mode> <op> <n>
+					var mode = Enum.Parse<UnitOrder>(a[2], ignoreCase: true);
+					int n = UnitSystem.AllUnits().Count(u => u.Order == mode);
+					Expect(Cmp(n, a[3], F(a[4])), $"{desc} (have {n})");
+					break;
+				}
+				case "unitfar": { // expect unitfar <op> <tiles> : the farthest unit from the player, in tiles
+					float d = UnitSystem.AllUnits().Select(u => Vector2.Distance(u.NPC.Bottom, P.Bottom) / 16f).DefaultIfEmpty(0f).Max();
+					Expect(Cmp(d, a[2], F(a[3])), $"{desc} (farthest unit {d:0.0} tiles)");
+					break;
+				}
+				case "unitspan": { // expect unitspan <op> <tiles> : how far units have wandered (max X - min X seen since mark)
+					Expect(Cmp(unitSpan, a[2], F(a[3])), $"{desc} (span {unitSpan:0.0} tiles)");
+					break;
+				}
+				case "enemybrains": { int n = UnitSystem.AllUnits().Count(u => u.Team == CloneUnit.EnemyTeam && u.Loadout.Kind == Actors.ActorKind.Brain); Expect(Cmp(n, a[2], F(a[3])), $"{desc} (have {n})"); break; }
+				case "oresent": Expect(Cmp(CloneUnit.OreSentUp, a[2], F(a[3])), $"{desc} (ore sent up {CloneUnit.OreSentUp})"); break;
 				case "damaged": Expect(Cmp(PixelTerrain.DamagedTileCount, a[2], F(a[3])), $"{desc} (have {PixelTerrain.DamagedTileCount})"); break;
 				case "tile": {
 					int x = t.X + I(a[2]), y = t.Y + I(a[3]);

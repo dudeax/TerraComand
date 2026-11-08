@@ -125,7 +125,7 @@ namespace TerraCommand.Content.Items.Devices
 	/// </summary>
 	public abstract class CCDigger : CCFirearm
 	{
-		protected abstract int Strength { get; }
+		public abstract int Strength { get; }
 
 		public override void SetDefaults()
 		{
@@ -151,7 +151,7 @@ namespace TerraCommand.Content.Items.Devices
 			Recoil = 0.2f, Sound = SoundID.Item22 with { Volume = 0.3f, Pitch = 0.5f },
 		};
 		protected override int Damage => 2;
-		protected override int Strength => 50;
+		public override int Strength => 50;
 		protected override int ValueCopper => Item.buyPrice(silver: 30);
 		public override void AddRecipes() => CreateRecipe().AddRecipeGroup(RecipeGroupID.IronBar, 6).AddIngredient(ItemID.CopperBar, 4).AddTile(TileID.Anvils).Register();
 	}
@@ -164,7 +164,7 @@ namespace TerraCommand.Content.Items.Devices
 			Recoil = 0.3f, Sound = SoundID.Item22 with { Volume = 0.35f, Pitch = 0.2f },
 		};
 		protected override int Damage => 3;
-		protected override int Strength => 110;
+		public override int Strength => 110;
 		protected override int Rarity => ItemRarityID.Orange;
 		protected override int ValueCopper => Item.buyPrice(gold: 3);
 		public override void AddRecipes() => CreateRecipe().AddIngredient<LightDigger>().AddIngredient(ItemID.HellstoneBar, 10).AddTile(TileID.Anvils).Register();

@@ -9,11 +9,15 @@ using Terraria.ID;
 using Terraria.ModLoader;
 using TerraCommand.Common.Actors;
 using TerraCommand.Common.Combat;
+using TerraCommand.Common.Destruction;
+using TerraCommand.Common.Orbital;
 using TerraCommand.Common.Units;
+using TerraCommand.Content.Items.Devices;
 
 namespace TerraCommand.Content.NPCs
 {
-	public enum UnitOrder : byte { Sentry, Follow }
+	/// <summary>CC's AI modes: hold (sentry), follow, patrol, go to a point, gold dig, brain hunt.</summary>
+	public enum UnitOrder : byte { Sentry, Follow, Patrol, GoTo, GoldDig, BrainHunt }
 
 	/// <summary>
 	/// An idle body: the same Cortex Command actor as a controlled one (<see cref="CCActor"/>: legs, jetpack, balance,
@@ -27,7 +31,12 @@ namespace TerraCommand.Content.NPCs
 		public UnitLoadout Loadout = new();
 		public int Team;
 		public UnitOrder Order = UnitOrder.Sentry;
+		/// <summary>Go-To: the point to reach. Patrol: the middle of the beat.</summary>
+		public Vector2 Waypoint;
 		public readonly CCActor Actor = new();
+		int patrolDir = 1, digSearch, shaftSide = 1;
+		Point digTile = new(-1, -1);
+		public static int OreSentUp;   // tests
 
 		int targetIndex = -1;
 		int fireCooldown, reloadTicks, stuckTicks, jetTicks;
@@ -73,6 +82,7 @@ namespace TerraCommand.Content.NPCs
 			Loadout = loadout;
 			Team = team;
 			Order = order;
+			NPC.friendly = team != EnemyTeam;   // the AI faction's bodies are hostile: the player's shots hit them
 			NPC.lifeMax = Math.Max(lifeMax, 20);
 			NPC.life = Math.Clamp(loadout.Life, 1, NPC.lifeMax);
 			NPC.defense = loadout.Defense;
@@ -196,37 +206,33 @@ namespace TerraCommand.Content.NPCs
 			Vector2 shoulder = RigRenderer.Shoulder(pose);
 			bool stable = Actor.Status == ActorStatus.Stable;
 
-			// move: follow the nearest team player, or hold position
+			// move: towards whatever the orders say (or nowhere: sentry)
+			Vector2? goal = Goal(out float arrive);
 			int moveDir = 0;
-			float leaderDy = 0f, leaderDx = 0f;
-			if (Order == UnitOrder.Follow) {
-				Player leader = NearestTeamPlayer();
-				if (leader != null) {
-					leaderDx = leader.Center.X - NPC.Center.X;
-					leaderDy = leader.Bottom.Y - NPC.Bottom.Y;
-					if (Math.Abs(leaderDx) > 16 * 5)
-						moveDir = Math.Sign(leaderDx);
-					// hopelessly far behind: catch up
-					if (Vector2.Distance(leader.Center, NPC.Center) > 16 * 120) {
-						NPC.Bottom = leader.Bottom;
-						NPC.velocity = Vector2.Zero;
-						skipImpact = true;
-						NPC.netUpdate = true;
-					}
-				}
+			float dx = 0f, dy = 0f;
+			if (goal is Vector2 g && Actor.SpeedScale > 0f) {
+				dx = g.X - NPC.Center.X;
+				dy = g.Y - NPC.Bottom.Y;
+				if (Math.Abs(dx) > arrive)
+					moveDir = Math.Sign(dx);
 			}
 			input.Left = moveDir < 0;
 			input.Right = moveDir > 0;
-			input.Fast = moveDir != 0 && Math.Abs(leaderDx) > 16 * 20;
+			input.Fast = moveDir != 0 && Math.Abs(dx) > 16 * 20;
 
-			// blocked (walking into something without getting anywhere), or the leader is well above: jetpack
+			// blocked (walking into something without getting anywhere), or the goal is well above: jetpack
 			if (moveDir != 0 && Actor.Grounded && Math.Abs(NPC.velocity.X) < 0.2f)
 				stuckTicks++;
 			else if (Actor.Grounded)
 				stuckTicks = 0;
-			if (stable && (stuckTicks > 20 || moveDir != 0 && leaderDy < -16 * 5 && Actor.Grounded) && Actor.Fuel > CC.JetMinStartTicks) {
-				jetTicks = 40;
+			if (Order == UnitOrder.Patrol && stuckTicks > 90) {
+				patrolDir = -patrolDir;   // a patrol turns back at walls it can't get over
 				stuckTicks = 0;
+			}
+			bool climb = goal != null && dy < -16 * 4 && (moveDir != 0 || Math.Abs(dx) <= arrive + 16);
+			if (stable && (stuckTicks > 20 || climb && Actor.Grounded) && Actor.Fuel > CC.JetMinStartTicks) {
+				jetTicks = 40;
+				stuckTicks = Math.Min(stuckTicks, 20) - 20;
 			}
 			if (jetTicks > 0) {
 				jetTicks--;
@@ -235,12 +241,14 @@ namespace TerraCommand.Content.NPCs
 			input.JumpStart = input.Jump && !prevJump;
 			prevJump = input.Jump;
 
-			// aim: at the target, or along the way it's going
+			// aim: at the target, at the ore being dug, or along the way it's going
 			input.Aim = target != null ? target.Center - shoulder : new Vector2((moveDir != 0 ? moveDir : Actor.FlipFactor) * 100f, 0f);
 			input.SharpAim = target != null && moveDir == 0;
 
 			if (target != null && stable)
 				TryAttack(target, pose);
+			else if (Order == UnitOrder.GoldDig && stable)
+				GoldDig(ref input, shoulder, Math.Abs(dx) <= arrive + 16 || stuckTicks > 10);
 			if (reloadTicks > 0 && --reloadTicks == 0) {
 				Item gun = Loadout.Held;
 				if (Devices.IsFirearm(gun))
@@ -251,6 +259,198 @@ namespace TerraCommand.Content.NPCs
 			return input;
 		}
 
+		/// <summary>Where the orders send the body (null: stay put), and how close counts as there.</summary>
+		Vector2? Goal(out float arrive)
+		{
+			arrive = 16 * 2;
+			switch (Order) {
+				case UnitOrder.Follow: {
+					Player leader = NearestTeamPlayer();
+					if (leader == null)
+						return null;
+					arrive = 16 * 5;
+					// hopelessly far behind: catch up
+					if (Vector2.Distance(leader.Center, NPC.Center) > 16 * 120) {
+						NPC.Bottom = leader.Bottom;
+						NPC.velocity = Vector2.Zero;
+						skipImpact = true;
+						NPC.netUpdate = true;
+					}
+					return new Vector2(leader.Center.X, leader.Bottom.Y);
+				}
+				case UnitOrder.Patrol: {
+					if (Waypoint == Vector2.Zero)
+						Waypoint = NPC.Bottom;
+					float x = Waypoint.X + patrolDir * 16 * 12;
+					if (Math.Abs(x - NPC.Center.X) < arrive + 2)
+						patrolDir = -patrolDir;
+					return new Vector2(x, NPC.Bottom.Y);
+				}
+				case UnitOrder.GoTo:
+					if (Math.Abs(Waypoint.X - NPC.Center.X) <= arrive && Math.Abs(Waypoint.Y - NPC.Bottom.Y) < 16 * 3) {
+						Order = UnitOrder.Sentry;   // arrived: hold here
+						NPC.netUpdate = true;
+						Common.Testing.AutoTest.Trace($"unit #{NPC.whoAmI} reached its waypoint");
+						return null;
+					}
+					return Waypoint;
+				case UnitOrder.GoldDig: {
+					CollectOre();
+					if (digTile.X < 0 || !IsOre(digTile.X, digTile.Y)) {
+						digTile = new Point(-1, -1);
+						if (--digSearch <= 0) {
+							digSearch = 60;
+							digTile = FindOre(30);
+						}
+					}
+					if (digTile.X < 0)
+						return null;
+					arrive = 16 * 2;
+					return new Vector2(digTile.X * 16 + 8, digTile.Y * 16 + 16);
+				}
+				case UnitOrder.BrainHunt:
+					return HuntTarget();
+			}
+			return null;
+		}
+
+		// ------------------------------------------------------------ gold dig
+
+		static bool IsOre(int i, int j)
+		{
+			if (!WorldGen.InWorld(i, j, 2))
+				return false;
+			Tile t = Main.tile[i, j];
+			return t.HasTile && (TileID.Sets.Ore[t.TileType] || Main.tileSpelunker[t.TileType] && Main.tileSolid[t.TileType]);
+		}
+
+		Point FindOre(int radius)
+		{
+			int ci = (int)(NPC.Center.X / 16), cj = (int)(NPC.Center.Y / 16);
+			Point best = new(-1, -1);
+			int bestD = int.MaxValue;
+			for (int i = ci - radius; i <= ci + radius; i++)
+				for (int j = cj - radius; j <= cj + radius; j++) {
+					int d = (i - ci) * (i - ci) + (j - cj) * (j - cj);
+					if (d < bestD && d <= radius * radius && IsOre(i, j)) {
+						bestD = d;
+						best = new Point(i, j);
+					}
+				}
+			return best;
+		}
+
+		static bool IsDigger(Item it) => it.ModItem is CCDigger || it.pick > 0;
+
+		/// <summary>Dig towards the ore with whatever digger the body carries (it takes it in hand).</summary>
+		void GoldDig(ref ActorInput input, Vector2 shoulder, bool there)
+		{
+			if (digTile.X < 0 || !there)
+				return;
+			if (!IsDigger(Loadout.Held)) {
+				int k = Array.FindIndex(Loadout.Inventory, IsDigger);
+				if (k < 0)
+					return;
+				Loadout.Selected = k;
+				NPC.netUpdate = true;
+			}
+			// at what's left of the ore (a partly dug tile's middle may already be gone)
+			Vector2 ore = PixelTerrain.NearestSolidPixel(digTile.X, digTile.Y, shoulder);
+			Item dig = Loadout.Held;
+			var digger = dig.ModItem as CCDigger;
+			float reach = digger != null ? 10f + digger.Spec.FireVelocity * 10f : 16 * 4;
+			if (Vector2.Distance(ore, shoulder) > reach - 8f) {
+				// out of reach: sink a body-wide shaft under its feet towards the ore, and drop into it (CC diggers)
+				ore = NPC.Bottom + new Vector2(Math.Clamp(ore.X - NPC.Center.X, -3f, 3f) + shaftSide * 5f, 6f);
+			}
+			input.Aim = ore - shoulder;
+			input.SharpAim = true;
+			if (fireCooldown > 0)
+				return;
+			// the first solid terrain along the aim, within reach, takes a bite (dropping what it was made of)
+			Vector2 dir = input.Aim.SafeNormalize(Vector2.UnitX);
+			int power = digger != null ? digger.Strength : dig.pick;
+			for (float r = 4f; r <= reach; r += 2f) {
+				Vector2 at = shoulder + dir * r;
+				if (!PixelTerrain.IsPixelSolid(at.X, at.Y))
+					continue;
+				PixelTerrain.RequestCarve(at, digger != null ? 4f + digger.Spec.ParticleCount : 5f, power, CarveFlags.DropItems);
+				break;
+			}
+			if (!Main.dedServ)
+				for (int k = 0; k < 2; k++) {
+					var d = Dust.NewDustDirect(shoulder + dir * Main.rand.NextFloat(8f, reach), 2, 2, DustID.Electric, 0, 0, 150, default, 0.5f);
+					d.noGravity = true;
+					d.velocity = dir;
+				}
+			if (dig.UseSound is Terraria.Audio.SoundStyle snd && Main.rand.NextBool(3))
+				SoundEngine.PlaySound(snd, NPC.Center);
+			fireCooldown = Math.Max(4, dig.useTime * 2);
+			shaftSide = -shaftSide;   // the shaft goes down left and right of centre in turn, wide enough to drop into
+		}
+
+		/// <summary>CC: dug gold goes to the team's funds. Here dug ore and gems go up to the orbital stockpile.</summary>
+		void CollectOre()
+		{
+			if (Main.GameUpdateCount % 15 != (ulong)(NPC.whoAmI % 15))
+				return;
+			foreach (Item it in Main.item) {
+				if (!it.active || it.createTile < TileID.Dirt || Vector2.Distance(it.Center, NPC.Center) > 16 * 10)
+					continue;
+				if (!TileID.Sets.Ore[it.createTile] && !Main.tileSpelunker[it.createTile])
+					continue;
+				OrbitalStockpile.Add(it);
+				OreSentUp += it.stack;
+				Common.Testing.AutoTest.Trace($"gold dig: {it.stack} {it.Name} sent to orbit");
+				it.TurnToAir();
+				it.active = false;
+				if (Main.netMode == NetmodeID.Server)
+					NetMessage.SendData(MessageID.SyncItem, number: Array.IndexOf(Main.item, it));
+			}
+		}
+
+		// ------------------------------------------------------------ brain hunt
+
+		/// <summary>The nearest enemy brain (another team's brain body or player), else the nearest hostile thing.</summary>
+		Vector2? HuntTarget()
+		{
+			Vector2? best = null;
+			float bestD = float.MaxValue;
+			void Consider(Vector2 at)
+			{
+				float d = Vector2.DistanceSquared(at, NPC.Center);
+				if (d < bestD) {
+					bestD = d;
+					best = at;
+				}
+			}
+			foreach (NPC n in Main.ActiveNPCs)
+				if (n.ModNPC is CloneUnit u && u.Team != Team && u.Loadout.Kind == ActorKind.Brain)
+					Consider(new Vector2(n.Center.X, n.Bottom.Y));
+			foreach (Player p in Main.ActivePlayers)
+				if (!p.dead && p.team != Team && p.GetModPlayer<RigPlayer>().Kind == ActorKind.Brain && (p.hostile || Team == EnemyTeam))
+					Consider(new Vector2(p.Center.X, p.Bottom.Y));
+			if (best != null)
+				return best;
+			foreach (NPC n in Main.ActiveNPCs)
+				if (IsEnemy(n) && Vector2.Distance(n.Center, NPC.Center) < 16 * 200)
+					Consider(new Vector2(n.Center.X, n.Bottom.Y));
+			return best;
+		}
+
+		/// <summary>The AI faction's team (CC's enemy player).</summary>
+		public const int EnemyTeam = 6;
+
+		/// <summary>Something this body should shoot: a hostile creature, or another team's body.</summary>
+		bool IsEnemy(NPC n)
+		{
+			if (n.ModNPC is CloneUnit u)
+				return u.Team != Team && n.life > 0;
+			if (Team == EnemyTeam)
+				return false;   // the AI faction leaves the wildlife to the player
+			return !n.friendly && n.lifeMax > 5 && n.CanBeChasedBy(NPC);
+		}
+
 		void FindTarget()
 		{
 			if (Main.GameUpdateCount % 10 != (ulong)(NPC.whoAmI % 10))
@@ -258,7 +458,7 @@ namespace TerraCommand.Content.NPCs
 			targetIndex = -1;
 			float best = 16 * 35;
 			foreach (NPC n in Main.ActiveNPCs) {
-				if (n.friendly || n.lifeMax <= 5 || !n.CanBeChasedBy(NPC))
+				if (n.whoAmI == NPC.whoAmI || !IsEnemy(n))
 					continue;
 				float d = Vector2.Distance(n.Center, NPC.Center);
 				if (d < best && Collision.CanHitLine(NPC.Center, 1, 1, n.Center, 1, 1)) {
@@ -370,6 +570,7 @@ namespace TerraCommand.Content.NPCs
 		{
 			writer.Write((byte)Team);
 			writer.Write((byte)Order);
+			writer.WriteVector2(Waypoint);
 			writer.Write(NPC.lifeMax);
 			writer.Write((byte)Actor.Status);
 			writer.Write((byte)Actor.Prone);
@@ -385,7 +586,9 @@ namespace TerraCommand.Content.NPCs
 		public override void ReceiveExtraAI(BinaryReader reader)
 		{
 			Team = reader.ReadByte();
+			NPC.friendly = Team != EnemyTeam;
 			Order = (UnitOrder)reader.ReadByte();
+			Waypoint = reader.ReadVector2();
 			NPC.lifeMax = reader.ReadInt32();
 			Actor.Status = (ActorStatus)reader.ReadByte();
 			Actor.Prone = (ProneState)reader.ReadByte();
@@ -434,8 +637,13 @@ namespace TerraCommand.Content.NPCs
 
 			// Order marker above the head; highlighted when the mouse hovers this body.
 			bool hover = NPC.Hitbox.Contains(Main.MouseWorld.ToPoint());
-			string tag = Order == UnitOrder.Follow ? "F" : "S";
-			Color c = Team == Main.LocalPlayer.team ? (hover ? Color.Yellow : Color.LightGreen) : Color.Gray;
+			string tag = Order switch {
+				UnitOrder.Follow => "F", UnitOrder.Patrol => "P", UnitOrder.GoTo => "G", UnitOrder.GoldDig => "$", UnitOrder.BrainHunt => "H", _ => "S",
+			};
+			bool selected = UnitPlayer.Selected.Contains(NPC.whoAmI);
+			Color c = Team == Main.LocalPlayer.team ? (hover ? Color.Yellow : selected ? Color.Cyan : Color.LightGreen) : Color.IndianRed;
+			if (selected && Team == Main.LocalPlayer.team)
+				tag = "[" + tag + "]";
 			Vector2 pos = NPC.Top - screenPos - new Vector2(4, 24);
 			Utils.DrawBorderString(spriteBatch, tag, pos, c, 0.8f);
 			return false;

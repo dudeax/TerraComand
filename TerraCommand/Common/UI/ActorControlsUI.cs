@@ -34,14 +34,33 @@ namespace TerraCommand.Common.UI
 
 		static Player Me => Main.LocalPlayer;
 
-		public static readonly Slice[] Slices = {
+		/// <summary>The pie's current page: the main commands, or the unit orders.</summary>
+		public static Slice[] Slices => page == 1 ? OrderSlices : MainSlices;
+		static int page;
+		static bool sticky;   // the orders page stays open after the right button is let go: pick with a click
+
+		static UnitPlayer Units => Me.GetModPlayer<UnitPlayer>();
+		static bool HaveUnits() => UnitSystem.TeamUnits(Me.team).Any();
+
+		public static readonly Slice[] OrderSlices = {
+			new("Sentry", HaveUnits, () => Units.Order(Content.NPCs.UnitOrder.Sentry)),
+			new("Follow", HaveUnits, () => Units.Order(Content.NPCs.UnitOrder.Follow)),
+			new("Patrol", HaveUnits, () => Units.Order(Content.NPCs.UnitOrder.Patrol)),
+			new("Go to...", HaveUnits, () => Units.Order(Content.NPCs.UnitOrder.GoTo)),
+			new("Gold dig", HaveUnits, () => Units.Order(Content.NPCs.UnitOrder.GoldDig)),
+			new("Brain hunt", HaveUnits, () => Units.Order(Content.NPCs.UnitOrder.BrainHunt)),
+			new("Select units...", HaveUnits, () => Units.BeginBoxSelect()),
+			new("Select all", () => UnitPlayer.Selected.Count > 0, () => Units.SelectIn(Rectangle.Empty)),
+		};
+
+		public static readonly Slice[] MainSlices = {
 			new("Orbital menu", () => true, () => OrbitalUISystem.Toggle()),
 			new("Launch ship", () => ShipSystem.HasLandedShip(Me.team), () => ShipSystem.RequestLaunch(Me)),
 			new("Next item", () => true, () => Me.GetModPlayer<ActorInventory>().Next()),
 			new("Drop", () => !Me.inventory[ActorInventory.Held].IsAir, () => Me.GetModPlayer<ActorInventory>().DropHeld()),
 			new("Pick up", () => Me.GetModPlayer<ActorInventory>().ItemInReach >= 0, () => Me.GetModPlayer<ActorInventory>().PickUp()),
 			new("Ship hold", () => ShipHoldUI.NearestLandedShip(Me) != null, () => ShipHoldUI.Open(ShipHoldUI.NearestLandedShip(Me))),
-			new("Units: hold / follow", () => UnitSystem.TeamUnits(Me.team).Any(), () => Me.GetModPlayer<UnitPlayer>().CycleOrders()),
+			new("Unit orders", HaveUnits, () => { page = 1; sticky = true; PieOpen = true; }),
 			new("Switch body", () => UnitSystem.TeamUnits(Me.team).Any(), () => Me.GetModPlayer<UnitPlayer>().SwitchBody()),
 		};
 
@@ -49,6 +68,10 @@ namespace TerraCommand.Common.UI
 		{
 			PieOpen = false;
 			hovered = -1;
+			page = 0;
+			sticky = false;
+			UnitPlayer.Selected.Clear();
+			UnitPlayer.Pick = UnitPlayer.Picking.None;
 		}
 
 		public override void PostUpdateInput()
@@ -56,7 +79,28 @@ namespace TerraCommand.Common.UI
 			if (Main.gameMenu || Main.dedServ)
 				return;
 			bool down = Main.mouseRight;
+			UnitPlayer.UpdatePicking();
+			if (sticky && PieOpen) {
+				// the orders page: point and click (either button); the middle, or Esc, closes it
+				Vector2 d = new Vector2(Main.mouseX, Main.mouseY) - pieCenter;
+				hovered = d.Length() < 18f ? -1 : SliceAt(d);
+				bool click = Main.mouseLeft && Main.mouseLeftRelease || down && !rightWasDown;
+				if (click || Main.keyState.IsKeyDown(Microsoft.Xna.Framework.Input.Keys.Escape)) {
+					ClosePie();
+					if (click && hovered >= 0 && OrderSlices[hovered].Enabled()) {
+						SoundEngine.PlaySound(SoundID.MenuTick);
+						Testing.AutoTest.Trace($"pie: {OrderSlices[hovered].Label}");
+						OrderSlices[hovered].Run();
+					}
+					Main.mouseLeftRelease = false;
+				}
+				Main.mouseRightRelease = false;
+				Me.mouseInterface = true;
+				rightWasDown = down;
+				return;
+			}
 			bool blocked = Main.playerInventory || Main.mapFullscreen || OrbitalUISystem.Visible || ShipSystem.PickingLz
+				|| UnitPlayer.Pick != UnitPlayer.Picking.None
 				|| Me.talkNPC >= 0 || Me.dead || Main.drawingPlayerChat;
 			if (down && !rightWasDown && !blocked && !Me.mouseInterface) {
 				PieOpen = true;
@@ -71,10 +115,20 @@ namespace TerraCommand.Common.UI
 					PieOpen = false;
 					if (hovered >= 0 && Slices[hovered].Enabled())
 						Activate(hovered);
+					if (sticky)
+						hovered = -1;   // the orders page opened: it waits for a click
 				}
 				Main.mouseRightRelease = false;
 			}
 			rightWasDown = down;
+		}
+
+		static void ClosePie()
+		{
+			PieOpen = false;
+			sticky = false;
+			page = 0;
+			hovered = -1;
 		}
 
 		/// <summary>Slice 0 is straight up; they go clockwise in 45 degree steps.</summary>
@@ -93,8 +147,9 @@ namespace TerraCommand.Common.UI
 		}
 
 		/// <summary>For tests: show the pie menu open (around the screen centre) with a slice hovered; -1 closes it.</summary>
-		public static void ShowForTest(int hover)
+		public static void ShowForTest(int hover, int onPage = 0)
 		{
+			page = onPage;
 			PieOpen = hover >= 0;
 			testHold = PieOpen;
 			pieCenter = new Vector2(Main.screenWidth, Main.screenHeight) / 2f / Main.UIScale;
@@ -129,6 +184,7 @@ namespace TerraCommand.Common.UI
 					DrawHud(Main.spriteBatch);
 				if (PieOpen)
 					DrawPie(Main.spriteBatch);
+				UnitPlayer.DrawPicking(Main.spriteBatch);
 				return true;
 			}, InterfaceScaleType.UI));
 		}
