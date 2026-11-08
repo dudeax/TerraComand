@@ -5,11 +5,12 @@ flatten 40 14
 wait 30
 
 # ---- pixel mining: a copper pickaxe chips part of a block instead of breaking it outright
+settile 2 -1 Dirt    # a block on the ground: diggers dig the first solid thing along the aim
 hold CopperPickaxe
-aimtile 2 0
+aimtile 2 -1
 use 2                # a single swing (dirt takes 2)
 wait 30
-expect tile 2 0 partial
+expect tile 2 -1 partial
 screenshot 01-mining
 
 # ---- explicit carve + bomb crater + bullets chipping

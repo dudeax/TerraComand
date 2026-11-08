@@ -20,7 +20,7 @@ namespace TerraCommand.Common.Actors
 		public static float ToMps(float pxPerTick) => pxPerTick * 60f / PPM;
 
 		public static readonly float Gravity = Accel(20f);           // scene GlobalAcceleration (0, 20)
-		public const float Mass = 150f;                             // Soldier Light: body + head + limbs + jetpack (kg)
+		public const float Mass = 140f;                             // Soldier Light: body + head + limbs + jetpack (kg); carried items add to it
 
 		// stability: faster than this and the body is thrown off its feet (StableVelocityThreshold 15, 25 m/s)
 		public static readonly float StableVelX = Speed(15f), StableVelY = Speed(25f);
@@ -99,6 +99,9 @@ namespace TerraCommand.Common.Actors
 		public int FlipFactor => Flipped ? -1 : 1;
 		public bool Lying => Status == ActorStatus.Unstable || Prone != ProneState.NotProne;
 
+		/// <summary>Total mass (kg): the body plus what it carries. Legs and jetpack push against all of it (CC).</summary>
+		public float Mass = CC.Mass;
+
 		/// <summary>Leg speed scale and whether this body can run (the brain robot is slow).</summary>
 		public float SpeedScale = 1f;
 		public bool CanRun = true;
@@ -134,7 +137,7 @@ namespace TerraCommand.Common.Actors
 			if (Status != ActorStatus.Dying && Status != ActorStatus.Dead && canStart && Fuel > 0f && (input.JumpStart || input.Jump)) {
 				Jetting = true;
 				if (input.JumpStart) {
-					Vel += JetDirection(input) * (CC.JetBurstImpulse / CC.Mass) * (CC.PPM / 60f);
+					Vel += JetDirection(input) * (CC.JetBurstImpulse / Mass) * (CC.PPM / 60f);
 					Fuel -= CC.JetBurstFuelTicks;
 				}
 				Fuel -= 1f;
@@ -147,7 +150,7 @@ namespace TerraCommand.Common.Actors
 			}
 			Fuel = Math.Clamp(Fuel, 0f, FuelMax);
 			if (Jetting)
-				Vel += JetDirection(input) * CC.Accel(JetForce * Throttle() / CC.Mass);
+				Vel += JetDirection(input) * CC.Accel(JetForce * Throttle() / Mass);
 
 			// prone / crouch / walk / run / crawl
 			bool moving = (input.Left || input.Right) && active;
@@ -255,7 +258,7 @@ namespace TerraCommand.Common.Actors
 						g.SpeedMultiplier = mult;
 				}
 				if (push > 0f && (pathSpeed == 0f || AnyFootPlanted())) {
-					float maxDv = CC.Accel(push / CC.Mass);
+					float maxDv = CC.Accel(push / Mass);
 					float dv = target - Vel.X;
 					// pushing back against the travel direction is weak (CC cuts it to 30%) - you can't brake hard while walking
 					if (moveDir != 0 && Math.Sign(dv) != moveDir)
@@ -405,7 +408,7 @@ namespace TerraCommand.Common.Actors
 		/// </summary>
 		public float ImpactDamage(float speedLost)
 		{
-			float impulse = CC.Mass * CC.ToMps(speedLost);
+			float impulse = Mass * CC.ToMps(speedLost);
 			LastImpulse = impulse;
 			if (Status != ActorStatus.Unstable || impulse <= CC.ImpulseDamageThreshold)
 				return 0f;

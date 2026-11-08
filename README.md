@@ -12,7 +12,8 @@ Vanilla progression, blocks and enemies stay; the rules change around them:
 | **Ships & orbit** | Everything moves between the ground and orbit by **cargo ship**. In the orbital menu (**K**), pick cargo from the stockpile, or nothing for a pickup, then **Order ship** and click a landing zone. The ship flies down, lands and unloads; ordered Clone Bodies step out as soldiers. Throw items into a landed ship, or walk idle bodies into it, then **Launch ship**. When it leaves the atmosphere its cargo joins the stockpile shared by every player in the world. Enemies can shoot ships down, and the cargo is lost. From the menu you can also **craft** in orbit (a station counts as available when its item is in orbit, and buckets count as water/lava/honey). With the **Orbital Constructor**, blocks and walls are placed straight from orbit: right-click a block in the menu to select it. |
 
 | **Cortex Command bodies** | The body you control is a CC actor, built from CC's own numbers (see `docs/cc-actor-design.md`). It has CC gravity (about a quarter of Terraria's). It walks on its legs slowly and steadily: 0.8 px/tick, or 1.6 running. Jumping is the **jetpack**: a burst on press, then thrust that weakens as the 1.5 s tank drains and refills when you stop. The torso leans while walking and bends forward when crouched. Going prone dives you onto your belly to crawl. Moving too fast (thrown by a blast, falling about 20 tiles) throws the body off its feet. It then ragdolls, takes impact damage when it hits something, and gets back up after a second. A fall of about 32 tiles is lethal. Wings, rocket boots and extra jumps add jetpack fuel and thrust. Hooks still work; mounts and dashes are disabled. Collision is per pixel. |
-| **Aiming & damage** | Guns, bows and magic have spread that depends on stance: steady when crouched, wild when moving, airborne or using the jetpack. Recoil climbs under sustained fire, and the reticle shows current accuracy. Headshots do ×1.75. Hits leave visible wounds, which are cosmetic (no bleeding). Violent deaths gib. Bodies don't regenerate health naturally (there's a config option), but potions, buffs and accessories still heal. |
+| **Weapons (CC devices)** | **Guns** have magazines: size and reload time come from the fire rate (pistols 15, assault guns 40, machine guns 100, shotguns 6, snipers 5, launchers 1). An empty gun reloads by itself, and **R** reloads early. Each round leaves the muzzle with a random spread (CC's "shake"). **Sharp aim** narrows it: aim far out and hold steady, and the camera looks ahead along the aim by the gun's reach (a sniper sees further than a pistol). Firing unsupported (in the air, jetting, knocked over) doubles the spread. Recoil pushes the body, less so when it's heavily loaded. A dotted sight line shows the aim and current spread. **Pickaxes are diggers**: they dig the first solid ground along the aim, close in front of the hands, not under the cursor. **Grenades, bombs and dynamite** are thrown CC-style: hold to wind up, release to throw (a tap just lobs it at your feet). |
+| **Damage** | Headshots do ×1.75. Hits leave visible wounds, which are cosmetic (no bleeding). Violent deaths gib. Bodies don't regenerate health naturally (there's a config option), but potions, buffs and accessories still heal. |
 
 A new team starts as its brain. The first ship lands next to it with two soldier bodies, and new characters also get an Orbital Constructor.
 
@@ -24,15 +25,31 @@ A new team starts as its brain. The first ship lands next to it with two soldier
 | W or Space | jetpack: burst on press, thrust while held |
 | Ctrl (hold) | crouch: lower, steadier aim; walking crouched is slower |
 | S (hold) | prone: dive flat; A/D to crawl. Also drops through platforms |
-| mouse | aim (the body turns to face it); reticle shows current spread |
+| mouse | aim (the body turns to face it). Aiming far out builds sharp aim, and the camera looks ahead |
+| left mouse | fire / use the held item (throwables: hold to wind up, release to throw) |
+| R | reload |
+| right mouse (hold) | **pie menu**: point at a command and release (orbital menu, launch ship, next/previous item, drop, pick up, unit orders, switch body) |
+| mouse wheel, 1 / 2 | next / previous carried item (the held item goes to the back of the queue) |
+| F | pick up the weapon or gear nearest your hands; with nothing in reach, use/open what's under the cursor (doors, chests) |
+| G | drop the held item |
 | Q | switch to the body under the cursor, or cycle to the next one |
-| G | toggle idle bodies between hold position and follow |
 | K | orbital menu (stockpile, fabricate, order and launch ships) |
 
 Body constants are in `TerraCommand/Common/Actors/CCActor.cs` (class `CC`), ported from the CC Community Project's data
 files, with sources noted in `docs/cc-actor-design.md`. Spread, recoil and blast strength are still in
-`TerraCommand/Common/Physics/Tuning.cs`. Crouch (Ctrl) and Run (Shift) can be rebound under Controls → Mod Controls.
-Unbind Terraria's own Smart Cursor (Ctrl) and Auto Select (Shift) if they get in the way.
+`TerraCommand/Common/Physics/Tuning.cs`. All mod keys can be rebound under Controls → Mod Controls. Unbind Terraria's own
+Smart Cursor (Ctrl), Auto Select (Shift) and Quick Mount (R) if they get in the way.
+
+**Carrying (CC style).** There's no hotbar.
+- **Held and queued items:** a body holds one item in its hands. Its other weapons, tools and gadgets form a queue you rotate
+  through.
+- **Picking up:** equipment lying around is picked up deliberately (F), not by walking over it. Materials, ammo, coins and
+  potions are still collected automatically, so mining works.
+- **Blocks and potions:** these stay in the pack. Use them from the inventory (Esc) cursor, the Terraria way.
+- **Mass:** everything carried has mass. A heavily loaded body walks sluggishly, and with enough stone in its pack the jetpack
+  can't lift it. Send loads up by ship instead.
+- **HUD:** shown next to the body: the held item with its rounds or reload progress, a throw wind-up bar, health, jetpack
+  fuel, and the carried list after switching.
 
 ## Design decisions (easy to change)
 - **Progression stays with the player, not the body.** Max life and mana from crystals and other permanent upgrades belong to the player. Each body only carries its items, its equipment and its current health.
@@ -89,6 +106,8 @@ Scenario commands, one per tick (tile offsets are relative to the tile under the
 | `claimbrain [starter]`, `kind brain\|soldier`, `killunit` | brain (`expect kind\|unitkind brain\|soldier`, `expect brainstate none\|alive\|lost`, `expect gameover yes\|no`) |
 | `carve dx dy r [power]`, `settile dx dy TileName`, `projectile name dx dy vx vy`, `spawnnpc name dx dy` | terrain / combat |
 | `switch`, `orders`, `hurt dmg` | bodies |
+| `next`, `prev`, `pickup`, `drop`, `spawnitem item dx dy`, `pie label`, `pieshow n` | CC carrying and pie menu (`expect holding item\|nothing`, `expect queue\|mass op n`, `expect worlditem item op n`) |
+| `reload` | devices (`expect rounds\|magazine\|throwspeed\|sharpaim op n`, `expect reloading yes\|no`, `expect cone\|spread op n`) |
 | `screenshot name`, `probe n`, `log text` | output (`probe` logs aim and item-use state for n ticks) |
 | `expect stock\|inv item op n`, `expect units\|damaged\|ground\|life op n`, `expect projectiles name op n`, `expect npcs name op n`, `expect tile dx dy empty\|solid\|partial`, `expect wall dx dy`, `expect alive`, `expect menu open\|closed` | assertions (`op` is one of `>= <= > < == !=`) |
 
@@ -137,9 +156,8 @@ TerraCommand/
 ## Roadmap
 1. **Play exactly like Cortex Command** (`docs/cc-actor-design.md`). Done: CC movement; original CC-style actors made of
    separate parts (IK legs on CC limb paths, arms on the weapon); the brain robot, whose loss ends the game; cargo ships to and
-   from orbit. Next: CC controls and carried inventory (pie menu, pick up and drop),
-   then CC devices (magazines, reload, sharp aim with camera look-ahead, diggers), then clone bodies on the same actor with
-   limb gibbing.
+   from orbit. CC controls and carried inventory (pie menu, pick up and drop); CC devices (magazines, reload, sharp aim with camera
+   look-ahead, diggers, thrown grenades). Next: clone bodies on the same actor, with limb gibbing.
 2. Loose debris: carved pixels fall as particles and settle.
 3. Smarter unit AI: dig, take cover, use ammo and mana, use any weapon properly. Direct per-unit orders via a selection box.
 4. Coin-based ship and body costs (CC's gold), and buying from NPC shops through orbit.

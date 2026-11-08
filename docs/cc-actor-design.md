@@ -146,3 +146,46 @@ Status:
    - A rocket ordered from the buy menu flies to a chosen landing spot, lands and opens.
    - It unloads ordered bodies and items. Cargo or bodies inside the bay go up when it's sent back to orbit, into the stockpile.
    - It has health and can crash. It replaces `LaunchPad`, `LaunchRocket` and `DropPod`.
+
+## Controls and inventory (done, after v0.3.0)
+
+The keys follow CC's mouse+WASD preset (`Source/System/InputScheme.cs`), plus Terraria's own keys where CC has no equivalent:
+
+| Input | CC | Here |
+|---|---|---|
+| Fire | LMB | LMB (use the held item) |
+| Pie menu | RMB (hold) | RMB (hold, point, release) |
+| Previous / next item | 1 / 2, mouse wheel | 1 / 2, mouse wheel |
+| Pick up | F | F (nothing in reach: interact with the tile under the cursor) |
+| Drop | G | G |
+| Reload | R | R (registered; firearms arrive with CC devices) |
+| Actor switch | Q / E | Q (E stays Terraria's grapple) |
+
+How the pieces map:
+- **Inventory:** CC's inventory deque maps onto Terraria's slots. Slot 0 is the hands; slots 1–49 hold the queue of devices
+  (weapons, tools, gadgets). Blocks, potions and materials are pack stock, used from the inventory cursor.
+- **Pick-up rules:** equipment needs a deliberate pick-up. Loose stock is still grabbed by walking over it, because Terraria
+  mining needs it.
+- **Mass:** carried mass adds to the actor's mass (140 kg base), so legs and jetpack push against all of it, as in CC. Weapons
+  weigh about 2–8 kg, armor 2 kg plus 0.6 × defense, materials 0.05 kg each.
+- **Code:** `Common/Actors/ActorInventory.cs` and `Common/UI/ActorControlsUI.cs` (pie menu + HUD).
+
+## Devices (done)
+
+`Common/Combat/Devices.cs` replaces the old stance-based aiming. Terraria weapons become CC devices:
+
+- **Firearms** (ammo-fed ranged weapons except bows): a magazine counted per item (`MagazineGlobalItem`, saved with the item).
+  - Stats derived from use time: magazine 100 / 40 / 15 / 8 / 5 (shotguns 6, rocket launchers 1); reload 1.2–3 s.
+  - Shake 5° / 3° / 1.6° / 0.8° (fast → slow), sharp shake ≈ 55 % of that; sharp-aim reach 140–420 px.
+  - Spread per round = `(shake − (shake − sharpShake) · sharpAim) · (supported ? 1 : 2) · gaussian`, halved (CC halves
+    `ShakeRange` on load). Supported means stable and on the ground or prone, not jetting.
+  - An empty gun reloads by itself; R reloads early; reloading drops sharp aim and can't fire.
+  - Rounds leave the muzzle along the aim. The aim is measured from the shoulder, so the muzzle line passes through the cursor.
+  - Recoil pushes the body (scaled by its total mass) and jolts the gun back in the hands.
+- **Camera:** it looks ahead along the aim by `30 + reach · sharpAim` px (CC `AimDistance` + `SharpLength`). A dotted sight line
+  fans out with the spread.
+- **Diggers** (pickaxes): they dig the first solid pixel along the aim within 56 px of the hands (the tile containing it), not
+  the cursor tile.
+- **Throwables** (consumable thrown items: grenades, bombs, dynamite): held to wind up over 0.75 s, thrown on release at
+  2.5–9 px/tick (CC MinThrowVel..MaxThrowVel).
+- Swords keep Terraria's swing; CC has no melee to port.

@@ -1,3 +1,4 @@
 # Runs on the dedicated server before clients join. Offsets are relative to the world spawn tile.
 nospawn
 flatten 60 14
+settile 2 -1 Dirt               # a block on the ground for A to dig (diggers dig along the aim)

@@ -9,11 +9,11 @@ expect kind brain
 sync brains
 
 # mining (server computes the pixel mask and broadcasts it)
-hold CopperPickaxe
-aimtile 2 0
+hold CopperPickaxe                # (the server placed a dirt block at 2 -1)
+aimtile 2 -1
 use 2
 wait 60
-expect tile 2 0 partial
+expect tile 2 -1 partial
 sync mined
 
 # a client calls down an empty ship, throws wood into it and sends it up: it reaches the shared stockpile
@@ -47,6 +47,15 @@ expect units == 1
 sync deployed
 sync switched                 # B takes over that body
 expect units == 1             # B's old body is now the idle one
+
+# equipment is picked up deliberately (F): it disappears for everyone
+spawnitem IronBroadsword 16 0
+wait 60
+sync sword-down
+pickup
+wait 30
+expect holding IronBroadsword
+sync sword-taken
 
 # a ship ordered by A delivers wood next to A
 ship 3 Wood 10

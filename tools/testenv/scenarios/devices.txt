@@ -1,0 +1,41 @@
+# CC devices other than guns: diggers dig along the aim from the hands; throwables wind up and fly on release.
+nospawn
+clearnpcs
+goto spawn
+flatten 60 20
+wait 30
+
+# digger: a wall of dirt in front; aim at it (the cursor isn't what's dug: the aim ray from the hands is)
+fill 2 -3 3 -1 Dirt
+wait 5
+hold CopperPickaxe
+aim 200 -12
+use 2                             # a single swing bites into the wall along the aim
+wait 20
+expect tile 2 -2 partial
+screenshot dig
+
+# aiming away from it digs nothing
+fill -5 -3 -4 -1 Stone
+aim 0 -200
+mark
+use 40
+wait 10
+expect tile -4 -2 solid
+expect tile -5 -2 solid
+
+# throwables: a quick tap is a weak lob, holding winds up a long throw
+give Grenade 5
+hold Grenade
+aim 200 -100
+use 3
+wait 5
+expect throwspeed <= 3.5
+expect projectiles Grenade >= 1
+wait 200
+use 50
+wait 5
+expect throwspeed >= 8
+screenshot throw
+wait 200
+expect inv Grenade == 3

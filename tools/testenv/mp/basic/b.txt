@@ -10,7 +10,7 @@ expect kind soldier
 expect brainstate alive
 sync brains
 sync mined
-expect tile 2 0 partial       # A's pickaxe bite is visible here
+expect tile 2 -1 partial       # A's pickaxe bite is visible here
 sync launched
 expect stock Wood >= 60       # the ship's cargo reached the shared stockpile, seen by B
 craft WorkBench               # B crafts from the shared stockpile
@@ -26,5 +26,10 @@ wait 90
 expect units == 1
 expect inv CloneBody == 0     # now wearing the empty body
 sync switched
+sync sword-down
+expect worlditem IronBroadsword >= 1   # A's sword lying on the ground, seen by B
+sync sword-taken
+wait 30
+expect worlditem IronBroadsword == 0   # picked up by A
 screenshot b-final
 sync done

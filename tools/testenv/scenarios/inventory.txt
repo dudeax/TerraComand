@@ -1,0 +1,80 @@
+# Cortex Command carrying: one item in the hands, the rest in a queue; F picks up, G drops; equipment isn't vacuumed up;
+# what a body carries has mass.
+nospawn
+clearnpcs
+goto spawn
+flatten 60 20
+wait 30
+clearinv
+give Minishark
+give MusketBall 200
+give CopperPickaxe
+give IronBroadsword
+give Wood 50
+hold Minishark
+wait 2
+expect holding Minishark
+expect queue == 2                  # pickaxe, broadsword (wood and ammo are pack stock, not in the queue)
+
+# next / previous rotate the queue (held item to the back)
+next
+wait 2
+expect holding CopperPickaxe
+next
+wait 2
+expect holding IronBroadsword
+next
+wait 2
+expect holding Minishark
+prev
+wait 2
+expect holding IronBroadsword
+aim 200 -20
+screenshot inv-switch
+
+# drop: thrown along the aim, the next item comes into the hands
+aim 200 0
+drop
+wait 30
+expect holding Minishark
+expect worlditem IronBroadsword >= 1
+expect queue == 1
+
+# walking over equipment doesn't pick it up; F does (item in reach of the hands)
+spawnitem IronBroadsword 20 0
+wait 30
+expect worlditem IronBroadsword >= 2
+pickup
+wait 5
+expect holding IronBroadsword
+expect queue == 2
+screenshot inv-pickup
+
+# loose stock is still collected by walking over it (mining yields)
+spawnitem StoneBlock 4 0
+wait 30
+expect inv StoneBlock >= 1
+
+# carried mass slows a body down: a big load of stone vs. travelling light
+give StoneBlock 999
+give StoneBlock 999
+give StoneBlock 999
+wait 5
+expect mass >= 150
+mark
+jump 60
+wait 60
+expect peak <= 8                     # a full tank lifts a loaded body far less (unloaded: ~16 tiles)
+
+# the pie menu runs commands
+pie Next item
+wait 2
+expect holding CopperPickaxe
+pie Orbital menu
+wait 5
+expect menu open
+menu
+pieshow 2
+wait 5
+screenshot inv-pie
+pieshow -1

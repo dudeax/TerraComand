@@ -56,6 +56,8 @@ namespace TerraCommand.Common.Testing
 		internal static int WalkDir, WalkTicks, JumpTicks, DownTicks;
 		internal static bool HoldDown, HoldJump, HoldLeft, HoldRight;   // `hold <down|jump|left|right> on|off`
 		internal static bool HoldCrouch, HoldRun;                        // `hold <crouch|run> on|off` (mod keybinds)
+		/// <summary>The driver is holding the fire button this tick (use / shoot commands).</summary>
+		internal static bool FireHeld => UseTicks > 0;
 		internal static readonly Dictionary<int, (int type, Vector2 pos)> Pinned = new();
 		static Vector2 markPos;
 		static float peakRise;
@@ -483,7 +485,28 @@ namespace TerraCommand.Common.Testing
 					AimOffset = at - P.Center;
 					break;
 				}
-				case "give": P.QuickSpawnItem(P.GetSource_FromThis(), ItemType(a[1]), a.Length > 2 ? I(a[2]) : 1); break;
+				case "give": { // give <item> [n] : straight into the pack (equipment isn't picked up by walking over it)
+					var it = new Item(ItemType(a[1]), a.Length > 2 ? I(a[2]) : 1);
+					it = P.GetItem(Main.myPlayer, it, GetItemSettings.InventoryUIToInventorySettings);
+					if (!it.IsAir)
+						P.QuickSpawnItem(P.GetSource_FromThis(), it, it.stack);
+					break;
+				}
+				case "drop" when a.Length == 1: P.GetModPlayer<Actors.ActorInventory>().DropHeld(); break;
+				case "pickup" when a.Length == 1: P.GetModPlayer<Actors.ActorInventory>().PickUp(); break;
+				case "next": P.GetModPlayer<Actors.ActorInventory>().Next(); break;
+				case "reload": P.GetModPlayer<Combat.AimPlayer>().Reload(); break;
+				case "pieshow": UI.ActorControlsUI.ShowForTest(I(a[1])); break;
+				case "pie": if (!UI.ActorControlsUI.Activate(string.Join(' ', a.Skip(1)))) throw new ArgumentException("pie slice unavailable: " + string.Join(' ', a.Skip(1))); break;
+				case "prev": P.GetModPlayer<Actors.ActorInventory>().Prev(); break;
+				case "spawnitem": { // spawnitem <item> <dx px> <dy px> : an item lying in the world near the player
+					int idx = Item.NewItem(P.GetSource_FromThis(), P.Center + new Vector2(F(a[2]), F(a[3])), 1, 1, ItemType(a[1]), 1, noBroadcast: false, noGrabDelay: true);
+					Main.item[idx].velocity = Vector2.Zero;
+					if (Main.netMode == NetmodeID.MultiplayerClient)
+						NetMessage.SendData(MessageID.SyncItem, -1, -1, null, idx, 1f);
+					Report("INFO", $"spawned item {Main.item[idx].Name} #{idx} at {Main.item[idx].Center.ToTileCoordinates()} active={Main.item[idx].active}");
+					break;
+				}
 				case "clearinv": for (int i = 0; i < 58; i++) P.inventory[i].TurnToAir(); break;
 				case "hold" when a.Length > 2 && (a[2] == "on" || a[2] == "off"): {
 					bool on = a[2] == "on";
@@ -513,8 +536,9 @@ namespace TerraCommand.Common.Testing
 					int type = ItemType(a[1]);
 					int slot = Array.FindIndex(P.inventory, it => it.type == type);
 					if (slot < 0) throw new ArgumentException("not in inventory: " + a[1]);
-					if (slot >= 10) { (P.inventory[0], P.inventory[slot]) = (P.inventory[slot], P.inventory[0]); slot = 0; }
-					P.selectedItem = slot;
+					// CC: the held item is slot 0
+					(P.inventory[0], P.inventory[slot]) = (P.inventory[slot], P.inventory[0]);
+					P.selectedItem = 0;
 					break;
 				}
 				case "aim": AimOffset = new Vector2(F(a[1]), F(a[2])); break;
@@ -684,6 +708,15 @@ namespace TerraCommand.Common.Testing
 					break;
 				}
 				case "delivered": Expect(Cmp(ShipSystem.Delivered - deliveredAtMark, a[2], F(a[3])), $"{desc} ({ShipSystem.Delivered - deliveredAtMark} since mark)"); break;
+				case "rounds": { Item h = P.inventory[0]; int r = h.IsAir || !Combat.Devices.IsFirearm(h) ? -1 : h.GetGlobalItem<Combat.MagazineGlobalItem>().Loaded(h); Expect(Cmp(r, a[2], F(a[3])), $"{desc} (rounds {r})"); break; }
+				case "magazine": { Item h = P.inventory[0]; int m = Combat.Devices.IsFirearm(h) ? Combat.Devices.Stats(h).Magazine : -1; Expect(Cmp(m, a[2], F(a[3])), $"{desc} (magazine {m})"); break; }
+				case "reloading": Expect(P.GetModPlayer<Combat.AimPlayer>().Reloading == (a[2] == "yes"), $"{desc} (reload ticks {P.GetModPlayer<Combat.AimPlayer>().ReloadTicks})"); break;
+				case "throwspeed": { float v = P.GetModPlayer<Combat.AimPlayer>().LastThrowSpeed; Expect(Cmp(v, a[2], F(a[3])), $"{desc} (last throw {v:0.0} px/tick)"); break; }
+				case "sharpaim": { float s = P.GetModPlayer<Physics.BodyPhysicsPlayer>().Actor.SharpAim; Expect(Cmp(s, a[2], F(a[3])), $"{desc} (sharp aim {s:0.00})"); break; }
+				case "holding": { Item h = P.inventory[0]; Expect(a[2] == "nothing" ? h.IsAir : h.type == ItemType(a[2]), $"{desc} (holding {(h.IsAir ? "nothing" : h.Name)})"); break; }
+				case "queue": { int n = P.inventory.Skip(1).Take(49).Count(Actors.ActorInventory.IsDevice); Expect(Cmp(n, a[2], F(a[3])), $"{desc} ({n} carried)"); break; }
+				case "mass": { float m = P.GetModPlayer<Actors.ActorInventory>().CarriedMass; Expect(Cmp(m, a[2], F(a[3])), $"{desc} (carrying {m:0.0} kg)"); break; }
+				case "worlditem": { int n = Main.item.Count(i => i.active && i.type == ItemType(a[2])); Expect(Cmp(n, a[3], F(a[4])), $"{desc} ({n} lying around)"); break; }
 				case "kind": { var k = P.GetModPlayer<Actors.RigPlayer>().Kind; Expect(k.ToString().ToLower() == a[2], $"{desc} (kind {k})"); break; }
 				case "brainstate": { var st = Units.BrainSystem.StateOf(P.team); Expect(st.ToString().ToLower() == a[2], $"{desc} (state {st})"); break; }
 				case "gameover": Expect(Units.BrainSystem.GameOver == (a[2] == "yes"), $"{desc} (game over {Units.BrainSystem.GameOver})"); break;

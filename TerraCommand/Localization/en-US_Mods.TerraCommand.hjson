@@ -4,6 +4,9 @@ Keybinds: {
 	OrbitalMenu.DisplayName: Orbital Command Menu
 	Crouch.DisplayName: Crouch
 	Run.DisplayName: Run
+	Pickup.DisplayName: Pickup
+	Drop.DisplayName: Drop
+	Reload.DisplayName: Reload
 }
 
 Items: {

@@ -10,32 +10,53 @@ give Minishark
 hold FlintlockPistol
 aim 300 -10
 
-# spread by stance (single shots with recoil settled in between)
-hold down on                    # crouched: steady
-wait 5
+# CC firearms: spread per round shrinks with sharp aim (aiming far out, holding steady) and doubles unsupported (airborne)
+aim 300 -10
+wait 150                        # sharp aim builds up
+expect sharpaim >= 0.9
 mark
-shoot 12 50
-expect cone <= 0.015            # 0.035 x 0.35
-hold down off
-wait 5
-mark                            # standing
-shoot 12 50
-expect cone >= 0.03
-expect cone <= 0.045            # 0.035 standing
-expect spread <= 0.035
-goto rel 0 -20                  # falling: wild (arena is flattened 24 tiles high)
-wait 12                         # let the previous shot's animation finish; the fall takes ~40 ticks
-mark
-shoot 1 0                       # one shot: the cone is deterministic
-expect cone >= 0.07             # airborne/jetpacking
-wait 120
-
-# recoil: holding the trigger on an automatic weapon walks the shots out
-hold Minishark
+shoot 3 30
+expect cone <= 0.016            # flintlock: 3 deg shake -> 1.65 sharp (half-range, radians)
+aim 25 -2                       # aiming close in: no sharp aim
 wait 60
+expect sharpaim <= 0.05
 mark
-use 90
-expect cone >= 0.1              # recoil climbs under sustained fire
+shoot 3 30
+expect cone >= 0.022
+expect cone <= 0.03
+goto rel 0 -20                  # falling: unsupported, x2 (arena is flattened 24 tiles high)
+wait 12
+mark
+shoot 1 0
+expect cone >= 0.04
+wait 160
+heal
+
+# magazines: rounds count down; an empty gun reloads by itself; R reloads a part-empty one
+aim 300 -10
+reload
+wait 80
+expect magazine == 15
+expect rounds == 15
+wait 40
+shoot 3 25
+wait 30
+expect rounds == 12
+reload
+wait 2
+expect reloading yes
+wait 80
+expect reloading no
+expect rounds == 15
+hold Minishark
+wait 5
+expect magazine == 40
+use 400                         # full auto: empties the magazine, then reloads by itself
+wait 20
+expect reloading yes
+wait 120
+expect rounds == 40
+hold FlintlockPistol
 
 # headshots on an upright target, body shots aren't
 hold FlintlockPistol

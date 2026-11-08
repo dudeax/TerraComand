@@ -71,6 +71,7 @@ namespace TerraCommand.Common.Actors
 		public float WalkDist;          // ground covered (drives the gait)
 		public Item Held;
 		public bool HeldInUse;          // vanilla is animating a swing: don't draw our copy
+		public float Kick;              // the gun jolts back along the aim when fired (px)
 		public Color Light;
 	}
 
@@ -101,6 +102,13 @@ namespace TerraCommand.Common.Actors
 		{
 			ActorArt art = ActorArt.Get(p.Kind);
 			return Hip(p, art) + new Vector2(art.JetpackAt.X * p.Dir, art.JetpackAt.Y + 9f).RotatedBy(p.Rot);
+		}
+
+		/// <summary>The front shoulder (world): aiming is measured from here, so the muzzle line passes through the cursor.</summary>
+		public static Vector2 Shoulder(in RigPose p)
+		{
+			ActorArt art = ActorArt.Get(p.Kind);
+			return Hip(p, art) + new Vector2(art.Shoulder.X * p.Dir, art.Shoulder.Y).RotatedBy(p.Rot);
 		}
 
 		/// <summary>Where the front hand grips the held item (world).</summary>
@@ -172,7 +180,7 @@ namespace TerraCommand.Common.Actors
 			// ---------------- arms
 			Vector2 frontShoulder = W(new Vector2(art.Shoulder.X * dir, art.Shoulder.Y));
 			Vector2 aimDir = AimWorld(p).ToRotationVector2();
-			Vector2 grip = frontShoulder + aimDir * 8f + new Vector2(0f, 1.5f);
+			Vector2 grip = frontShoulder + aimDir * (8f - p.Kick) + new Vector2(0f, 1.5f);
 
 			void Arm(int arm, Color c)
 			{
@@ -320,6 +328,7 @@ namespace TerraCommand.Common.Actors
 				WalkDist = WalkDist,
 				Held = Player.HeldItem,
 				HeldInUse = Player.itemAnimation > 0 && !RigRenderer.IsGunLike(Player.HeldItem),
+				Kick = Player.GetModPlayer<Combat.AimPlayer>().GunKick,
 				Light = Lighting.GetColor(Player.Center.ToTileCoordinates()),
 			};
 		}

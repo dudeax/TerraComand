@@ -59,6 +59,7 @@ namespace TerraCommand.Common.Physics
 			Actor.FuelMax = brain ? 0f : fuel;   // the brain robot has no jetpack: it walks, slowly
 			Actor.JetForce = force;
 			Actor.SpeedScale = brain ? 0.6f : 1f;
+			Actor.Mass = CC.Mass + Player.GetModPlayer<Actors.ActorInventory>().CarriedMass;
 			Actor.CanRun = !brain;
 			Actor.MaxHealth = Player.statLifeMax2;
 
@@ -90,7 +91,8 @@ namespace TerraCommand.Common.Physics
 				Prone = Player.controlDown,
 				Crouch = TerraCommandKeybinds.Crouch?.Current == true || Testing.AutoTest.Enabled && Testing.AutoTest.HoldCrouch,
 				Fast = TerraCommandKeybinds.Run?.Current == true || Testing.AutoTest.Enabled && Testing.AutoTest.HoldRun,
-				Aim = Main.MouseWorld - Player.Center,
+				// aim from the shoulder, so the gun's line passes through the cursor; the pie menu holds the aim
+				Aim = UI.ActorControlsUI.PieOpen ? Input.Aim : Main.MouseWorld - Actors.RigRenderer.Shoulder(Player.GetModPlayer<Actors.RigPlayer>().Pose()),
 			};
 			if (Testing.AutoTest.Enabled && Testing.AutoTest.AimOffset == null)
 				Input.Aim = new Vector2(Actor.FlipFactor * 100f, 0f);
