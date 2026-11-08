@@ -4,5 +4,4 @@ goto spawn
 wait 30
 screenshot spawn
 expect alive
-expect inv CloneBody >= 2
-expect inv LaunchPadItem >= 1
+expect inv OrbitalConstructor >= 1   # the starting kit (bodies now arrive by ship)

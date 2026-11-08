@@ -23,6 +23,7 @@ namespace TerraCommand.Common.Units
 		public Item[] MiscDyes = Empty(5);
 		public int Life = 100;
 		public int Selected;
+		public Actors.ActorKind Kind = Actors.ActorKind.Soldier;
 
 		// appearance
 		public bool Male = true;
@@ -70,6 +71,7 @@ namespace TerraCommand.Common.Units
 			for (int i = 0; i < 5; i++) { l.MiscEquips[i] = p.miscEquips[i].Clone(); l.MiscDyes[i] = p.miscDyes[i].Clone(); }
 			l.Life = p.statLife;
 			l.Selected = Math.Clamp(p.selectedItem, 0, 9);
+			l.Kind = p.GetModPlayer<Actors.RigPlayer>().Kind;
 			l.CopyAppearance(p);
 			return l;
 		}
@@ -97,6 +99,7 @@ namespace TerraCommand.Common.Units
 			for (int i = 0; i < 5; i++) { p.miscEquips[i] = MiscEquips[i].Clone(); p.miscDyes[i] = MiscDyes[i].Clone(); }
 			p.selectedItem = Math.Clamp(Selected, 0, 9);
 			p.statLife = Math.Clamp(Life, 1, Math.Max(1, p.statLifeMax2));
+			p.GetModPlayer<Actors.RigPlayer>().Kind = Kind;
 		}
 
 		/// <summary>Visual-only copy for rendering a body with a dummy Player.</summary>
@@ -129,7 +132,7 @@ namespace TerraCommand.Common.Units
 		public void Write(BinaryWriter w, bool visualsOnly = false)
 		{
 			w.Write(visualsOnly);
-			w.Write(Life); w.Write((byte)Selected);
+			w.Write(Life); w.Write((byte)Selected); w.Write((byte)Kind);
 			w.Write(Male); w.Write((byte)SkinVariant); w.Write((short)Hair);
 			foreach (Color c in new[] { HairColor, SkinColor, EyeColor, ShirtColor, UnderShirtColor, PantsColor, ShoeColor })
 				w.Write(c.PackedValue);
@@ -144,7 +147,7 @@ namespace TerraCommand.Common.Units
 		{
 			var l = new UnitLoadout();
 			bool visualsOnly = r.ReadBoolean();
-			l.Life = r.ReadInt32(); l.Selected = r.ReadByte();
+			l.Life = r.ReadInt32(); l.Selected = r.ReadByte(); l.Kind = (Actors.ActorKind)r.ReadByte();
 			l.Male = r.ReadBoolean(); l.SkinVariant = r.ReadByte(); l.Hair = r.ReadInt16();
 			var cols = new Color[7];
 			for (int i = 0; i < 7; i++) cols[i] = new Color { PackedValue = r.ReadUInt32() };
@@ -169,7 +172,7 @@ namespace TerraCommand.Common.Units
 		public TagCompound Save() => new() {
 			["inv"] = SaveArr(Inventory), ["armor"] = SaveArr(Armor), ["dye"] = SaveArr(Dye),
 			["misc"] = SaveArr(MiscEquips), ["miscDye"] = SaveArr(MiscDyes),
-			["life"] = Life, ["sel"] = Selected, ["male"] = Male, ["skin"] = SkinVariant, ["hair"] = Hair,
+			["life"] = Life, ["sel"] = Selected, ["kind"] = (byte)Kind, ["male"] = Male, ["skin"] = SkinVariant, ["hair"] = Hair,
 			["colors"] = new List<Color> { HairColor, SkinColor, EyeColor, ShirtColor, UnderShirtColor, PantsColor, ShoeColor },
 		};
 
@@ -178,7 +181,7 @@ namespace TerraCommand.Common.Units
 			var l = new UnitLoadout();
 			LoadArr(tag, "inv", l.Inventory); LoadArr(tag, "armor", l.Armor); LoadArr(tag, "dye", l.Dye);
 			LoadArr(tag, "misc", l.MiscEquips); LoadArr(tag, "miscDye", l.MiscDyes);
-			l.Life = tag.GetInt("life"); l.Selected = tag.GetInt("sel"); l.Male = tag.GetBool("male");
+			l.Life = tag.GetInt("life"); l.Selected = tag.GetInt("sel"); l.Kind = (Actors.ActorKind)tag.GetByte("kind"); l.Male = tag.GetBool("male");
 			l.SkinVariant = tag.GetInt("skin"); l.Hair = tag.GetInt("hair");
 			var cols = tag.GetList<Color>("colors");
 			if (cols.Count == 7)

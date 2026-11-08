@@ -118,3 +118,31 @@ RMB sharp aim, R reload, Q/E previous/next inventory item, F pick up, G drop, ho
 3. **Controls + inventory**: CC key scheme, carried items instead of the hotbar, Q/E switch, F/G pick up and drop, pie menu.
 4. **Devices**: firearms (magazines, reload, sharp aim + look-ahead camera, recoil), diggers, melee, throwables.
 5. **Clone bodies** on the same actor + AI; gibbing into limbs; multiplayer sync of actor state.
+
+## Round 2 (after playtesting v0.2.0): "literally play like Cortex Command"
+
+Decisions (user, 2026-11-08):
+- **Characters:** original CC-style actors made of separate parts. The art is ours (`tools/gen_art.py` →
+  `Content/Actors/<Kind>/*.png`), not CC's; replace the PNGs to restyle. The Terraria character isn't drawn. Armor only gives
+  stats.
+- **Brain:** a walking brain robot, controllable like any body. If it's destroyed it's game over, and the world is lost for that
+  team.
+- **Ships:** ordered from the buy menu. A ship flies down, unloads, is loaded and sent back up to the stockpile, and can be
+  shot down. Ships replace the launch pad and drop pods.
+
+Status:
+1. **Actor rig (done)** — `ActorRig.cs`:
+   - `RigRenderer` poses parts with two-bone IK. Feet follow the CC walk/run/crawl limb paths (advanced by ground covered) and
+     plant on the actual ground pixels. Arms reach the weapon's grip and fore-grip.
+   - The torso leans and tumbles about the hip, the head looks toward the aim, and the jetpack sits on the back.
+   - Player bodies (`RigPlayer.BodyLayer`, all vanilla layers hidden) and idle clone bodies (`CloneUnit.PreDraw`) share the
+     renderer.
+2. **Brain (done)** — `Units/BrainSystem.cs`:
+   - A body's kind (`ActorKind`) travels with its loadout, so the brain can be controlled, or left idle as a unit.
+   - The first player of a team to enter a world becomes its brain. The brain walks at 60 %, can't run, and has no jetpack.
+   - A dead brain (controlled or idle) marks the team Lost (saved with the world). That team gets the game-over screen and is
+     sent back to the menu, and re-entering shows it again.
+3. **Ships (done)** — `Content/NPCs/CargoShip.cs`, `Common/Orbital/ShipSystem.cs`. Planned as:
+   - A rocket ordered from the buy menu flies to a chosen landing spot, lands and opens.
+   - It unloads ordered bodies and items. Cargo or bodies inside the bay go up when it's sent back to orbit, into the stockpile.
+   - It has health and can crash. It replaces `LaunchPad`, `LaunchRocket` and `DropPod`.

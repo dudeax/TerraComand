@@ -55,8 +55,11 @@ namespace TerraCommand.Common.Physics
 			foreach (ExtraJump jump in ExtraJumpLoader.OrderedJumps)
 				if (Player.GetJumpState(jump).Enabled)
 					fuel += 15f;
-			Actor.FuelMax = fuel;
+			bool brain = Player.GetModPlayer<Actors.RigPlayer>().Kind == Actors.ActorKind.Brain;
+			Actor.FuelMax = brain ? 0f : fuel;   // the brain robot has no jetpack: it walks, slowly
 			Actor.JetForce = force;
+			Actor.SpeedScale = brain ? 0.6f : 1f;
+			Actor.CanRun = !brain;
 			Actor.MaxHealth = Player.statLifeMax2;
 
 			// vanilla mobility off: it's legs and a jetpack now
@@ -261,6 +264,7 @@ namespace TerraCommand.Common.Physics
 
 		byte syncedStatus, syncedProne, syncedCrouch;
 		sbyte syncedRot, syncedAim;
+		byte syncedKind;
 		bool syncedFlip;
 
 		public override void CopyClientState(ModPlayer targetCopy)
@@ -272,6 +276,7 @@ namespace TerraCommand.Common.Physics
 			t.syncedRot = QuantRot(Actor.Rot);
 			t.syncedFlip = Actor.Flipped;
 			t.syncedAim = QuantRot(Actor.AimAngle);
+			t.syncedKind = (byte)Player.GetModPlayer<Actors.RigPlayer>().Kind;
 		}
 
 		static sbyte QuantRot(float r) => (sbyte)Math.Clamp((int)MathF.Round(MathHelper.WrapAngle(r) * 32f), -127, 127);
@@ -281,7 +286,7 @@ namespace TerraCommand.Common.Physics
 			var c = (BodyPhysicsPlayer)clientPlayer;
 			if (c.syncedStatus != (byte)Actor.Status || c.syncedProne != (byte)Actor.Prone || c.syncedCrouch != (byte)(Actor.CrouchAmount * 10)
 				|| Math.Abs(c.syncedRot - QuantRot(Actor.Rot)) > 2 || c.syncedFlip != Actor.Flipped
-				|| Math.Abs(c.syncedAim - QuantRot(Actor.AimAngle)) > 2)
+				|| Math.Abs(c.syncedAim - QuantRot(Actor.AimAngle)) > 2 || c.syncedKind != (byte)Player.GetModPlayer<Actors.RigPlayer>().Kind)
 				SyncPlayer(-1, Main.myPlayer, false);
 		}
 
@@ -298,6 +303,7 @@ namespace TerraCommand.Common.Physics
 			p.Write(Actor.Flipped);
 			p.Write((byte)height);
 			p.Write(QuantRot(Actor.AimAngle));
+			p.Write((byte)Player.GetModPlayer<Actors.RigPlayer>().Kind);
 			p.Send(toWho, fromWho);
 		}
 
@@ -311,6 +317,7 @@ namespace TerraCommand.Common.Physics
 			bool flip = r.ReadBoolean();
 			int h = r.ReadByte();
 			float aim = r.ReadSByte() / 32f;
+			var kind = (Actors.ActorKind)r.ReadByte();
 			if (Main.netMode == NetmodeID.Server)
 				who = from;
 			Player p = Main.player[who];
@@ -323,6 +330,7 @@ namespace TerraCommand.Common.Physics
 			bp.Actor.Rot = rot;
 			bp.Actor.Flipped = flip;
 			bp.Actor.AimAngle = aim;
+			p.GetModPlayer<Actors.RigPlayer>().Kind = kind;
 			bp.height = Math.Clamp(h, CC.LyingHeight, CC.StandHeight);
 			bp.ApplyHeight();
 			if (Main.netMode == NetmodeID.Server)

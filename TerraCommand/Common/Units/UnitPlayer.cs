@@ -53,6 +53,8 @@ namespace TerraCommand.Common.Units
 		{
 			if (Player.whoAmI != Main.myPlayer || !TerraCommandConfig.Instance.TransferControlOnDeath)
 				return true;
+			if (Player.GetModPlayer<Actors.RigPlayer>().Kind == Actors.ActorKind.Brain)
+				return true; // the brain itself died: game over (BrainPlayer)
 			CloneUnit next = UnitSystem.TeamUnits(Player.team)
 				.OrderBy(u => Vector2.DistanceSquared(u.NPC.Center, Player.Center)).FirstOrDefault();
 			if (next == null)

@@ -99,6 +99,10 @@ namespace TerraCommand.Common.Actors
 		public int FlipFactor => Flipped ? -1 : 1;
 		public bool Lying => Status == ActorStatus.Unstable || Prone != ProneState.NotProne;
 
+		/// <summary>Leg speed scale and whether this body can run (the brain robot is slow).</summary>
+		public float SpeedScale = 1f;
+		public bool CanRun = true;
+
 		/// <summary>Max health for impulse damage (CC damage is a fraction of max health).</summary>
 		public float MaxHealth = 100f;
 
@@ -155,7 +159,7 @@ namespace TerraCommand.Common.Actors
 				if (Move != MoveState.Jump || Vel.LengthSquared() < 0.1f) {
 					MoveState old = Move;
 					Move = Prone != ProneState.NotProne ? MoveState.Crawl
-						: input.Fast && !input.Crouch ? MoveState.Run
+						: input.Fast && !input.Crouch && CanRun ? MoveState.Run
 						: MoveState.Walk;
 					if (old != Move)
 						foreach (Gait g in Legs)
@@ -241,6 +245,7 @@ namespace TerraCommand.Common.Actors
 						break;
 				}
 
+				pathSpeed *= SpeedScale;
 				float target = moveDir * CC.Speed(pathSpeed);
 				// slow bodies move their legs faster to get going (UpdateLimbPathSpeed)
 				float maxBody = CC.Speed(pathSpeed) * 0.5f;

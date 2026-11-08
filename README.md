@@ -8,12 +8,13 @@ Vanilla progression, blocks and enemies stay; the rules change around them:
 |---|---|
 | **Pixel terrain** | Every solid block is 8×8 "art pixels" (one 64-bit mask per tile). Pickaxes carve the pixels nearest the cursor at vanilla's pace (each hit removes pick power % of the block, doubled on soft ground), explosions blow round craters, bullets/arrows/bolts chip where they hit. Dirt and sand erode fast, stone slower, bricks slowest. Vanilla pickaxe-power requirements and boss gating still apply. When enough of a tile is gone (80% by default), what's left crumbles. |
 | **Multiple bodies** | Use a **Clone Body** to deploy an idle body. Press **Q** to take control of the body under the cursor, or cycle to the next one. Your current body, with its items and health, stays behind as an idle unit. Idle bodies hold position or follow you (**G**) and fight with whatever they're holding. If your body dies, it drops its gear and control jumps to your nearest idle body. You only truly die when you run out of bodies. |
-| **Orbital stockpile** | Place a **Launch Pad**, then right-click it with an item or just throw items onto it. Rockets carry the items into a stockpile shared by every player in the world. Open it with **K** to **craft** from it (a station counts as available when its item is in orbit, and buckets count as water/lava/honey) or to **order a drop pod** that crashes down next to you with equipment. With the **Orbital Constructor**, blocks and walls are placed straight from orbit: right-click a block in the menu to select it. |
+| **Brain** | Your team's brain is a slow walking robot with a brain in a jar. It's a body like the others: you start in it, and you can leave it idle somewhere safe while you fight in a soldier. If it's destroyed, it's game over and the world is lost for your team. |
+| **Ships & orbit** | Everything moves between the ground and orbit by **cargo ship**. In the orbital menu (**K**), pick cargo from the stockpile, or nothing for a pickup, then **Order ship** and click a landing zone. The ship flies down, lands and unloads; ordered Clone Bodies step out as soldiers. Throw items into a landed ship, or walk idle bodies into it, then **Launch ship**. When it leaves the atmosphere its cargo joins the stockpile shared by every player in the world. Enemies can shoot ships down, and the cargo is lost. From the menu you can also **craft** in orbit (a station counts as available when its item is in orbit, and buckets count as water/lava/honey). With the **Orbital Constructor**, blocks and walls are placed straight from orbit: right-click a block in the menu to select it. |
 
 | **Cortex Command bodies** | The body you control is a CC actor, built from CC's own numbers (see `docs/cc-actor-design.md`). It has CC gravity (about a quarter of Terraria's). It walks on its legs slowly and steadily: 0.8 px/tick, or 1.6 running. Jumping is the **jetpack**: a burst on press, then thrust that weakens as the 1.5 s tank drains and refills when you stop. The torso leans while walking and bends forward when crouched. Going prone dives you onto your belly to crawl. Moving too fast (thrown by a blast, falling about 20 tiles) throws the body off its feet. It then ragdolls, takes impact damage when it hits something, and gets back up after a second. A fall of about 32 tiles is lethal. Wings, rocket boots and extra jumps add jetpack fuel and thrust. Hooks still work; mounts and dashes are disabled. Collision is per pixel. |
 | **Aiming & damage** | Guns, bows and magic have spread that depends on stance: steady when crouched, wild when moving, airborne or using the jetpack. Recoil climbs under sustained fire, and the reticle shows current accuracy. Headshots do ×1.75. Hits leave visible wounds, which are cosmetic (no bleeding). Violent deaths gib. Bodies don't regenerate health naturally (there's a config option), but potions, buffs and accessories still heal. |
 
-New characters start with a Launch Pad, an Orbital Constructor and 2 Clone Bodies.
+A new team starts as its brain. The first ship lands next to it with two soldier bodies, and new characters also get an Orbital Constructor.
 
 ### Controls
 | Key | Action |
@@ -26,7 +27,7 @@ New characters start with a Launch Pad, an Orbital Constructor and 2 Clone Bodie
 | mouse | aim (the body turns to face it); reticle shows current spread |
 | Q | switch to the body under the cursor, or cycle to the next one |
 | G | toggle idle bodies between hold position and follow |
-| K | orbital menu (stockpile, fabricate, drop pods) |
+| K | orbital menu (stockpile, fabricate, order and launch ships) |
 
 Body constants are in `TerraCommand/Common/Actors/CCActor.cs` (class `CC`), ported from the CC Community Project's data
 files, with sources noted in `docs/cc-actor-design.md`. Spread, recoil and blast strength are still in
@@ -35,9 +36,9 @@ Unbind Terraria's own Smart Cursor (Ctrl) and Auto Select (Shift) if they get in
 
 ## Design decisions (easy to change)
 - **Progression stays with the player, not the body.** Max life and mana from crystals and other permanent upgrades belong to the player. Each body only carries its items, its equipment and its current health.
-- **Items must physically come down to be used.** Crafting and building happen in orbit, but weapons, armour and tools have to be delivered by drop pod. Drop pods are free for now. Charging coins from the stockpile (Cortex Command's "gold") is an obvious next step.
+- **Items must physically come down to be used.** Crafting and building happen in orbit, but weapons, armour and tools have to be delivered by ship. Ships are free for now. Charging coins from the stockpile (Cortex Command's "gold") is an obvious next step.
 - **Units belong to a team.** Players on the same team (or everyone, with no team) share bodies.
-- No Cortex Command assets, names or art are used. Only the mechanics are borrowed, and all art is generated by `tools/gen_art.py`.
+- No Cortex Command assets, names or art are used. Its mechanics and numbers are ported (see `docs/cc-actor-design.md`), and all art is original, generated by `tools/gen_art.py`. Actors are drawn from per-part PNGs in `TerraCommand/Content/Actors/`.
 
 ## Building
 ```bash
@@ -83,11 +84,13 @@ Scenario commands, one per tick (tile offsets are relative to the tile under the
 | `give item [n]`, `clearinv`, `hold item`, `pickup off\|on` | inventory (items by vanilla name, ID, or mod item name) |
 | `aim dx dy`, `aimtile dx dy`, `use ticks` | aim the cursor and hold the use button: really swings, places, mines |
 | `drop item n dx dy`, `droptile item n dx dy`, `interact dx dy [item n]` | world items, right-clicking tiles |
-| `stock item n`, `craft item [n]`, `order item n`, `buildkey item`, `menu` | orbital stockpile |
+| `stock item n`, `craft item [n]`, `buildkey item`, `menu` | orbital stockpile |
+| `ship dx [item n]...`, `shiplaunch`, `shiphit dmg` | cargo ships (`expect ships\|shipcargo\|delivered op n`, `expect shipstate descending\|unloading\|waiting\|ascending`) |
+| `claimbrain [starter]`, `kind brain\|soldier`, `killunit` | brain (`expect kind\|unitkind brain\|soldier`, `expect brainstate none\|alive\|lost`, `expect gameover yes\|no`) |
 | `carve dx dy r [power]`, `settile dx dy TileName`, `projectile name dx dy vx vy`, `spawnnpc name dx dy` | terrain / combat |
 | `switch`, `orders`, `hurt dmg` | bodies |
 | `screenshot name`, `probe n`, `log text` | output (`probe` logs aim and item-use state for n ticks) |
-| `expect stock\|inv item op n`, `expect units\|damaged\|ground\|life op n`, `expect projectiles name op n`, `expect npcs name op n`, `expect tile dx dy empty\|solid\|partial\|launchpad`, `expect wall dx dy`, `expect alive`, `expect menu open\|closed` | assertions (`op` is one of `>= <= > < == !=`) |
+| `expect stock\|inv item op n`, `expect units\|damaged\|ground\|life op n`, `expect projectiles name op n`, `expect npcs name op n`, `expect tile dx dy empty\|solid\|partial`, `expect wall dx dy`, `expect alive`, `expect menu open\|closed` | assertions (`op` is one of `>= <= > < == !=`) |
 
 ### Multiplayer testing
 ```bash
@@ -122,21 +125,24 @@ TerraCommand/
   Common/Physics/      BodyPhysicsPlayer (hosts the CCActor on the player, disables vanilla movement), Explosions, Tuning
   Common/Destruction/  PixelTerrain (masks, carving, sync, save), TerrainRules (hardness/softness),
                        PixelTerrainGlobalTile (partial-tile drawing), DestructionGlobalProjectile, PixelMining
-  Common/Orbital/      OrbitalStockpile (shared inventory), OrbitalCrafting, OrbitalNet (launch/craft/order/build requests)
+  Common/Orbital/      OrbitalStockpile (shared inventory), OrbitalCrafting, OrbitalNet (craft/build requests),
+                       ShipSystem (ordering ships, cargo, unloading/loading, launch, delivery, landing-zone picking)
+  Common/Units/BrainSystem  the team brain: claim on entering a world, game over and world lost when it dies
   Common/Units/        UnitLoadout (a body's items/health/looks), UnitSystem (spawn/swap/orders/save), UnitPlayer (controls, death transfer)
-  Common/UI/           OrbitalUISystem (stockpile / fabricate / drop pod menu)
+  Common/UI/           OrbitalUISystem (stockpile / fabricate / ship cargo menu)
   Common/Net/          PacketHandler; server is authoritative for terrain, stockpile and units
-  Content/             Launch Pad tile + entity, Clone Body, Orbital Constructor, CloneUnit NPC, rocket & drop pod projectiles
+  Content/             CargoShip and CloneUnit NPCs, Clone Body, Orbital Constructor, actor part art (Content/Actors)
 ```
 
 ## Roadmap
-1. **Play exactly like Cortex Command** (`docs/cc-actor-design.md`). Phase 1 (movement) and phase 2 (the CC body rig drawn
-   from Terraria skin and armor) are done. Next: CC controls and carried inventory (pie menu, pick up and drop),
+1. **Play exactly like Cortex Command** (`docs/cc-actor-design.md`). Done: CC movement; original CC-style actors made of
+   separate parts (IK legs on CC limb paths, arms on the weapon); the brain robot, whose loss ends the game; cargo ships to and
+   from orbit. Next: CC controls and carried inventory (pie menu, pick up and drop),
    then CC devices (magazines, reload, sharp aim with camera look-ahead, diggers), then clone bodies on the same actor with
    limb gibbing.
 2. Loose debris: carved pixels fall as particles and settle.
 3. Smarter unit AI: dig, take cover, use ammo and mana, use any weapon properly. Direct per-unit orders via a selection box.
-4. Coin-based drop pod and body costs, and buying from NPC shops through orbit.
+4. Coin-based ship and body costs (CC's gold), and buying from NPC shops through orbit.
 5. Bosses and large enemies that tunnel or blast terrain. Gibs.
 6. Per-corner lighting on carved tiles. Proper gib chunks (art) instead of particles.
 7. Keep per-item mod data (`ModItem` fields) in the stockpile.

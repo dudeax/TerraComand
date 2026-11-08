@@ -38,7 +38,7 @@ namespace TerraCommand.Common.Destruction
 		public override bool PreKill(Projectile projectile, int timeLeft)
 		{
 			// before vanilla deals the explosion's damage, so blast deaths gib
-			if (IsExplosive(projectile) && projectile.ModProjectile is not Content.Projectiles.LaunchRocket)
+			if (IsExplosive(projectile))
 				Physics.Explosions.MarkBlasted(projectile.Center, (Physics.Explosions.BlastRadiusTiles(projectile) + 2) * 16f);
 			return true;
 		}
@@ -47,11 +47,11 @@ namespace TerraCommand.Common.Destruction
 		{
 			if (IsExplosive(projectile))
 				Testing.AutoTest.Trace($"explosive {projectile.Name} died at {projectile.Center.ToTileCoordinates()}");
-			if (IsExplosive(projectile) && projectile.ModProjectile is not Content.Projectiles.LaunchRocket)
+			if (IsExplosive(projectile))
 				Physics.Explosions.Blast(projectile.Center, (Physics.Explosions.BlastRadiusTiles(projectile) + 2) * 16f, Physics.Tuning.BlastImpulse);
 			if (Main.netMode == NetmodeID.MultiplayerClient || !TerraCommandConfig.Instance.PixelExplosions)
 				return;
-			if (cratered || !IsExplosive(projectile) || projectile.ModProjectile is Content.Projectiles.DropPod)
+			if (cratered || !IsExplosive(projectile))
 				return;
 			// Explosives that don't destroy tiles in vanilla (grenades, Rocket I/III...) still scorch the ground.
 			Testing.AutoTest.Trace($"scorch {projectile.Name} at {projectile.Center.ToTileCoordinates()}");

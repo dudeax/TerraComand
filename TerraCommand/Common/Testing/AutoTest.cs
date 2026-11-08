@@ -59,7 +59,7 @@ namespace TerraCommand.Common.Testing
 		internal static readonly Dictionary<int, (int type, Vector2 pos)> Pinned = new();
 		static Vector2 markPos;
 		static float peakRise;
-		static int shotsLeft, shotGap, shotWait, gibsAtMark;
+		static int shotsLeft, shotGap, shotWait, gibsAtMark, deliveredAtMark;
 
 		static int EnvInt(string name, int def) => int.TryParse(Environment.GetEnvironmentVariable(name), out int v) ? v : def;
 
@@ -474,6 +474,7 @@ namespace TerraCommand.Common.Testing
 					P.GetModPlayer<Combat.AimPlayer>().ShotLog.Clear();
 					P.GetModPlayer<Combat.AimPlayer>().ConeLog.Clear();
 					gibsAtMark = Combat.DamageRules.GibCount;
+					deliveredAtMark = ShipSystem.Delivered;
 					break;
 				case "shoot": shotsLeft = I(a[1]); shotGap = I(a[2]); shotWait = 0; break;
 				case "aimnpc": { // aimnpc <NPCName> head|body : aim at the nearest such NPC
@@ -559,7 +560,19 @@ namespace TerraCommand.Common.Testing
 					OrbitalNet.RequestCraft(r, a.Length > 2 ? I(a[2]) : 1);
 					break;
 				}
-				case "order": OrbitalNet.RequestDropPod(new[] { (new StockKey(ItemType(a[1]), 0), I(a[2])) }, P.Center); break;
+				case "ship": { // ship <dx tiles> [Item count]... : order a ship from the stockpile, landing dx tiles from the player
+					var manifest = new List<(StockKey, int)>();
+					for (int i = 2; i + 1 < a.Length; i += 2)
+						manifest.Add((new StockKey(ItemType(a[i]), 0), I(a[i + 1])));
+					ShipSystem.RequestShip(P.team, manifest, P.Center + new Vector2(F(a[1]) * 16f, 0f));
+					break;
+				}
+				case "shiplaunch": ShipSystem.RequestLaunch(P); break;
+				case "shiphit": { // shiphit <damage> : enemy fire hits the nearest ship
+					NPC s = Main.npc.Where(n => n.active && n.ModNPC is Content.NPCs.CargoShip).OrderBy(n => Vector2.Distance(n.Center, P.Center)).First();
+					s.SimpleStrikeNPC(I(a[1]), 0);
+					break;
+				}
 				case "hurt": P.Hurt(PlayerDeathReason.LegacyDefault(), I(a[1]), 0, dodgeable: false); break;
 				case "sync": // barrier: wait until all TC_PEERS clients reached this label
 					if (syncDir == null) break;
@@ -571,6 +584,18 @@ namespace TerraCommand.Common.Testing
 				case "pickup": NoPickup = a[1] == "off"; break;
 				case "probe": Probe = I(a[1]); break;
 				case "screenshot": pendingShot = a[1]; shotFrames = shotWarmup; break;
+				case "claimbrain": // claimbrain [starter] : enter-world brain logic (tests otherwise start as plain soldiers)
+					Units.BrainSystem.claimInTests = true;
+					Units.BrainSystem.starterInTests = a.Length > 1 && a[1] == "starter";
+					Units.BrainSystem.OnEnterWorld(P);
+					Units.BrainSystem.claimInTests = false;
+					break;
+				case "killunit": { // killunit : destroy the nearest idle body
+					var u = UnitSystem.AllUnits().OrderBy(x => Vector2.Distance(x.NPC.Center, P.Center)).First();
+					u.NPC.StrikeInstantKill();
+					break;
+				}
+				case "kind": P.GetModPlayer<Actors.RigPlayer>().Kind = a[1] == "brain" ? Actors.ActorKind.Brain : Actors.ActorKind.Soldier; break;
 				case "dumptex": { // dumptex : save the player skin sheets (Players[0, i]) as PNGs into the run folder
 					for (int i = 0; i < Terraria.GameContent.TextureAssets.Players.GetLength(1); i++) {
 						var asset = Terraria.GameContent.TextureAssets.Players[0, i];
@@ -626,7 +651,6 @@ namespace TerraCommand.Common.Testing
 						"empty" => !has,
 						"solid" => has,
 						"partial" => has && PixelTerrain.TryGet(x, y, out var d) && d.Mask != 0,
-						"launchpad" => has && Main.tile[x, y].TileType == ModContent.TileType<Content.Tiles.LaunchPad>(),
 						_ => throw new ArgumentException("tile state must be empty|solid|partial|launchpad"),
 					};
 					Expect(ok, $"{desc} (tile {x},{y} has={has} type={Main.tile[x, y].TileType})");
@@ -647,6 +671,27 @@ namespace TerraCommand.Common.Testing
 				case "stance": { var st = P.GetModPlayer<Physics.BodyPhysicsPlayer>().Stance; Expect(st.ToString().ToLower() == a[2], $"{desc} (stance {st}, height {P.height})"); break; }
 				case "fuelnow": { float f = P.GetModPlayer<Physics.BodyPhysicsPlayer>().Fuel; Expect(Cmp(f, a[2], F(a[3])), $"{desc} (fuel {f:0})"); break; }
 				case "status": { var st = P.GetModPlayer<Physics.BodyPhysicsPlayer>().Actor.Status; Expect(st.ToString().ToLower() == a[2], $"{desc} (status {st}, rot {P.fullRotation:0.00})"); break; }
+				case "ships": { int n = ShipSystem.Ships().Count(); Expect(Cmp(n, a[2], F(a[3])), $"{desc} (have {n})"); break; }
+				case "shipstate": {
+					var s = ShipSystem.Ships().OrderBy(x => Vector2.Distance(x.NPC.Center, P.Center)).FirstOrDefault();
+					Expect(s != null && s.State.ToString().ToLower() == a[2], $"{desc} (state {s?.State}, at {s?.NPC.Bottom.ToTileCoordinates()})");
+					break;
+				}
+				case "shipcargo": {
+					var s = ShipSystem.Ships().OrderBy(x => Vector2.Distance(x.NPC.Center, P.Center)).FirstOrDefault();
+					int n = s == null ? 0 : ShipSystem.CargoCountClient(s.NPC.whoAmI);
+					Expect(Cmp(n, a[2], F(a[3])), $"{desc} (cargo {n})");
+					break;
+				}
+				case "delivered": Expect(Cmp(ShipSystem.Delivered - deliveredAtMark, a[2], F(a[3])), $"{desc} ({ShipSystem.Delivered - deliveredAtMark} since mark)"); break;
+				case "kind": { var k = P.GetModPlayer<Actors.RigPlayer>().Kind; Expect(k.ToString().ToLower() == a[2], $"{desc} (kind {k})"); break; }
+				case "brainstate": { var st = Units.BrainSystem.StateOf(P.team); Expect(st.ToString().ToLower() == a[2], $"{desc} (state {st})"); break; }
+				case "gameover": Expect(Units.BrainSystem.GameOver == (a[2] == "yes"), $"{desc} (game over {Units.BrainSystem.GameOver})"); break;
+				case "unitkind": {
+					var u = UnitSystem.AllUnits().OrderBy(x => Vector2.Distance(x.NPC.Center, P.Center)).FirstOrDefault();
+					Expect(u != null && u.Loadout.Kind.ToString().ToLower() == a[2], $"{desc} (unit kind {u?.Loadout.Kind})");
+					break;
+				}
 				case "height": Expect(Cmp(P.height, a[2], F(a[3])), $"{desc} (height {P.height})"); break;
 				case "knocked": Expect((P.GetModPlayer<Physics.BodyPhysicsPlayer>().KnockedTicks > 0) == (a[2] == "yes"), desc); break;
 				case "fuel": { float f = P.GetModPlayer<Physics.BodyPhysicsPlayer>().FuelMax; Expect(Cmp(f, a[2], F(a[3])), $"{desc} (max fuel {f:0})"); break; }

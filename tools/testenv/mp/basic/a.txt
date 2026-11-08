@@ -3,6 +3,10 @@ goto spawn
 pickup off
 wait 60
 sync start
+claimbrain                    # first of the team in: A is the brain
+wait 60
+expect kind brain
+sync brains
 
 # mining (server computes the pixel mask and broadcasts it)
 hold CopperPickaxe
@@ -12,14 +16,15 @@ wait 60
 expect tile 2 0 partial
 sync mined
 
-# launch pad placed by a client; items thrown on it go to the shared stockpile
-hold LaunchPadItem
-aimtile 3 -1
-use 4
-wait 30
-expect tile 3 -1 launchpad
-droptile Wood 60 3 -3
-wait 150
+# a client calls down an empty ship, throws wood into it and sends it up: it reaches the shared stockpile
+ship 5
+wait 520
+expect shipstate waiting
+droptile Wood 60 5 -3
+wait 90
+expect shipcargo >= 60
+shiplaunch
+wait 450
 expect stock Wood >= 60
 sync launched
 
@@ -30,6 +35,10 @@ expect tile -10 1 empty
 sync bombed
 
 # deploy a body
+pickup on
+give CloneBody 2
+wait 10
+pickup off
 hold CloneBody
 aim 90 -30
 use 2
@@ -39,10 +48,10 @@ sync deployed
 sync switched                 # B takes over that body
 expect units == 1             # B's old body is now the idle one
 
-# drop pod ordered by A, delivered on A
-order Wood 10
+# a ship ordered by A delivers wood next to A
+ship 3 Wood 10
 pickup on
-wait 360
+wait 560
 expect inv Wood >= 10
 screenshot a-final
 sync done

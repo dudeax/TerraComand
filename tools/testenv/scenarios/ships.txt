@@ -1,0 +1,42 @@
+# Cargo ships between the ground and orbit (they replace the launch pad and drop pods).
+nospawn
+clearnpcs
+goto spawn
+flatten 80 30
+wait 30
+
+# a new team's brain gets a first ship with two soldiers, landing next to it
+claimbrain starter
+expect kind brain
+wait 30
+expect ships == 1
+screenshot ship-starter-descending
+wait 450
+expect shipstate waiting
+expect units == 2                 # the two soldiers stepped out
+screenshot ship-starter-landed
+
+# idle bodies that walk into the bay go up with the ship (as bodies, with their gear)
+placeunit 7                       # stand the nearest body right in the ship's bay
+wait 40
+expect units <= 1
+expect shipcargo >= 1
+mark
+shiplaunch
+wait 450
+expect delivered >= 1
+expect stock CloneBody >= 1
+
+# order those bodies again: they step out where it lands
+ship -8 CloneBody 1
+wait 470
+expect shipstate waiting
+expect units >= 2
+
+# enemy fire can shoot a ship down: it explodes and the cargo is lost
+shiplaunch
+wait 20
+shiphit 5000
+wait 30
+expect ships == 0
+screenshot ship-destroyed

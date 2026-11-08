@@ -1,0 +1,18 @@
+# Losing the brain while controlling it ends the game too (no transfer to another body).
+nospawn
+clearnpcs
+goto spawn
+flatten 40 20
+wait 30
+claimbrain
+give CloneBody
+hold CloneBody
+aim 70 -30
+use 2
+wait 10
+expect units == 1
+hurt 9999
+wait 30
+expect brainstate lost
+expect gameover yes
+expect units == 1                  # control did not jump to the spare body

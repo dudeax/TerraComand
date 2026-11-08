@@ -26,27 +26,6 @@ class C:
 DARK=(40,44,52,255); STEEL=(120,128,140,255); LIGHT=(180,188,200,255); YEL=(240,200,40,255); BLK=(20,20,24,255)
 RED=(200,60,50,255); CYAN=(80,220,230,255); SKIN=(230,180,140,255); GREEN=(80,160,90,255)
 
-def pad_tile():
-    # 3x2 tile, 16px frames with 2px padding -> 54x36 px. Draw at 1x then place frames.
-    full = [[(0,0,0,0)]*54 for _ in range(36)]
-    art = C(24, 16)  # 48x32 art at scale 2
-    art.rect(0, 10, 23, 15, DARK); art.rect(0, 10, 23, 10, LIGHT)
-    for x in range(0, 24, 4): art.rect(x, 12, x+1, 13, YEL)
-    art.rect(2, 2, 3, 9, STEEL); art.rect(20, 2, 21, 9, STEEL)  # gantry arms
-    art.rect(2, 2, 6, 3, STEEL); art.rect(17, 2, 21, 3, STEEL)
-    art.set(3, 1, RED); art.set(20, 1, RED)
-    for fy in range(2):
-        for fx in range(3):
-            for y in range(16):
-                for x in range(16): full[fy*18+y][fx*18+x] = art.p[fy*16+y][fx*16+x]
-    png("Content/Tiles/LaunchPad.png", 54, 36, full)
-
-def pad_item():
-    c = C(16, 10); c.rect(0, 6, 15, 9, DARK); c.rect(0, 6, 15, 6, LIGHT)
-    for x in range(0, 16, 4): c.rect(x, 8, x+1, 8, YEL)
-    c.rect(1, 1, 1, 5, STEEL); c.rect(14, 1, 14, 5, STEEL); c.set(1, 0, RED); c.set(14, 0, RED)
-    c.save("Content/Tiles/LaunchPadItem.png")
-
 def body_item():
     c = C(11, 15)
     c.rect(1, 0, 9, 14, (60,90,120,255)); c.rect(2, 1, 8, 13, (140,210,230,180))
@@ -59,24 +38,6 @@ def wand():
     for i in range(10): c.set(2+i, 11-i, STEEL); c.set(3+i, 11-i, DARK)
     c.rect(10, 0, 13, 3, YEL); c.rect(11, 1, 12, 2, CYAN)
     c.save("Content/Items/OrbitalConstructor.png")
-
-def remote():
-    c = C(10, 14)
-    c.rect(1, 3, 8, 13, DARK); c.rect(2, 4, 7, 7, CYAN); c.rect(2, 9, 3, 10, RED); c.rect(6, 9, 7, 10, YEL)
-    c.rect(7, 0, 7, 2, STEEL); c.set(7, 0, RED)
-    c.save("Content/Items/OrbitalUplink.png")
-
-def pod():
-    c = C(13, 17)
-    c.rect(2, 2, 10, 14, STEEL); c.rect(3, 3, 9, 13, (90,96,110,255)); c.rect(5, 0, 7, 1, DARK)
-    c.rect(3, 6, 9, 7, YEL); c.rect(0, 13, 2, 16, DARK); c.rect(10, 13, 12, 16, DARK); c.rect(4, 15, 8, 16, RED)
-    c.save("Content/Projectiles/DropPod.png")
-
-def rocket():
-    c = C(7, 15)
-    c.rect(2, 1, 4, 11, LIGHT); c.set(3, 0, RED); c.rect(2, 4, 4, 5, DARK)
-    c.rect(0, 9, 1, 12, RED); c.rect(5, 9, 6, 12, RED); c.rect(2, 12, 4, 14, YEL)
-    c.save("Content/Projectiles/LaunchRocket.png")
 
 def unit_fallback():
     c = C(10, 21)
@@ -111,5 +72,66 @@ def jetpack():
     c.rect(1, 7, 3, 8, BLK); c.set(2, 8, (90, 90, 96, 255))   # nozzle
     c.save("Content/Actors/Jetpack.png")
 
+# ---------------------------------------------------------------- CC-style actors (original designs)
+# Each part is drawn facing right at Terraria's 2x art scale. Limbs hang straight down from their joint (top centre);
+# the renderer rotates them. Torso/jar stands on its hip (bottom centre); heads sit on the neck (bottom centre).
+
+OLIVE=(104,116,72,255); OLIVE_D=(66,74,46,255); OLIVE_L=(150,160,104,255); OUT=(28,30,22,255)
+VISOR=(80,190,210,255); VISOR_L=(170,240,250,255); BOOT=(58,44,34,255); BOOT_L=(92,72,54,255)
+METAL=(130,136,146,255); METAL_D=(78,82,92,255); METAL_L=(196,202,210,255)
+GLASS=(150,220,235,120); GLASS_L=(220,250,255,170); BRAIN=(226,120,150,255); BRAIN_D=(176,80,110,255)
+
+def soldier():
+    d = "Content/Actors/Soldier/"
+    t = C(6, 8)                                   # torso: 12x16, hip at bottom centre
+    t.rect(0, 0, 5, 7, OUT); t.rect(1, 1, 4, 5, OLIVE); t.rect(3, 1, 4, 4, OLIVE_L)   # chest plate on the front
+    t.rect(1, 0, 4, 0, OLIVE_D)                   # collar
+    t.rect(1, 6, 4, 6, OUT); t.set(3, 6, (200, 170, 60, 255))  # belt + buckle
+    t.rect(1, 7, 4, 7, OLIVE_D)                   # pelvis
+    t.save(d + "Torso.png")
+    h = C(6, 6)                                   # head: helmet + visor, sits on the neck
+    h.rect(0, 0, 5, 5, OUT); h.rect(1, 1, 4, 3, OLIVE); h.rect(1, 1, 3, 1, OLIVE_L)
+    h.rect(0, 2, 5, 2, OLIVE_D)                   # helmet rim
+    h.rect(3, 3, 5, 4, VISOR); h.set(5, 3, VISOR_L)
+    h.rect(1, 4, 2, 5, OLIVE_D)                   # jaw guard
+    h.save(d + "Head.png")
+    th = C(2, 4); th.rect(0, 0, 1, 3, OLIVE); th.rect(0, 0, 0, 3, OLIVE_D); th.set(1, 0, OLIVE_L); th.save(d + "Thigh.png")
+    sh = C(2, 4); sh.rect(0, 0, 1, 3, OLIVE_D); sh.rect(0, 0, 1, 0, OLIVE_L); sh.save(d + "Shin.png")       # knee pad on top
+    f = C(3, 2); f.rect(0, 0, 2, 1, BOOT); f.rect(0, 0, 1, 0, BOOT_L); f.set(2, 1, OUT); f.save(d + "Foot.png")
+    ua = C(2, 4); ua.rect(0, 0, 1, 3, OLIVE); ua.rect(0, 0, 1, 0, OLIVE_L); ua.save(d + "UpperArm.png")      # shoulder pad
+    fa = C(2, 4); fa.rect(0, 0, 1, 2, OLIVE_D); fa.rect(0, 3, 1, 3, OUT); fa.save(d + "Forearm.png")        # glove at the end
+
+def brainbot():
+    d = "Content/Actors/Brain/"
+    t = C(8, 9)                                   # the jar is the torso: 16x18, hip at bottom centre
+    t.rect(1, 0, 6, 0, METAL_D); t.rect(0, 1, 7, 1, METAL)                      # lid
+    t.rect(0, 2, 7, 6, GLASS); t.rect(1, 3, 6, 5, BRAIN); t.rect(2, 3, 2, 5, BRAIN_D); t.rect(4, 3, 4, 5, BRAIN_D)
+    t.rect(1, 2, 1, 5, GLASS_L)                                                  # glint
+    t.rect(0, 7, 7, 8, METAL_D); t.rect(1, 7, 6, 7, METAL); t.set(5, 8, (230, 70, 60, 255))  # base + status light
+    t.save(d + "Torso.png")
+    h = C(4, 2); h.rect(0, 0, 3, 1, METAL_D); h.rect(1, 0, 3, 0, METAL_L); h.set(3, 1, (230, 70, 60, 255)); h.save(d + "Head.png")  # sensor
+    th = C(3, 4); th.rect(0, 0, 2, 3, METAL); th.rect(0, 0, 0, 3, METAL_D); th.save(d + "Thigh.png")
+    sh = C(3, 4); sh.rect(0, 0, 2, 3, METAL_D); sh.rect(0, 0, 2, 0, METAL_L); sh.save(d + "Shin.png")
+    f = C(4, 2); f.rect(0, 0, 3, 1, METAL_D); f.rect(0, 0, 2, 0, METAL); f.save(d + "Foot.png")
+    ua = C(2, 4); ua.rect(0, 0, 1, 3, METAL); ua.save(d + "UpperArm.png")
+    fa = C(2, 4); fa.rect(0, 0, 1, 3, METAL_D); fa.rect(0, 3, 1, 3, METAL_L); fa.save(d + "Forearm.png")
+
+def ship():
+    # an original cargo rocket: 14x34 art (28x68 px), door on the lower body, fins and a nozzle at the bottom
+    c = C(14, 34)
+    HULL=(176,182,190,255); HULL_D=(112,118,128,255); HULL_L=(222,226,232,255); STRIPE=(200,120,40,255)
+    for y in range(0, 7):                                   # nose cone
+        half = 1 + y * 5 // 6
+        c.rect(7 - half, y, 6 + half, y, HULL); c.set(7 - half, y, HULL_D); c.set(6 + half, y, HULL_D)
+    c.rect(6, 0, 7, 1, RED)
+    c.rect(2, 7, 11, 29, HULL); c.rect(2, 7, 2, 29, HULL_D); c.rect(11, 7, 11, 29, HULL_D); c.rect(4, 7, 4, 29, HULL_L)
+    c.rect(2, 15, 11, 15, STRIPE); c.rect(2, 16, 11, 16, HULL_D)
+    c.rect(6, 9, 8, 11, BLK); c.rect(6, 9, 7, 10, CYAN)    # window
+    c.rect(4, 19, 9, 27, HULL_D); c.rect(5, 20, 8, 26, (150, 156, 166, 255)); c.set(8, 23, YEL)   # cargo door (closed)
+    for x0, x1 in ((0, 1), (12, 13)):                       # fins
+        c.rect(x0, 24, x1, 33, HULL_D); c.rect(x0, 24, x1, 24, HULL)
+    c.rect(4, 30, 9, 33, DARK); c.rect(5, 32, 8, 33, BLK)  # nozzle
+    c.save("Content/NPCs/CargoShip.png")
+
 if __name__ == "__main__":
-    pad_tile(); pad_item(); body_item(); wand(); remote(); pod(); rocket(); unit_fallback(); icon(); jetpack()
+    body_item(); wand(); unit_fallback(); icon(); jetpack(); soldier(); brainbot(); ship()

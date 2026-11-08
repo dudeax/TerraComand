@@ -23,22 +23,28 @@ projectile Bullet -80 -60 0 12
 wait 20
 screenshot 02-craters
 
-# ---- launch pad: placed with the real item, auto-launches items thrown onto it
-hold LaunchPadItem
-aimtile 3 -1
-use 4
-wait 5
-expect tile 3 -1 launchpad
-pickup off   # the pad is within the player's grab range
-droptile Wood 60 3 -3
-wait 30
-screenshot 03-launch
+# ---- a cargo ship: called down empty, loaded by throwing things into it, sent back up to the stockpile
+stock StoneBlock 40
+ship 6
 wait 60
+expect shipstate descending
+screenshot 03-ship-descending
+wait 400
+expect shipstate waiting
+pickup off   # the ship is within the player's grab range
+droptile Wood 60 6 -3
+wait 60
+expect shipcargo >= 60
+screenshot 03b-ship-landed
+mark
+shiplaunch
+wait 30
+expect shipstate ascending
+wait 400
+expect delivered >= 1
 expect stock Wood >= 60
-expect inv Wood == 0
+expect ships == 0
 pickup on
-interact 3 -1 StoneBlock 40
-expect stock StoneBlock >= 40
 
 # ---- crafting in orbit: work bench first, then a recipe that needs it
 craft WorkBench
@@ -62,14 +68,17 @@ wait 5
 expect tile -3 -3 solid
 expect stock StoneBlock <= 39
 
-# ---- drop pod delivery
-order WoodenChair 1
-wait 45
-screenshot 05-droppod-falling
-wait 150
-expect inv WoodenChair >= 1
+# ---- ship delivery: ordered cargo is unloaded beside the landed ship
+ship -6 WoodenChair 1
+wait 460
+expect shipstate waiting
+screenshot 05-ship-delivered
+expect ground >= 1
+shiplaunch
+wait 400
 
 # ---- bodies: deploy, swap into it, swap back
+give CloneBody 2
 hold CloneBody
 aim 70 -30
 use 2

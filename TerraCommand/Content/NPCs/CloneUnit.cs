@@ -115,6 +115,8 @@ namespace TerraCommand.Content.NPCs
 		public override void AI()
 		{
 			Loadout.Life = NPC.life;
+			if (NPC.velocity.Y == 0f)
+				walkDist += Math.Abs(NPC.velocity.X); // drives the legs' gait when drawn
 			if (fireCooldown > 0)
 				fireCooldown--;
 			NPC.GravityMultiplier = MultipliableFloat.One * (Common.Physics.Tuning.Gravity / 0.3f);
@@ -255,6 +257,8 @@ namespace TerraCommand.Content.NPCs
 		public override void OnKill()
 		{
 			Loadout.DropAll(NPC.GetSource_Death(), NPC.Hitbox);
+			if (Loadout.Kind == Common.Actors.ActorKind.Brain)
+				Common.Units.BrainSystem.BrainDestroyed(Team); // the idle brain was destroyed: game over for its team
 		}
 
 		// ------------------------------------------------------------ net
@@ -286,6 +290,7 @@ namespace TerraCommand.Content.NPCs
 		{
 			dummy ??= new Player();
 			Loadout.ApplyVisuals(dummy);
+			dummy.GetModPlayer<Common.Actors.RigPlayer>().Kind = Loadout.Kind;
 			dummy.direction = NPC.direction == 0 ? 1 : NPC.direction;
 			dummy.fullRotation = KnockedTicks > 0 ? knockDir * MathHelper.PiOver2 * Math.Min(1f, KnockedTicks / 10f) : 0f;
 			dummy.fullRotationOrigin = new Vector2(dummy.width / 2f, dummy.height / 2f);
@@ -300,13 +305,28 @@ namespace TerraCommand.Content.NPCs
 			return dummy;
 		}
 
+		static readonly System.Collections.Generic.List<Common.Actors.RigPiece> rigPieces = new();
+		float walkDist;
+
 		public override bool PreDraw(SpriteBatch spriteBatch, Vector2 screenPos, Color drawColor)
 		{
-			VisualBody();
-			spriteBatch.End();
-			Main.PlayerRenderer.DrawPlayers(Main.Camera, new[] { dummy });
-			spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, Main.DefaultSamplerState, DepthStencilState.None,
-				Main.Rasterizer, null, Main.GameViewMatrix.TransformationMatrix);
+			int dir = NPC.direction == 0 ? 1 : NPC.direction;
+			var pose = new Common.Actors.RigPose {
+				Kind = Loadout.Kind,
+				Feet = NPC.Bottom + new Vector2(0f, NPC.gfxOffY),
+				Dir = dir,
+				Rot = KnockedTicks > 0 ? knockDir * MathHelper.PiOver2 * Math.Min(1f, KnockedTicks / 10f) : 0f,
+				AimAngle = 0f,
+				Unstable = KnockedTicks > 0,
+				Grounded = NPC.velocity.Y == 0f,
+				VelX = NPC.velocity.X,
+				WalkDist = walkDist,
+				Held = Loadout.Held,
+				Light = drawColor,
+			};
+			rigPieces.Clear();
+			Common.Actors.RigRenderer.Build(pose, rigPieces);
+			Common.Actors.RigRenderer.Draw(spriteBatch, rigPieces);
 
 			// Order marker above the head; highlighted when the mouse hovers this body.
 			bool hover = NPC.Hitbox.Contains(Main.MouseWorld.ToPoint());

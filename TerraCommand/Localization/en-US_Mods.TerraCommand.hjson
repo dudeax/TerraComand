@@ -32,7 +32,11 @@ Items: {
 }
 
 Tiles.LaunchPad.MapEntry: Launch Pad
-NPCs.CloneUnit.DisplayName: Clone
+
+NPCs: {
+	CloneUnit.DisplayName: Clone
+	CargoShip.DisplayName: Cargo Ship
+}
 
 Projectiles: {
 	LaunchRocket.DisplayName: Cargo Rocket

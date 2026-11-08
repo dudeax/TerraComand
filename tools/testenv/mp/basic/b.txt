@@ -3,11 +3,16 @@ goto spawn
 pickup off
 wait 60
 sync start
+wait 30
+claimbrain                    # the team already has a brain (A): B stays a soldier
+wait 60
+expect kind soldier
+expect brainstate alive
+sync brains
 sync mined
 expect tile 2 0 partial       # A's pickaxe bite is visible here
 sync launched
-expect tile 3 -1 launchpad
-expect stock Wood >= 60       # shared stockpile reached B
+expect stock Wood >= 60       # the ship's cargo reached the shared stockpile, seen by B
 craft WorkBench               # B crafts from the shared stockpile
 wait 60
 expect stock WorkBench >= 1

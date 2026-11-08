@@ -44,6 +44,13 @@ namespace TerraCommand.Common.Units
 			return idx;
 		}
 
+		/// <summary>Authority: a fresh, empty soldier body (delivered by a ship).</summary>
+		public static int SpawnFresh(Vector2 bottom, int team) =>
+			Spawn(bottom, new UnitLoadout { Life = 100, Kind = Actors.ActorKind.Soldier }, team, UnitOrder.Sentry, 100);
+
+		/// <summary>Authority: remove an idle body (e.g. loaded into a ship).</summary>
+		public static void DespawnUnit(NPC npc) => Despawn(npc);
+
 		static void Despawn(NPC npc)
 		{
 			npc.active = false;

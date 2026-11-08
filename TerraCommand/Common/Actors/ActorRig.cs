@@ -12,202 +12,342 @@ using TerraCommand.Common.Physics;
 
 namespace TerraCommand.Common.Actors
 {
+	public enum ActorKind : byte { Soldier, Brain }
+
 	/// <summary>
-	/// Draws a player's body as a Cortex Command actor rig, re-posing the pieces vanilla draws (so skin, armor, vanity and dyes
-	/// all still show): the torso leans/tumbles around the hip, the head turns toward the aim, both arms hold the aim, the held
-	/// item is always shown in the hands pointing at the aim, and the legs step with the CC gait (Terraria's walk frames advanced
-	/// by distance actually covered, so feet don't slide), squash when crouched, and lie along the body when prone or thrown.
+	/// One actor type's part sprites and proportions (px). Parts are original art (tools/gen_art.py), drawn facing right:
+	/// limbs hang down from their joint, the torso stands on the hip, the head sits on the neck. Replace the PNGs in
+	/// Content/Actors/&lt;Kind&gt;/ to restyle an actor.
 	/// </summary>
-	public class RigPlayer : ModPlayer
+	public sealed class ActorArt
 	{
-		// Joint positions in the vanilla 40x56 player frame (facing right): the frame's row 52 sits on the hitbox's bottom.
-		const float HipAboveFeet = 10f;      // frame y 42
-		const float NeckAboveFeet = 23f;     // frame y 29
-		const float ShoulderAboveFeet = 23f; // composite shoulder: Center + (-4*dir, -2) on a 42px body
-		const float LegLength = 11f;
-		const float StepPx = 3.6f;           // ground covered per walk frame (14 frames ~ one CC stride cycle)
+		public Asset<Texture2D> Head, Torso, Thigh, Shin, Foot, UpperArm, Forearm;
+		public float HipHeight = 15f, CrouchHipHeight = 9f;   // hip above the soles
+		public float ThighLen = 7f, ShinLen = 7f, AnkleToSole = 2f;
+		public float UpperArmLen = 7f, ForearmLen = 7f;
+		public Vector2 Shoulder = new(1f, -13f), Neck = new(1f, -15f);
+		public Vector2 FootAnkle = new(2f, 1f);               // ankle pixel inside the foot sprite (toe to the right)
+		public Vector2 JetpackAt = new(-7f, -9f);
+		public bool HasJetpack = true;
 
-		float walkDist;
-		public float LegsSquash = 1f;        // 1 standing, < 1 crouched
+		static readonly Dictionary<ActorKind, ActorArt> all = new();
 
-		BodyPhysicsPlayer Body => Player.GetModPlayer<BodyPhysicsPlayer>();
+		public static ActorArt Get(ActorKind kind)
+		{
+			if (all.TryGetValue(kind, out ActorArt a))
+				return a;
+			string dir = kind == ActorKind.Brain ? "Brain" : "Soldier";
+			Asset<Texture2D> R(string n) => ModContent.Request<Texture2D>($"TerraCommand/Content/Actors/{dir}/{n}");
+			a = new ActorArt {
+				Head = R("Head"), Torso = R("Torso"), Thigh = R("Thigh"), Shin = R("Shin"), Foot = R("Foot"),
+				UpperArm = R("UpperArm"), Forearm = R("Forearm"),
+			};
+			if (kind == ActorKind.Brain) {
+				a.Shoulder = new(0f, -12f);
+				a.Neck = new(0f, -18f);
+				a.FootAnkle = new(3f, 1f);
+				a.UpperArmLen = a.ForearmLen = 6f;
+				a.HasJetpack = false;
+				a.CrouchHipHeight = 11f;
+			}
+			all[kind] = a;
+			return a;
+		}
 
-		/// <summary>World-space (screen-oriented) angle of the aim.</summary>
-		public float AimWorldAngle {
-			get {
-				CCActor a = Body.Actor;
-				return a.Flipped ? MathHelper.Pi + a.AimAngle : -a.AimAngle;
+		public static void Unload() => all.Clear();
+	}
+
+	/// <summary>Everything needed to pose an actor for one frame.</summary>
+	public struct RigPose
+	{
+		public ActorKind Kind;
+		public Vector2 Feet;            // world: bottom-centre of the hitbox
+		public int Dir;                 // 1 facing right, -1 left
+		public float Rot;               // torso rotation (screen-clockwise)
+		public float AimAngle;          // CC aim angle: + up, - down (relative to facing)
+		public float Crouch;            // 0..1
+		public bool Prone, Unstable, Grounded;
+		public float VelX;
+		public float WalkDist;          // ground covered (drives the gait)
+		public Item Held;
+		public bool HeldInUse;          // vanilla is animating a swing: don't draw our copy
+		public Color Light;
+	}
+
+	/// <summary>A sprite to draw (world position).</summary>
+	public readonly record struct RigPiece(Texture2D Tex, Vector2 Pos, Rectangle? Src, Color Color, float Rot, Vector2 Origin, float Scale, SpriteEffects Fx);
+
+	/// <summary>
+	/// Poses a Cortex Command style actor from separate parts: two-bone legs whose feet follow the CC limb paths and plant on the
+	/// actual ground pixels, two-bone arms that reach the held weapon's grip and fore-grip, a torso that leans/tumbles about the
+	/// hip, a head that looks toward the aim, and the jetpack on the back.
+	/// </summary>
+	public static class RigRenderer
+	{
+		/// <summary>Where the hip goes: lowered by the crouch, and moved so a lying body is centred on its (short) hitbox.</summary>
+		public static Vector2 Hip(in RigPose p, ActorArt art)
+		{
+			float lying = Lying(p);
+			float stand = MathHelper.Lerp(art.HipHeight, art.CrouchHipHeight, p.Crouch);
+			return p.Feet + new Vector2(-p.Dir * 6.5f * lying, -MathHelper.Lerp(stand, 6f, lying));
+		}
+
+		public static float Lying(in RigPose p) => Math.Clamp((Math.Abs(MathF.Sin(p.Rot)) - 0.3f) / 0.5f, 0f, 1f);
+
+		/// <summary>Aim direction in the world (screen-oriented angle).</summary>
+		public static float AimWorld(in RigPose p) => p.Dir < 0 ? MathHelper.Pi + p.AimAngle : -p.AimAngle;
+
+		public static Vector2 NozzleWorld(in RigPose p)
+		{
+			ActorArt art = ActorArt.Get(p.Kind);
+			return Hip(p, art) + new Vector2(art.JetpackAt.X * p.Dir, art.JetpackAt.Y + 9f).RotatedBy(p.Rot);
+		}
+
+		/// <summary>Where the front hand grips the held item (world).</summary>
+		public static Vector2 Grip(in RigPose p)
+		{
+			ActorArt art = ActorArt.Get(p.Kind);
+			Vector2 shoulder = Hip(p, art) + new Vector2(art.Shoulder.X * p.Dir, art.Shoulder.Y).RotatedBy(p.Rot);
+			return shoulder + AimWorld(p).ToRotationVector2() * 8f + new Vector2(0f, 1.5f);
+		}
+
+		public static void Build(RigPose p, List<RigPiece> outList)
+		{
+			ActorArt art = ActorArt.Get(p.Kind);
+			if (!art.Torso.IsLoaded || !art.Thigh.IsLoaded)
+				return;
+			int dir = p.Dir;
+			float rot = p.Rot;
+			Vector2 hip = Hip(p, art);
+			SpriteEffects fx = dir > 0 ? SpriteEffects.None : SpriteEffects.FlipHorizontally;
+			Color light = p.Light, back = p.Light.MultiplyRGB(new Color(165, 165, 165));
+			bool lying = p.Prone || p.Unstable;
+			float legFrame = lying ? rot : 0f;   // upright legs keep world orientation; only the torso leans
+			bool holding = IsHoldable(p.Held) && !p.Unstable;
+			Vector2 W(Vector2 local) => hip + local.RotatedBy(rot);
+
+			// ---------------- legs
+			Vector2 FootLocal(int leg)
+			{
+				if (p.Unstable)
+					return new Vector2((leg == 0 ? 2 : -3) * dir, art.HipHeight - 2f);
+				bool moving = Math.Abs(p.VelX) > 0.05f && p.Grounded;
+				if (moving) {
+					LimbPath path = p.Prone ? LimbPaths.Crawl : Math.Abs(p.VelX) > 1.1f ? LimbPaths.Run : LimbPaths.Walk;
+					float prog = (p.WalkDist / path.Length + (leg == 0 ? 0f : 0.5f)) % 1f;
+					Vector2 at = path.At(prog * path.Length, out _);
+					bool backwards = Math.Sign(p.VelX) != dir;   // walking backwards runs the path the other way
+					return new Vector2(at.X * (backwards ? -dir : dir), at.Y);
+				}
+				if (p.Prone)
+					return new Vector2((leg == 0 ? 1 : -1) * dir, art.HipHeight);
+				if (!p.Grounded)
+					return new Vector2((leg == 0 ? 3 : -3) * dir, art.HipHeight - 3f);
+				float h = MathHelper.Lerp(art.HipHeight, art.CrouchHipHeight, p.Crouch);
+				float spread = MathHelper.Lerp(3.5f, 5f, p.Crouch);
+				return new Vector2((leg == 0 ? spread : -spread) * dir, h);
+			}
+
+			void Leg(int leg, Color c)
+			{
+				Vector2 joint = hip + new Vector2((leg == 0 ? 1 : -1) * dir, 0f).RotatedBy(legFrame);
+				Vector2 local = FootLocal(leg);
+				Vector2 sole = hip + local.RotatedBy(legFrame);
+				if (!lying && p.Grounded) {
+					// plant the foot on the actual ground (pixel terrain): feet step onto bumps and into dips
+					float ground = GroundBelow(new Vector2(sole.X, hip.Y), art.HipHeight + 6f);
+					if (sole.Y > ground)
+						sole.Y = ground;
+				}
+				Vector2 ankle = sole - new Vector2(0f, art.AnkleToSole).RotatedBy(legFrame);
+				Vector2 knee = Ik(joint, ankle, art.ThighLen, art.ShinLen, (new Vector2(dir, 0f)).RotatedBy(legFrame));
+				ankle = knee + (ankle - knee).SafeNormalize(Vector2.UnitY) * art.ShinLen; // where the leg actually reaches
+				Bone(art.Thigh.Value, joint, knee, c);
+				Bone(art.Shin.Value, knee, ankle, c);
+				Texture2D foot = art.Foot.Value;
+				Vector2 o = dir > 0 ? art.FootAnkle : new Vector2(foot.Width - art.FootAnkle.X, art.FootAnkle.Y);
+				outList.Add(new RigPiece(foot, ankle, null, c, legFrame, o, 1f, fx));
+			}
+
+			// ---------------- arms
+			Vector2 frontShoulder = W(new Vector2(art.Shoulder.X * dir, art.Shoulder.Y));
+			Vector2 aimDir = AimWorld(p).ToRotationVector2();
+			Vector2 grip = frontShoulder + aimDir * 8f + new Vector2(0f, 1.5f);
+
+			void Arm(int arm, Color c)
+			{
+				Vector2 shoulder = arm == 0 ? frontShoulder : W(new Vector2(-art.Shoulder.X * dir, art.Shoulder.Y));
+				Vector2 hand;
+				if (holding)
+					hand = arm == 0 ? grip : grip + aimDir * (IsGunLike(p.Held) ? 6f : 2f);
+				else {
+					// arms hang and swing a little with the stride; thrown bodies flail
+					float swing = MathF.Sin(p.WalkDist / 9f + arm * MathHelper.Pi) * (p.Grounded ? 3f : 1f);
+					hand = p.Unstable ? shoulder + new Vector2(swing * 0.5f, 12f) : shoulder + new Vector2(swing * dir, 12f).RotatedBy(rot);
+				}
+				Vector2 elbow = Ik(shoulder, hand, art.UpperArmLen, art.ForearmLen, new Vector2(0f, 1f).RotatedBy(holding ? 0f : rot) - new Vector2(dir * 0.3f, 0f));
+				hand = elbow + (hand - elbow).SafeNormalize(Vector2.UnitY) * art.ForearmLen;
+				Bone(art.UpperArm.Value, shoulder, elbow, c);
+				Bone(art.Forearm.Value, elbow, hand, c);
+			}
+
+			// ---------------- draw order (facing): back arm, back leg, jetpack, torso, head, front leg, held item, front arm
+			Arm(1, back);
+			Leg(1, back);
+			if (art.HasJetpack && RigPlayer.JetpackTex != null && RigPlayer.JetpackTex.IsLoaded) {
+				Texture2D jt = RigPlayer.JetpackTex.Value;
+				outList.Add(new RigPiece(jt, W(new Vector2(art.JetpackAt.X * dir, art.JetpackAt.Y)), null, light, rot, jt.Size() / 2f, 1f, fx));
+			}
+			Texture2D torso = art.Torso.Value;
+			outList.Add(new RigPiece(torso, hip, null, light, rot, new Vector2(torso.Width / 2f, torso.Height), 1f, fx));
+			Texture2D head = art.Head.Value;
+			float headTurn = p.Unstable ? 0f : Math.Clamp(-p.AimAngle * 0.45f * dir - rot * 0.4f, -0.6f, 0.6f);
+			outList.Add(new RigPiece(head, W(new Vector2(art.Neck.X * dir, art.Neck.Y)), null, light, rot + headTurn,
+				new Vector2(head.Width / 2f, head.Height), 1f, fx));
+			Leg(0, light);
+			if (holding && !p.HeldInUse)
+				Held(grip);
+			Arm(0, light);
+
+			void Held(Vector2 at)
+			{
+				Item item = p.Held;
+				Main.instance.LoadItem(item.type);
+				Texture2D tex = TextureAssets.Item[item.type].Value;
+				Rectangle src = Main.itemAnimations[item.type] != null ? Main.itemAnimations[item.type].GetFrame(tex) : tex.Frame();
+				float aim = AimWorld(p);
+				Color c = item.GetAlpha(light);
+				if (IsGunLike(item)) {
+					outList.Add(new RigPiece(tex, at, src, c, aim, new Vector2(src.Width * 0.3f, src.Height * 0.55f), item.scale,
+						dir > 0 ? SpriteEffects.None : SpriteEffects.FlipVertically));
+				}
+				else {
+					// swords and tools are drawn diagonally (handle bottom-left): lay the blade along the aim
+					float r = dir > 0 ? aim + MathHelper.PiOver4 : aim - MathHelper.Pi - MathHelper.PiOver4 + MathHelper.TwoPi;
+					Vector2 o = dir > 0 ? new Vector2(src.Width * 0.15f, src.Height * 0.85f) : new Vector2(src.Width * 0.85f, src.Height * 0.85f);
+					outList.Add(new RigPiece(tex, at, src, c, r, o, item.scale, fx));
+				}
+			}
+
+			void Bone(Texture2D tex, Vector2 from, Vector2 to, Color c)
+			{
+				float r = (to - from).ToRotation() - MathHelper.PiOver2;   // sprites hang straight down from the joint
+				outList.Add(new RigPiece(tex, from, null, c, r, new Vector2(tex.Width / 2f, 1f), 1f, fx));
 			}
 		}
 
-		bool UsingItem => Player.itemAnimation > 0;
+		/// <summary>Only weapons and tools are carried in the hands; everything else stays in the inventory.</summary>
+		public static bool IsHoldable(Item item) =>
+			item != null && !item.IsAir && (item.damage > 0 || item.pick > 0 || item.axe > 0 || item.hammer > 0) && !item.consumable;
 
-		// ------------------------------------------------------------ pose (after vanilla's PlayerFrame)
+		public static bool IsGunLike(Item item) =>
+			item != null && (item.useStyle == ItemUseStyleID.Shoot || item.useStyle == ItemUseStyleID.HoldUp && item.shoot > 0);
+
+		/// <summary>Two-bone IK from <paramref name="a"/> to <paramref name="c"/>: the middle joint, bent toward <paramref name="bend"/>.</summary>
+		static Vector2 Ik(Vector2 a, Vector2 c, float l1, float l2, Vector2 bend)
+		{
+			Vector2 d = c - a;
+			float dist = Math.Clamp(d.Length(), Math.Abs(l1 - l2) + 0.01f, l1 + l2 - 0.01f);
+			float baseAng = d.ToRotation();
+			float cos = (l1 * l1 + dist * dist - l2 * l2) / (2f * l1 * dist);
+			float off = MathF.Acos(Math.Clamp(cos, -1f, 1f));
+			Vector2 j1 = a + (baseAng + off).ToRotationVector2() * l1;
+			Vector2 j2 = a + (baseAng - off).ToRotationVector2() * l1;
+			return Vector2.Dot(j1 - a, bend) >= Vector2.Dot(j2 - a, bend) ? j1 : j2;
+		}
+
+		/// <summary>The first solid pixel below a point (within a range), else the end of the range.</summary>
+		static float GroundBelow(Vector2 from, float range)
+		{
+			for (float y = 0; y < range; y += 1f)
+				if (Collision.SolidCollision(new Vector2(from.X, from.Y + y), 1, 1))
+					return from.Y + y;
+			return from.Y + range;
+		}
+
+		/// <summary>Draws pieces straight to a sprite batch (for bodies that aren't players, e.g. idle clones).</summary>
+		public static void Draw(SpriteBatch sb, List<RigPiece> pieces)
+		{
+			foreach (RigPiece r in pieces)
+				sb.Draw(r.Tex, (r.Pos - Main.screenPosition).Floor(), r.Src, r.Color, r.Rot, r.Origin, r.Scale, r.Fx, 0f);
+		}
+	}
+
+	/// <summary>Draws the player's body as a CC actor instead of the Terraria character (armor still counts, but isn't shown).</summary>
+	public class RigPlayer : ModPlayer
+	{
+		public static Asset<Texture2D> JetpackTex;
+		public float WalkDist;
+		public ActorKind Kind = ActorKind.Soldier;
+
+		public override void Load()
+		{
+			if (!Main.dedServ)
+				JetpackTex = ModContent.Request<Texture2D>("TerraCommand/Content/Actors/Jetpack");
+		}
+
+		public override void Unload()
+		{
+			JetpackTex = null;
+			ActorArt.Unload();
+		}
+
+		public override void SaveData(Terraria.ModLoader.IO.TagCompound tag) => tag["kind"] = (byte)Kind;
+
+		public override void LoadData(Terraria.ModLoader.IO.TagCompound tag) => Kind = (ActorKind)tag.GetByte("kind");
 
 		public override void PostUpdate()
 		{
-			CCActor a = Body.Actor;
 			Player.fullRotation = 0f;
-			Player.bodyFrame.Y = 0;
-
-			// legs: walk frames advance with the ground actually covered
-			bool stable = a.Status == ActorStatus.Stable;
-			bool onGround = Player.velocity.Y == 0f;
-			if (onGround && Math.Abs(Player.velocity.X) > 0.05f)
-				walkDist += Math.Abs(Player.velocity.X);
-			int frame = 0;
-			if (!stable || !onGround)
-				frame = 5;                                                   // legs loose in the air / tumbling
-			else if (Math.Abs(Player.velocity.X) > 0.05f)
-				frame = 6 + (int)(walkDist / StepPx) % 14;                   // walk / run / crawl cycle
-			Player.legFrame.Y = Player.legFrame.Height * frame;
-
-			LegsSquash = stable && a.Prone == ProneState.NotProne ? MathHelper.Lerp(1f, 0.55f, a.CrouchAmount) : 1f;
-
-			// arms hold the aim (relative to the leaning torso), unless vanilla is animating an item use
-			if (!UsingItem && !Player.dead) {
-				// thrown bodies go limp: the arms hang (and swing a little) instead of aiming
-				float world = stable ? AimWorldAngle : MathHelper.PiOver2 + MathF.Sin(Main.GameUpdateCount * 0.3f) * 0.4f;
-				float r = world - a.Rot - MathHelper.PiOver2;
-				Player.SetCompositeArmFront(true, Player.CompositeArmStretchAmount.Full, r);
-				Player.SetCompositeArmBack(true, Player.CompositeArmStretchAmount.ThreeQuarters, r);
-			}
+			if (Player.velocity.Y == 0f)
+				WalkDist += Math.Abs(Player.velocity.X);
 		}
 
-		// ------------------------------------------------------------ joints in screen space
-
-		/// <summary>Bottom-centre of the hitbox, where vanilla puts the feet (screen space).</summary>
-		static Vector2 Feet(ref PlayerDrawSet d) => d.Position - Main.screenPosition + new Vector2(d.drawPlayer.width / 2f, d.drawPlayer.height);
-
-		/// <summary>Where the hip goes: lowered by bent legs, and moved so a lying body is centred on its (short) hitbox.</summary>
-		Vector2 Hip(Vector2 feet, CCActor a)
+		public RigPose Pose()
 		{
-			float lying = Math.Clamp((Math.Abs(MathF.Sin(a.Rot)) - 0.3f) / 0.5f, 0f, 1f);
-			float standHip = HipAboveFeet - LegLength * (1f - LegsSquash);
-			float x = MathHelper.Lerp(0f, -a.FlipFactor * 9f, lying);
-			float y = MathHelper.Lerp(standHip, 9f, lying);
-			return feet + new Vector2(x, -y);
+			CCActor a = Player.GetModPlayer<BodyPhysicsPlayer>().Actor;
+			return new RigPose {
+				Kind = Kind,
+				Feet = Player.Bottom + new Vector2(0f, Player.gfxOffY),
+				Dir = a.FlipFactor,
+				Rot = a.Rot,
+				AimAngle = a.AimAngle,
+				Crouch = a.Status == ActorStatus.Stable && a.Prone == ProneState.NotProne ? a.CrouchAmount : 0f,
+				Prone = a.Prone != ProneState.NotProne && a.Status == ActorStatus.Stable,
+				Unstable = a.Status != ActorStatus.Stable,
+				Grounded = Player.velocity.Y == 0f,
+				VelX = Player.velocity.X,
+				WalkDist = WalkDist,
+				Held = Player.HeldItem,
+				HeldInUse = Player.itemAnimation > 0 && !RigRenderer.IsGunLike(Player.HeldItem),
+				Light = Lighting.GetColor(Player.Center.ToTileCoordinates()),
+			};
 		}
 
-		/// <summary>The hand in the un-leaned body (vanilla's GetFrontHandPosition, but from the bottom-anchored sprite).</summary>
-		Vector2 FrontHand(Vector2 feet, CCActor a, float armRot)
+		public Vector2 NozzleWorld() => RigRenderer.NozzleWorld(Pose());
+
+		public override void HideDrawLayers(PlayerDrawSet drawInfo)
 		{
-			int dir = a.FlipFactor;
-			Vector2 shoulder = feet + new Vector2(-4f * dir, -ShoulderAboveFeet);
-			Vector2 v = (armRot + MathHelper.PiOver2).ToRotationVector2() * 10f;
-			v += new Vector2(0f, 3f * dir).RotatedBy(armRot + MathHelper.PiOver2);
-			return shoulder + v;
-		}
-
-		// ------------------------------------------------------------ re-posing vanilla's draw data
-
-		enum Part { Upper, Head, Legs, Skip }
-
-		readonly HashSet<Texture2D> headTex = new(), legTex = new();
-
-		void CollectTextures(Player p, int skin)
-		{
-			headTex.Clear();
-			legTex.Clear();
-			foreach (int i in new[] { 0, 1, 2, 15 })
-				Add(headTex, TextureAssets.Players[skin, i]);
-			foreach (int i in new[] { 10, 11, 12 })
-				Add(legTex, TextureAssets.Players[skin, i]);
-			Add(headTex, Get(TextureAssets.PlayerHair, p.hair));
-			Add(headTex, Get(TextureAssets.PlayerHairAlt, p.hair));
-			Add(headTex, Get(TextureAssets.ArmorHead, p.head));
-			Add(headTex, Get(TextureAssets.AccFace, p.face));
-			Add(headTex, Get(TextureAssets.AccFace, p.faceHead));
-			Add(headTex, Get(TextureAssets.AccFace, p.faceFlower));
-			Add(headTex, Get(TextureAssets.AccBeard, p.beard));
-			Add(legTex, Get(TextureAssets.ArmorLeg, p.legs));
-			Add(legTex, Get(TextureAssets.AccShoes, p.shoe));
-		}
-
-		static ReLogic.Content.Asset<Texture2D> Get(ReLogic.Content.Asset<Texture2D>[] arr, int i) => i > 0 && i < arr.Length ? arr[i] : null;
-
-		static void Add(HashSet<Texture2D> set, ReLogic.Content.Asset<Texture2D> asset)
-		{
-			if (asset != null && asset.IsLoaded)
-				set.Add(asset.Value);
-		}
-
-		public override void TransformDrawData(ref PlayerDrawSet drawInfo)
-		{
+			// the Terraria character isn't drawn at all; vanilla only shows the swing of a melee/tool item in use
 			Player p = drawInfo.drawPlayer;
-			if (drawInfo.shadow != 0f || p.mount.Active || p.dead || drawInfo.headOnlyRender)
-				return;
-			if (!p.TryGetModPlayer(out BodyPhysicsPlayer body))
-				return;
-			CCActor a = body.Actor;
-			if (!ReferenceEquals(p, Main.LocalPlayer))
-				a.Flipped = p.direction < 0; // other players and drawn-only bodies (idle clones) face as vanilla says
-			CollectTextures(p, drawInfo.skinVar);
-
-			Vector2 feet = Feet(ref drawInfo);
-			Vector2 hip0 = feet - new Vector2(0f, HipAboveFeet);
-			Vector2 neck0 = feet - new Vector2(0f, NeckAboveFeet);
-			Vector2 hip = Hip(feet, a);
-			float lean = a.Rot;
-			bool lyingOrThrown = a.Status != ActorStatus.Stable || a.Prone != ProneState.NotProne;
-			float legRot = lyingOrThrown ? a.Rot : 0f;
-			// CC heads look toward the aim, part way, against the lean
-			float headTurn = Math.Clamp(-a.AimAngle * 0.45f * a.FlipFactor - lean * 0.4f, -0.6f, 0.6f);
-			if (a.Status != ActorStatus.Stable)
-				headTurn = 0f;
-
-			for (int i = 0; i < drawInfo.DrawDataCache.Count; i++) {
-				DrawData d = drawInfo.DrawDataCache[i];
-				switch (Classify(d)) {
-					case Part.Legs:
-						// pivot the legs sprite on the hip (frame row 52 - HipAboveFeet; the feet are on row 52), squash it for a
-						// crouch, and lay it along the body when lying or thrown
-						d.origin = new Vector2(d.origin.X, 52f - HipAboveFeet);
-						d.position = hip;
-						d.rotation += legRot;
-						d.scale = new Vector2(d.scale.X, d.scale.Y * LegsSquash);
-						break;
-					case Part.Head:
-						d.position = neck0 + (d.position - neck0).RotatedBy(headTurn);
-						d.rotation += headTurn;
-						goto case Part.Upper;
-					case Part.Upper:
-						d.position = hip + (d.position - hip0).RotatedBy(lean);
-						d.rotation += lean;
-						break;
-				}
-				drawInfo.DrawDataCache[i] = d;
+			foreach (PlayerDrawLayer layer in PlayerDrawLayerLoader.Layers) {
+				if (layer.Mod != null)
+					continue;
+				if (layer == PlayerDrawLayers.HeldItem && p.itemAnimation > 0 && !RigRenderer.IsGunLike(p.HeldItem))
+					continue;
+				layer.Hide();
 			}
 		}
 
-		Part Classify(in DrawData d)
+		public override void ModifyDrawInfo(ref PlayerDrawSet drawInfo)
 		{
-			if (d.texture == null)
-				return Part.Skip;
-			if (legTex.Contains(d.texture))
-				return Part.Legs;
-			if (headTex.Contains(d.texture))
-				return Part.Head;
-			return Part.Upper;
+			if (!ReferenceEquals(drawInfo.drawPlayer, Main.LocalPlayer) && drawInfo.drawPlayer.TryGetModPlayer(out BodyPhysicsPlayer bp))
+				bp.Actor.Flipped = drawInfo.drawPlayer.direction < 0; // other players / drawn-only bodies face as vanilla says
 		}
 
-		/// <summary>The jetpack nozzle in the world (the pack sits on the back, leaning with the torso).</summary>
-		public Vector2 NozzleWorld()
+		public class BodyLayer : PlayerDrawLayer
 		{
-			CCActor a = Body.Actor;
-			Vector2 hip = Hip(Player.Bottom, a);
-			return hip + new Vector2(-a.FlipFactor * 9f, -8f).RotatedBy(a.Rot);
-		}
-
-		public class JetpackLayer : PlayerDrawLayer
-		{
-			static Asset<Texture2D> tex;
-
-			public override void Load()
-			{
-				if (!Main.dedServ)
-					tex = ModContent.Request<Texture2D>("TerraCommand/Content/Actors/Jetpack");
-			}
+			static readonly List<RigPiece> pieces = new();
 
 			public override Position GetDefaultPosition() => new Between(PlayerDrawLayers.BalloonAcc, PlayerDrawLayers.Skin);
 
@@ -216,61 +356,13 @@ namespace TerraCommand.Common.Actors
 			protected override void Draw(ref PlayerDrawSet d)
 			{
 				Player p = d.drawPlayer;
-				int dir = p.GetModPlayer<BodyPhysicsPlayer>().Actor.FlipFactor;
-				Vector2 at = Feet(ref d) + new Vector2(-dir * 9f, -27f);
-				Color light = Lighting.GetColor(p.Center.ToTileCoordinates());
-				d.DrawDataCache.Add(new DrawData(tex.Value, at.Floor(), null, light, 0f, tex.Size() / 2f, 1f,
-					dir > 0 ? SpriteEffects.None : SpriteEffects.FlipHorizontally));
-			}
-		}
-
-		// ------------------------------------------------------------ the held item, always in hand
-
-		public class HeldItemLayer : PlayerDrawLayer
-		{
-			public override Position GetDefaultPosition() => new Between(PlayerDrawLayers.Shield, PlayerDrawLayers.ArmOverItem);
-
-			public override bool GetDefaultVisibility(PlayerDrawSet d)
-			{
-				Player p = d.drawPlayer;
-				return d.shadow == 0f && !p.dead && p.itemAnimation == 0 && !p.HeldItem.IsAir && !p.mount.Active && !d.headOnlyRender
-					&& p.HeldItem.useStyle != ItemUseStyleID.None && !p.HeldItem.consumable;
-			}
-
-			protected override void Draw(ref PlayerDrawSet d)
-			{
-				Player p = d.drawPlayer;
-				var rig = p.GetModPlayer<RigPlayer>();
-				CCActor a = p.GetModPlayer<BodyPhysicsPlayer>().Actor;
-				Item item = p.HeldItem;
-				Main.instance.LoadItem(item.type);
-				Texture2D tex = TextureAssets.Item[item.type].Value;
-				Rectangle src = Main.itemAnimations[item.type] != null ? Main.itemAnimations[item.type].GetFrame(tex) : tex.Frame();
-
-				Vector2 feet = Feet(ref d);
-				float armRot = rig.AimWorldAngle - a.Rot - MathHelper.PiOver2;
-				Vector2 hand = rig.FrontHand(feet, a, armRot);
-				float aim = rig.AimWorldAngle - a.Rot; // in the un-leaned body; TransformDrawData adds the lean
-				int dir = a.FlipFactor;
-				Color light = Lighting.GetColor(p.Center.ToTileCoordinates());
-				Color c = item.GetAlpha(light);
-
-				float rot;
-				Vector2 origin;
-				SpriteEffects fx;
-				if (item.useStyle == ItemUseStyleID.Shoot || item.useStyle == ItemUseStyleID.HoldUp && item.shoot > 0) {
-					// guns, bows, staves: point along the aim, grip a quarter of the way along
-					rot = aim;
-					fx = dir > 0 ? SpriteEffects.None : SpriteEffects.FlipVertically;
-					origin = new Vector2(src.Width * 0.3f, src.Height * 0.5f);
-				}
-				else {
-					// swords, pickaxes and tools are drawn diagonally (handle bottom-left): lay the blade along the aim
-					fx = dir > 0 ? SpriteEffects.None : SpriteEffects.FlipHorizontally;
-					rot = dir > 0 ? aim + MathHelper.PiOver4 : aim - MathHelper.Pi - MathHelper.PiOver4 + MathHelper.TwoPi;
-					origin = dir > 0 ? new Vector2(src.Width * 0.15f, src.Height * 0.85f) : new Vector2(src.Width * 0.85f, src.Height * 0.85f);
-				}
-				d.DrawDataCache.Add(new DrawData(tex, hand.Floor(), src, c, rot, origin, item.scale, fx));
+				RigPose pose = p.GetModPlayer<RigPlayer>().Pose();
+				// follow the draw position (snapshots draw a player away from its entity)
+				pose.Feet = d.Position + new Vector2(p.width / 2f, p.height);
+				pieces.Clear();
+				RigRenderer.Build(pose, pieces);
+				foreach (RigPiece r in pieces)
+					d.DrawDataCache.Add(new DrawData(r.Tex, (r.Pos - Main.screenPosition).Floor(), r.Src, r.Color, r.Rot, r.Origin, r.Scale, r.Fx));
 			}
 		}
 	}

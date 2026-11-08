@@ -6,6 +6,7 @@ wait 30
 give FlintlockPistol
 give MusketBall 100
 hold FlintlockPistol
+give CloneBody 2
 hold CloneBody
 aim 90 -30
 use 2

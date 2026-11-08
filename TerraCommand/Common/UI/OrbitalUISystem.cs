@@ -172,7 +172,7 @@ namespace TerraCommand.Common.UI
 
 			// ---- manifest + order button
 			int my = grid.Bottom + Pad;
-			Utils.DrawBorderString(sb, "Drop pod:", new Vector2(panel.X + Pad, my + 10), Color.LightBlue, 0.85f);
+			Utils.DrawBorderString(sb, "Ship cargo:", new Vector2(panel.X + Pad, my + 10), Color.LightBlue, 0.85f);
 			int mx = panel.X + Pad + 90;
 			for (int n = 0; n < manifest.Count && n < 8; n++) {
 				var r = new Rectangle(mx + n * Slot, my, Slot - 2, Slot - 2);
@@ -183,17 +183,24 @@ namespace TerraCommand.Common.UI
 					break;
 				}
 			}
-			var orderBtn = new Rectangle(panel.Right - Pad - 150, my + 4, 150, 30);
-			bool canOrder = manifest.Count > 0;
-			Utils.DrawInvBG(sb, orderBtn, canOrder ? new Color(140, 70, 30, 230) : new Color(60, 60, 60, 200));
-			Utils.DrawBorderString(sb, "Order drop pod", orderBtn.Center.ToVector2() - font.MeasureString("Order drop pod") * 0.4f, Color.White, 0.8f);
-			if (canOrder && Clicked(orderBtn)) {
-				OrbitalNet.RequestDropPod(manifest.ToList(), Main.LocalPlayer.Center);
+			// order a ship (an empty one is a pickup), or send a landed ship back up
+			var orderBtn = new Rectangle(panel.Right - Pad - 130, my + 4, 130, 30);
+			var launchBtn = new Rectangle(orderBtn.X - 140, my + 4, 130, 30);
+			Utils.DrawInvBG(sb, orderBtn, new Color(140, 70, 30, 230));
+			string orderText = manifest.Count > 0 ? "Order ship" : "Order empty ship";
+			Utils.DrawBorderString(sb, orderText, orderBtn.Center.ToVector2() - font.MeasureString(orderText) * 0.4f, Color.White, 0.8f);
+			if (Clicked(orderBtn)) {
+				ShipSystem.BeginPickLz(manifest.ToList());
 				manifest.Clear();
-				Main.NewText("Drop pod inbound.", Color.Orange);
+				Visible = false;
 			}
+			bool canLaunch = ShipSystem.HasLandedShip(Main.LocalPlayer.team);
+			Utils.DrawInvBG(sb, launchBtn, canLaunch ? new Color(40, 90, 140, 230) : new Color(60, 60, 60, 200));
+			Utils.DrawBorderString(sb, "Launch ship", launchBtn.Center.ToVector2() - font.MeasureString("Launch ship") * 0.4f, Color.White, 0.8f);
+			if (canLaunch && Clicked(launchBtn))
+				ShipSystem.RequestLaunch(Main.LocalPlayer);
 
-			Utils.DrawBorderString(sb, "Stockpile: L-click add to drop pod (Shift: whole stack), R-click a block to build with it",
+			Utils.DrawBorderString(sb, "Stockpile: L-click add to ship cargo (Shift: whole stack), R-click a block to build with it. Throw things into a landed ship to send them up",
 				new Vector2(panel.X + Pad, panel.Bottom - 40), Color.Gray, 0.65f);
 			Utils.DrawBorderString(sb, "Fabricate: click to craft one (Shift: x10)",
 				new Vector2(panel.X + Pad, panel.Bottom - 22), Color.Gray, 0.65f);

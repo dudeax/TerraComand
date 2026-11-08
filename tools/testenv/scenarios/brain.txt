@@ -1,0 +1,48 @@
+# The brain robot: the team's first body; slow, no jetpack; losing it is game over and the world is lost.
+nospawn
+clearnpcs
+goto spawn
+flatten 60 24
+wait 30
+claimbrain
+expect kind brain
+expect brainstate alive
+give Revolver
+give MusketBall 200
+hold Revolver
+aim 200 -40
+wait 10
+screenshot brain-robot
+
+# slow walker, no jetpack
+mark
+walk right 120
+wait 1
+expect moved <= 4.5               # 60% of a soldier's walk
+expect moved >= 2
+mark
+jump 60
+wait 30
+expect peak <= 0.3
+expect gameover no
+
+# take a soldier body: the brain stays behind as an idle unit
+give CloneBody
+hold CloneBody
+aim 70 -30
+use 2
+wait 10
+switch
+wait 10
+expect kind soldier
+expect unitkind brain
+aim -200 0
+wait 5
+screenshot brain-idle
+
+# the idle brain is destroyed: game over, world lost
+killunit
+wait 10
+expect brainstate lost
+expect gameover yes
+screenshot brain-gameover

@@ -21,9 +21,8 @@ namespace TerraCommand.Common.Orbital
 		{
 			if (mediumCoreDeath)
 				yield break;
-			yield return new Item(ModContent.ItemType<Content.Tiles.LaunchPadItem>());
+			// bodies arrive by ship (the brain's first delivery); the constructor builds from orbit
 			yield return new Item(ModContent.ItemType<Content.Items.OrbitalConstructor>());
-			yield return new Item(ModContent.ItemType<Content.Items.CloneBody>(), 2);
 		}
 	}
 }

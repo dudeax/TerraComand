@@ -21,9 +21,10 @@ namespace TerraCommand.Common.Net
 		// Orbital stockpile
 		StockFull,         // S->C
 		StockDelta,        // S->C
-		LaunchItem,        // C->S
 		CraftRequest,      // C->S
-		OrderDropPod,      // C->S
+		OrderShip,         // C->S
+		ShipLaunch,        // C->S
+		ShipCargo,         // S->C
 		BuildRequest,      // C->S
 		// Units
 		DeployUnit,        // C->S
@@ -32,6 +33,9 @@ namespace TerraCommand.Common.Net
 		SetOrders,         // C->S
 		// Bodies
 		StanceSync,        // C->S->C
+		// Brain
+		BrainClaim,        // C->S: a player entered the world (becomes the brain if the team has none)
+		BrainState,        // S->C: a team's brain state (and whether this player is it)
 	}
 
 	public static class PacketHandler
@@ -72,11 +76,18 @@ namespace TerraCommand.Common.Net
 				case PacketType.StockDelta:
 					OrbitalStockpile.ReceiveDelta(r);
 					break;
-				case PacketType.LaunchItem:
+				case PacketType.OrderShip:
+				case PacketType.ShipLaunch:
+				case PacketType.ShipCargo:
+					Orbital.ShipSystem.Receive(type, r, from);
+					break;
 				case PacketType.CraftRequest:
-				case PacketType.OrderDropPod:
 				case PacketType.BuildRequest:
 					OrbitalNet.HandleRequest(type, r, from);
+					break;
+				case PacketType.BrainClaim:
+				case PacketType.BrainState:
+					Units.BrainSystem.Receive(type, r, from);
 					break;
 				case PacketType.StanceSync:
 					Physics.BodyPhysicsPlayer.ReceiveStance(r, from);

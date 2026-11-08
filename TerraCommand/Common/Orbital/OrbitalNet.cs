@@ -8,7 +8,6 @@ using Terraria.ID;
 using Terraria.ModLoader;
 using Terraria.ModLoader.IO;
 using TerraCommand.Common.Net;
-using TerraCommand.Content.Projectiles;
 
 namespace TerraCommand.Common.Orbital
 {
@@ -19,27 +18,6 @@ namespace TerraCommand.Common.Orbital
 	public static class OrbitalNet
 	{
 		static bool IsClient => Main.netMode == NetmodeID.MultiplayerClient;
-
-		// ---------------------------------------------------------------- launch
-
-		/// <summary>Launch an item to orbit from a launch pad. Caller removes the item from the player.</summary>
-		public static void RequestLaunch(Item item, Vector2 padTop)
-		{
-			if (IsClient) {
-				ModPacket p = PacketHandler.Create(PacketType.LaunchItem);
-				ItemIO.Send(item, p, writeStack: true);
-				p.WriteVector2(padTop);
-				p.Send();
-				return;
-			}
-			DoLaunch(item, padTop);
-		}
-
-		public static void DoLaunch(Item item, Vector2 padTop)
-		{
-			OrbitalStockpile.Add(item);
-			LaunchRocket.Spawn(padTop, item.type);
-		}
 
 		// ---------------------------------------------------------------- craft
 
@@ -59,46 +37,6 @@ namespace TerraCommand.Common.Orbital
 			if (recipeIndex < 0 || recipeIndex >= Recipe.numRecipes)
 				return;
 			OrbitalCrafting.Craft(Main.recipe[recipeIndex], Math.Clamp(times, 1, 999));
-		}
-
-		// ---------------------------------------------------------------- drop pod
-
-		public static void RequestDropPod(IReadOnlyList<(StockKey key, int count)> manifest, Vector2 target)
-		{
-			if (manifest.Count == 0)
-				return;
-			if (IsClient) {
-				ModPacket p = PacketHandler.Create(PacketType.OrderDropPod);
-				p.Write(manifest.Count);
-				foreach (var (k, n) in manifest) {
-					p.Write(k.Type); p.Write(k.Prefix); p.Write(n);
-				}
-				p.WriteVector2(target);
-				p.Send();
-				return;
-			}
-			DoDropPod(manifest, target);
-		}
-
-		static void DoDropPod(IReadOnlyList<(StockKey key, int count)> manifest, Vector2 target)
-		{
-			var cargo = new List<Item>();
-			foreach (var (k, n) in manifest) {
-				int amount = (int)Math.Min(n, OrbitalStockpile.Count(k));
-				if (amount <= 0 || !OrbitalStockpile.TryTake(k, amount))
-					continue;
-				// split into legal stacks
-				int maxStack = Math.Max(1, ContentSamples.ItemsByType[k.Type].maxStack);
-				while (amount > 0) {
-					var it = new Item(k.Type, Math.Min(amount, maxStack));
-					if (k.Prefix > 0)
-						it.Prefix(k.Prefix);
-					cargo.Add(it);
-					amount -= it.stack;
-				}
-			}
-			if (cargo.Count > 0)
-				DropPod.Spawn(target, cargo);
 		}
 
 		// ---------------------------------------------------------------- build
@@ -148,24 +86,9 @@ namespace TerraCommand.Common.Orbital
 				return;
 			Player sender = Main.player[from];
 			switch (type) {
-				case PacketType.LaunchItem: {
-					Item item = ItemIO.Receive(r, readStack: true);
-					Vector2 pos = r.ReadVector2();
-					if (Vector2.Distance(pos, sender.Center) < 800f)
-						DoLaunch(item, pos);
-					break;
-				}
 				case PacketType.CraftRequest:
 					DoCraft(r.ReadInt32(), r.ReadInt32());
 					break;
-				case PacketType.OrderDropPod: {
-					int n = Math.Min(r.ReadInt32(), 200);
-					var manifest = new List<(StockKey, int)>(n);
-					for (int i = 0; i < n; i++)
-						manifest.Add((new StockKey(r.ReadInt32(), r.ReadInt32()), r.ReadInt32()));
-					DoDropPod(manifest, r.ReadVector2());
-					break;
-				}
 				case PacketType.BuildRequest: {
 					int x = r.ReadInt32(), y = r.ReadInt32();
 					var key = new StockKey(r.ReadInt32(), r.ReadInt32());
