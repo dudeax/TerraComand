@@ -151,11 +151,14 @@ namespace TerraCommand.Common.Orbital
 				p.Send();
 				return;
 			}
-			DoShip(team, manifest, lz);
+			DoShip(team, manifest, lz, payer: Main.myPlayer);
 		}
 
-		static void DoShip(int team, IReadOnlyList<(StockKey key, int count)> manifest, Vector2 lz)
+		/// <param name="payer">the player calling it (it costs money); -2 = free (a new team's first ship)</param>
+		static void DoShip(int team, IReadOnlyList<(StockKey key, int count)> manifest, Vector2 lz, int payer)
 		{
+			if (payer != -2 && !Economy.PayForShip(payer))
+				return;
 			var items = new List<Item>();
 			foreach (var (k, n) in manifest) {
 				int amount = (int)Math.Min(n, OrbitalStockpile.Count(k));
@@ -191,7 +194,8 @@ namespace TerraCommand.Common.Orbital
 			if (IsClient)
 				return;
 			OrbitalStockpile.Change(new StockKey(ModContent.ItemType<Content.Items.CloneBody>(), 0), 2);
-			DoShip(team, new[] { (new StockKey(ModContent.ItemType<Content.Items.CloneBody>(), 0), 2) }, near + new Vector2(dir * 16 * 7, 0));
+			Economy.Earn(Economy.StartingFunds);   // CC: a starting budget
+			DoShip(team, new[] { (new StockKey(ModContent.ItemType<Content.Items.CloneBody>(), 0), 2) }, near + new Vector2(dir * 16 * 7, 0), payer: -2);
 		}
 
 		// ------------------------------------------------------------ on the ground
@@ -338,7 +342,7 @@ namespace TerraCommand.Common.Orbital
 						manifest.Add((new StockKey(r.ReadInt32(), r.ReadInt32()), r.ReadInt32()));
 					Vector2 lz = r.ReadVector2();
 					if (Main.netMode == NetmodeID.Server && team == Main.player[from].team)
-						DoShip(team, manifest, lz);
+						DoShip(team, manifest, lz, payer: from);
 					break;
 				}
 				case PacketType.ShipLaunch: {

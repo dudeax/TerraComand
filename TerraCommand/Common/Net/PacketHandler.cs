@@ -24,6 +24,8 @@ namespace TerraCommand.Common.Net
 		CraftRequest,      // C->S
 		OrderShip,         // C->S
 		ShipLaunch,        // C->S
+		Buy,               // C->S: buy from the catalogue into the stockpile
+		Sell,              // C->S: sell from the stockpile
 		ShipCargo,         // S->C: a ship's cargo list
 		ShipHold,          // C->S: take from / put into a landed ship's hold
 		ShipGive,          // S->C: an item taken from a hold, for the player's pack
@@ -78,6 +80,10 @@ namespace TerraCommand.Common.Net
 					break;
 				case PacketType.StockDelta:
 					OrbitalStockpile.ReceiveDelta(r);
+					break;
+				case PacketType.Buy:
+				case PacketType.Sell:
+					Orbital.Economy.Receive(type, r, from);
 					break;
 				case PacketType.OrderShip:
 				case PacketType.ShipLaunch:

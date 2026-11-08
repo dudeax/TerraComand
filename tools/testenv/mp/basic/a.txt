@@ -76,5 +76,12 @@ expect inv Gel == 0
 shiphold take 0
 wait 30
 expect inv Gel >= 15
+# buying and selling go through the server
+buy ServicePistol
+wait 30
+expect stock ServicePistol >= 1
+sell Wood 5
+wait 30
+expect stock Wood <= 55
 screenshot a-final
 sync done

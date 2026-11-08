@@ -122,7 +122,16 @@ namespace TerraCommand.Common.UI
 				return;
 			}
 			Utils.DrawBorderString(sb, "Orbital Stockpile", new Vector2(panel.X + Pad, panel.Y + Pad), Color.Gold);
-			Utils.DrawBorderString(sb, "Fabricate", new Vector2(panel.X + Pad * 2 + stockW, panel.Y + Pad), Color.Gold);
+			// the right-hand panel: fabricate from the stockpile, or buy with the funds (CC's buy menu)
+			var fabTab = new Rectangle(panel.X + Pad * 2 + stockW, panel.Y + Pad - 2, 84, 24);
+			var buyTab = new Rectangle(fabTab.Right + 4, fabTab.Y, 50, 24);
+			Utils.DrawBorderString(sb, "Fabricate", fabTab.TopLeft() + new Vector2(2, 2), buying ? Color.Gray : Color.Gold);
+			Utils.DrawBorderString(sb, "Buy", buyTab.TopLeft() + new Vector2(2, 2), buying ? Color.Gold : Color.Gray);
+			if (Clicked(fabTab))
+				buying = false;
+			if (Clicked(buyTab))
+				buying = true;
+			Utils.DrawBorderString(sb, "Funds: " + Economy.Format(Economy.Funds()), new Vector2(panel.X + Pad + 170, panel.Y + Pad + 2), Color.Gold, 0.8f);
 
 			// ---- stockpile grid
 			var grid = new Rectangle(panel.X + Pad, panel.Y + Pad + 28, stockW, Rows * Slot);
@@ -143,12 +152,22 @@ namespace TerraCommand.Common.UI
 				if (k.Prefix > 0)
 					item.Prefix(k.Prefix);
 				DrawSlot(sb, r, item, count, orbital.BuildKey == k);
-				if (Clicked(r))
-					AddToManifest(k, Main.keyState.PressingShift() ? (int)Math.Min(count, int.MaxValue) : 1);
+				if (Clicked(r)) {
+					if (Main.keyState.IsKeyDown(Microsoft.Xna.Framework.Input.Keys.LeftControl) || Main.keyState.IsKeyDown(Microsoft.Xna.Framework.Input.Keys.RightControl))
+						Economy.RequestSell(k, count);   // Ctrl-click: sell the stack for coins
+					else
+						AddToManifest(k, Main.keyState.PressingShift() ? (int)Math.Min(count, int.MaxValue) : 1);
+				}
 				if (Clicked(r, right: true) && (item.createTile >= TileID.Dirt || item.createWall > 0)) {
 					orbital.BuildKey = orbital.BuildKey == k ? null : k;
 					Terraria.Audio.SoundEngine.PlaySound(SoundID.MenuTick);
 				}
+			}
+
+			// ---- buy menu
+			if (buying) {
+				DrawBuy(sb, new Rectangle(panel.X + Pad * 2 + stockW, grid.Y, recipeW, Rows * Slot));
+				goto Manifest;
 			}
 
 			// ---- recipes
@@ -180,6 +199,7 @@ namespace TerraCommand.Common.UI
 				}
 			}
 
+			Manifest:
 			// ---- manifest + order button
 			int my = grid.Bottom + Pad;
 			Utils.DrawBorderString(sb, "Ship cargo:", new Vector2(panel.X + Pad, my + 10), Color.LightBlue, 0.85f);
@@ -210,10 +230,42 @@ namespace TerraCommand.Common.UI
 			if (canLaunch && Clicked(launchBtn))
 				ShipSystem.RequestLaunch(Main.LocalPlayer);
 
-			Utils.DrawBorderString(sb, "Stockpile: L-click adds to ship cargo (Shift: whole stack), R-click a block to build with it",
+			Utils.DrawBorderString(sb, "Stockpile: click adds to ship cargo (Shift: stack), Ctrl-click sells, R-click a block to build with it",
 				new Vector2(panel.X + Pad, panel.Bottom - 40), Color.Gray, 0.65f);
-			Utils.DrawBorderString(sb, "Fabricate: click to craft one (Shift: x10).   Close: X, K or Esc",
+			Utils.DrawBorderString(sb, $"Fabricate / Buy: click (Shift: x10 / x5). Ships cost {Economy.Format(Economy.ShipCost)}. Close: X, K or Esc",
 				new Vector2(panel.X + Pad, panel.Bottom - 22), Color.Gray, 0.65f);
+		}
+
+		internal static bool buying;
+		static int buyScroll;
+
+		/// <summary>CC's buy menu: bodies and devices, bought into the stockpile with the funds (then shipped down).</summary>
+		static void DrawBuy(SpriteBatch sb, Rectangle area)
+		{
+			IReadOnlyList<int> cat = Economy.Catalogue;
+			if (area.Contains(Main.MouseScreen.ToPoint()) && PlayerInput.ScrollWheelDeltaForUI != 0)
+				buyScroll -= Math.Sign(PlayerInput.ScrollWheelDeltaForUI);
+			buyScroll = Math.Clamp(buyScroll, 0, Math.Max(0, cat.Count - RecipeRows));
+			long funds = Economy.Funds();
+			for (int n = 0; n < RecipeRows; n++) {
+				int idx = buyScroll + n;
+				var row = new Rectangle(area.X, area.Y + n * Slot, area.Width, Slot - 2);
+				if (idx >= cat.Count) {
+					Utils.DrawInvBG(sb, row, new Color(30, 35, 70, 160));
+					continue;
+				}
+				Item item = ContentSamples.ItemsByType[cat[idx]];
+				long price = Economy.Price(item.type);
+				bool afford = funds >= price;
+				Utils.DrawInvBG(sb, row, row.Contains(Main.MouseScreen.ToPoint()) ? new Color(70, 90, 140, 220) : new Color(40, 50, 90, 200));
+				DrawSlot(sb, new Rectangle(row.X, row.Y, Slot - 2, Slot - 2), item, 1, false);
+				Utils.DrawBorderString(sb, item.Name, new Vector2(row.X + Slot + 2, row.Y + 3), Color.White, 0.65f);
+				Utils.DrawBorderString(sb, Economy.Format(price), new Vector2(row.X + Slot + 2, row.Y + 20), afford ? Color.Gold : Color.IndianRed, 0.65f);
+				if (Clicked(row)) {
+					Economy.RequestBuy(item.type, Main.keyState.PressingShift() ? 5 : 1);
+					Terraria.Audio.SoundEngine.PlaySound(SoundID.Coins);
+				}
+			}
 		}
 
 		static void AddToManifest(StockKey k, int count)

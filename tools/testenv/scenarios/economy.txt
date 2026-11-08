@@ -1,0 +1,40 @@
+# Coins in orbit are CC's gold: buy bodies and devices, sell what's in the stockpile, pay for ships.
+nospawn
+clearnpcs
+goto spawn
+flatten 60 20
+wait 30
+stock GoldCoin 3
+wait 2
+expect funds == 30000
+buy FieldRifle
+wait 2
+expect funds == 20000              # a Field Rifle costs 1 gold
+expect stock FieldRifle >= 1
+buy Spinner                        # 5 gold: can't afford it
+wait 2
+expect funds == 20000
+expect stock Spinner == 0
+buy CloneBody 2
+wait 2
+expect funds == 0
+expect stock CloneBody >= 2
+stock IronOre 100
+sell IronOre 100                   # mined ore sells for coins
+wait 2
+expect funds == 10000              # Terraria's sell price: 1 silver each
+expect stock IronOre == 0
+stock GoldCoin 1
+wait 2
+ship 4 CloneBody 2
+wait 5
+expect ships == 1
+expect funds == 15000              # 2 gold, less the ship's 50 silver
+wait 500
+expect units == 2
+menu
+menutab buy
+wait 5
+screenshot economy-buy
+menutab fabricate
+menu

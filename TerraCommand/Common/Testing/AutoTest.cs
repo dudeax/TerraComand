@@ -619,6 +619,7 @@ namespace TerraCommand.Common.Testing
 				case "switch": P.GetModPlayer<UnitPlayer>().SwitchBody(); break;
 				case "orders": P.GetModPlayer<UnitPlayer>().CycleOrders(); break;
 				case "menu": OrbitalUISystem.Toggle(); break;
+				case "menutab": OrbitalUISystem.buying = a[1] == "buy"; break;
 				case "buildkey": P.GetModPlayer<OrbitalPlayer>().BuildKey = new StockKey(ItemType(a[1]), 0); break;
 				case "craft": {
 					int type = ItemType(a[1]);
@@ -634,6 +635,8 @@ namespace TerraCommand.Common.Testing
 					break;
 				}
 				case "shiplaunch": ShipSystem.RequestLaunch(P); break;
+				case "buy": Economy.RequestBuy(ItemType(a[1]), a.Length > 2 ? I(a[2]) : 1); break;
+				case "sell": Economy.RequestSell(new StockKey(ItemType(a[1]), 0), a.Length > 2 ? long.Parse(a[2]) : 1); break;
 				case "shiphold": { // shiphold open | take <index> | put <Item> [n] : use the hold of the landed ship next to the player
 					var ship = UI.ShipHoldUI.NearestLandedShip(P) ?? throw new ArgumentException("no landed ship in reach");
 					if (a[1] == "open")
@@ -793,6 +796,7 @@ namespace TerraCommand.Common.Testing
 					Expect(probeTicks > 0 && Cmp(g, a[2], F(a[3])), $"{desc} (gap {gapMin:0.0}..{gapMax:0.0} px over {probeTicks} ticks, {airFlickers} grounded/air flickers)");
 					break;
 				}
+				case "funds": Expect(Cmp(Economy.Funds(), a[2], F(a[3])), $"{desc} (funds {Economy.Format(Economy.Funds())} = {Economy.Funds()}c)"); break;
 				case "deposits": Expect(Cmp(Destruction.PixelTerrain.Deposits, a[2], F(a[3])), $"{desc} ({Destruction.PixelTerrain.Deposits} pixels settled into the terrain)"); break;
 				case "shrapnel": Expect(Cmp(Content.Projectiles.Shrapnel.Spawned, a[2], F(a[3])), $"{desc} ({Content.Projectiles.Shrapnel.Spawned} shrapnel so far)"); break;
 				case "blocked": Expect(Cmp(Combat.ShieldPlayer.Blocked, a[2], F(a[3])), $"{desc} ({Combat.ShieldPlayer.Blocked} blocked)"); break;
