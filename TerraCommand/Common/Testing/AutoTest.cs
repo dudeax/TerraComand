@@ -668,6 +668,25 @@ namespace TerraCommand.Common.Testing
 					ShipSystem.RequestShip(P.team, manifest, P.Center + new Vector2(F(a[1]) * 16f, 0f));
 					break;
 				}
+				case "callcraft": { // callcraft <style> <dx tiles> [Item count]... : like ship, with a craft type
+					var style = Enum.Parse<ShipStyle>(a[1], ignoreCase: true);
+					var manifest = new List<(StockKey, int)>();
+					for (int i = 3; i + 1 < a.Length; i += 2)
+						manifest.Add((new StockKey(ItemType(a[i]), 0), I(a[i + 1])));
+					ShipSystem.RequestShip(P.team, manifest, P.Center + new Vector2(F(a[2]) * 16f, 0f), style);
+					break;
+				}
+				case "pilot": { // pilot board | leave
+					var pp = P.GetModPlayer<PilotPlayer>();
+					if (a[1] == "leave")
+						pp.Leave();
+					else {
+						CargoShip ship = ShipSystem.Ships().Where(x => x.Team == P.team).OrderBy(x => Vector2.Distance(x.NPC.Center, P.Center)).FirstOrDefault()
+							?? throw new ArgumentException("no ship");
+						pp.Board(ship);
+					}
+					break;
+				}
 				case "shiplaunch": ShipSystem.RequestLaunch(P); break;
 				case "buy": Economy.RequestBuy(ItemType(a[1]), a.Length > 2 ? I(a[2]) : 1); break;
 				case "sell": Economy.RequestSell(new StockKey(ItemType(a[1]), 0), a.Length > 2 ? long.Parse(a[2]) : 1); break;
@@ -792,6 +811,29 @@ namespace TerraCommand.Common.Testing
 					break;
 				}
 				case "enemybrains": { int n = UnitSystem.AllUnits().Count(u => u.Team == CloneUnit.EnemyTeam && u.Loadout.Kind == Actors.ActorKind.Brain); Expect(Cmp(n, a[2], F(a[3])), $"{desc} (have {n})"); break; }
+				case "piloting": { // expect piloting true|false
+					bool on = P.GetModPlayer<PilotPlayer>().Ship != null;
+					Expect(on == (a[2] == "true"), $"{desc} (piloting {on})");
+					break;
+				}
+				case "shipstyle": { // expect shipstyle <style> <op> <n> : ships of that type in the world
+					var style = Enum.Parse<ShipStyle>(a[2], ignoreCase: true);
+					int n = ShipSystem.Ships().Count(x => x.Style == style);
+					Expect(Cmp(n, a[3], F(a[4])), $"{desc} (have {n})");
+					break;
+				}
+				case "shipx": { // expect shipx <op> <tiles> : the nearest ship's horizontal offset from the player
+					CargoShip ship = ShipSystem.Ships().OrderBy(x => Vector2.Distance(x.NPC.Center, P.Center)).FirstOrDefault();
+					float dx = ship == null ? 0f : (ship.NPC.Center.X - P.Center.X) / 16f;
+					Expect(Cmp(dx, a[2], F(a[3])), $"{desc} (ship {dx:0.0} tiles across, at {ship?.NPC.Bottom.ToTileCoordinates()})");
+					break;
+				}
+				case "shipalt": { // expect shipalt <op> <tiles> : the nearest ship's height above the mark
+					CargoShip ship = ShipSystem.Ships().OrderBy(x => Vector2.Distance(x.NPC.Center, P.Center)).FirstOrDefault();
+					float h = ship == null ? 0f : (markPos.Y - ship.NPC.Bottom.Y) / 16f;
+					Expect(Cmp(h, a[2], F(a[3])), $"{desc} (ship {h:0.0} tiles above the mark)");
+					break;
+				}
 				case "oresent": Expect(Cmp(CloneUnit.OreSentUp, a[2], F(a[3])), $"{desc} (ore sent up {CloneUnit.OreSentUp})"); break;
 				case "damaged": Expect(Cmp(PixelTerrain.DamagedTileCount, a[2], F(a[3])), $"{desc} (have {PixelTerrain.DamagedTileCount})"); break;
 				case "tile": {
@@ -823,6 +865,7 @@ namespace TerraCommand.Common.Testing
 				case "stance": { var st = P.GetModPlayer<Physics.BodyPhysicsPlayer>().Stance; Expect(st.ToString().ToLower() == a[2], $"{desc} (stance {st}, height {P.height})"); break; }
 				case "fuelnow": { float f = P.GetModPlayer<Physics.BodyPhysicsPlayer>().Fuel; Expect(Cmp(f, a[2], F(a[3])), $"{desc} (fuel {f:0})"); break; }
 				case "status": { var st = P.GetModPlayer<Physics.BodyPhysicsPlayer>().Actor.Status; Expect(st.ToString().ToLower() == a[2], $"{desc} (status {st}, rot {P.fullRotation:0.00})"); break; }
+				case "landedships": { int n = ShipSystem.Ships().Count(x => x.DoorOpen); Expect(Cmp(n, a[2], F(a[3])), $"{desc} (have {n})"); break; }
 				case "ships": { int n = ShipSystem.Ships().Count(); Expect(Cmp(n, a[2], F(a[3])), $"{desc} (have {n})"); break; }
 				case "shipstate": {
 					var s = ShipSystem.Ships().OrderBy(x => Vector2.Distance(x.NPC.Center, P.Center)).FirstOrDefault();

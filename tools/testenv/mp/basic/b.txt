@@ -26,6 +26,7 @@ wait 90
 expect units == 1
 expect inv CloneBody == 0     # now wearing the empty body
 sync switched
+wait 30                       # (A counts the idle bodies first)
 hurt 9999                     # control moves to B's old body (standing idle); this one bursts
 wait 30
 expect alive

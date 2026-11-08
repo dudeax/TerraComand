@@ -1,0 +1,53 @@
+# Craft types: a dropship (steers in at an angle, can be flown), a drop crate (falls, bursts open, one-way).
+nospawn
+clearnpcs
+goto spawn
+flatten 120 40
+wait 30
+stock GoldCoin 5
+stock CloneBody 3
+wait 2
+
+# a drop crate with a body in it: it falls, bursts open and the soldier steps out; it can't go back up
+callcraft crate 8 CloneBody 1
+wait 5
+expect shipstyle crate == 1
+expect funds == 48000              # a crate costs 20 silver
+wait 360
+expect units == 1
+expect landedships == 0            # a crate has no door: nothing loads, nothing launches
+screenshot craft-crate
+
+# a dropship: comes in from the side and lands on its mark
+clearunits
+callcraft dropship -10 CloneBody 1
+wait 5
+expect funds == 38000              # a dropship costs 1 gold
+wait 700
+expect landedships == 1
+expect shipx <= -8
+expect shipx >= -12
+expect units == 1
+screenshot craft-dropship
+
+# fly it: board, thrust up, steer right, set down, get out
+goto rel -10 0
+wait 10
+pilot board
+wait 10
+expect piloting true
+mark
+jump 50
+wait 50
+expect shipalt >= 3
+mark
+walk right 70
+wait 1
+expect moved >= 2                  # (the pilot rides along: the ship moved)
+screenshot craft-flying
+wait 240
+expect landedships == 1            # it set down again (gravity)
+pilot leave
+wait 10
+expect piloting false
+expect life >= 90

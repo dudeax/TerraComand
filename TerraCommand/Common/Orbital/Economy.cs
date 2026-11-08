@@ -25,6 +25,13 @@ namespace TerraCommand.Common.Orbital
 		};
 
 		public static readonly long ShipCost = Item.buyPrice(silver: 50);
+
+		/// <summary>What calling each craft type costs (a crate is cheap but one-way; a dropship is dear but can be flown).</summary>
+		public static long CostOf(Content.NPCs.ShipStyle style) => style switch {
+			Content.NPCs.ShipStyle.Dropship => Item.buyPrice(gold: 1),
+			Content.NPCs.ShipStyle.Crate => Item.buyPrice(silver: 20),
+			_ => ShipCost,
+		};
 		public static readonly long StartingFunds = Item.buyPrice(gold: 5);
 
 		static bool IsClient => Main.netMode == NetmodeID.MultiplayerClient;
@@ -165,11 +172,12 @@ namespace TerraCommand.Common.Orbital
 		}
 
 		/// <summary>Authority: a ship costs money to call (false: not enough funds, and the team is told).</summary>
-		public static bool PayForShip(int player)
+		public static bool PayForShip(int player, Content.NPCs.ShipStyle style)
 		{
-			if (TrySpend(ShipCost))
+			long cost = CostOf(style);
+			if (TrySpend(cost))
 				return true;
-			Tell(player, $"Not enough funds to call a ship ({Format(ShipCost)}; {Format(Funds())} in orbit).");
+			Tell(player, $"Not enough funds to call a {style.ToString().ToLower()} ({Format(cost)}; {Format(Funds())} in orbit).");
 			return false;
 		}
 	}

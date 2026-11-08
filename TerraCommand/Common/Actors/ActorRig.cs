@@ -469,7 +469,12 @@ namespace TerraCommand.Common.Actors
 		{
 			// the Terraria character isn't drawn at all; vanilla only shows the swing of a melee/tool item in use
 			Player p = drawInfo.drawPlayer;
+			bool aboard = Orbital.ShipSystem.PilotedBy(p) != null;   // a pilot is inside the ship: nothing of the body shows
 			foreach (PlayerDrawLayer layer in PlayerDrawLayerLoader.Layers) {
+				if (aboard) {
+					layer.Hide();
+					continue;
+				}
 				if (layer.Mod != null)
 					continue;
 				if (layer == PlayerDrawLayers.HeldItem && p.itemAnimation > 0 && !RigRenderer.IsGunLike(p.HeldItem))

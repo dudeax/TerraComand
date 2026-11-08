@@ -34,6 +34,7 @@ namespace TerraCommand.Common.Orbital
 		public override void ClearWorld()
 		{
 			cargo.Clear();
+			justUnloaded.Clear();
 			cargoClient.Clear();
 			PickingLz = false;
 		}
@@ -138,11 +139,15 @@ namespace TerraCommand.Common.Orbital
 		// ------------------------------------------------------------ ordering
 
 		/// <summary>Order a ship carrying items from the stockpile (may be empty: a pickup) to land at <paramref name="lz"/>.</summary>
-		public static void RequestShip(int team, IReadOnlyList<(StockKey key, int count)> manifest, Vector2 lz)
+		/// <summary>The craft type the local player orders (picked in the orbital menu).</summary>
+		public static ShipStyle OrderStyle = ShipStyle.Rocket;
+
+		public static void RequestShip(int team, IReadOnlyList<(StockKey key, int count)> manifest, Vector2 lz, ShipStyle style = ShipStyle.Rocket)
 		{
 			if (IsClient) {
 				ModPacket p = PacketHandler.Create(PacketType.OrderShip);
 				p.Write((byte)team);
+				p.Write((byte)style);
 				p.Write(manifest.Count);
 				foreach (var (k, n) in manifest) {
 					p.Write(k.Type); p.Write(k.Prefix); p.Write(n);
@@ -151,13 +156,13 @@ namespace TerraCommand.Common.Orbital
 				p.Send();
 				return;
 			}
-			DoShip(team, manifest, lz, payer: Main.myPlayer);
+			DoShip(team, manifest, lz, payer: Main.myPlayer, style);
 		}
 
 		/// <param name="payer">the player calling it (it costs money); -2 = free (a new team's first ship)</param>
-		static void DoShip(int team, IReadOnlyList<(StockKey key, int count)> manifest, Vector2 lz, int payer)
+		static void DoShip(int team, IReadOnlyList<(StockKey key, int count)> manifest, Vector2 lz, int payer, ShipStyle style = ShipStyle.Rocket)
 		{
-			if (payer != -2 && !Economy.PayForShip(payer))
+			if (payer != -2 && !Economy.PayForShip(payer, style))
 				return;
 			var items = new List<Item>();
 			foreach (var (k, n) in manifest) {
@@ -176,10 +181,15 @@ namespace TerraCommand.Common.Orbital
 			// it comes in from high above the landing zone
 			float x = Math.Clamp(lz.X, 16 * 60, Main.maxTilesX * 16 - 16 * 60);
 			float y = Math.Max(16 * 45f, lz.Y - 1500f);
+			float targetX = x;
+			if (style == ShipStyle.Dropship)   // a dropship comes in at an angle, from whichever side has more room
+				x = Math.Clamp(x + (x < Main.maxTilesX * 8 ? -1 : 1) * 700f, 16 * 50, Main.maxTilesX * 16 - 16 * 50);
 			int idx = NPC.NewNPC(Entity.GetSource_NaturalSpawn(), (int)x, (int)y, ModContent.NPCType<CargoShip>());
 			if (idx < 0 || idx >= Main.maxNPCs)
 				return;
 			var ship = (CargoShip)Main.npc[idx].ModNPC;
+			ship.SetStyle(style);
+			ship.TargetX = targetX;
 			ship.Team = team;
 			ship.State = ShipState.Descending;
 			cargo[idx] = items;
@@ -215,6 +225,9 @@ namespace TerraCommand.Common.Orbital
 					continue;
 				}
 				int n = Item.NewItem(ship.NPC.GetSource_FromAI(), at - new Vector2(8, 16), 16, 16, it.type, it.stack, false, it.prefix, noGrabDelay: true);
+				// tossed out, away from the door: the bay mustn't take it straight back in
+				Main.item[n].velocity = new Vector2(side * 2f, -2f);
+				justUnloaded[n] = Main.GameUpdateCount + 300;
 				if (Main.netMode == NetmodeID.Server)
 					NetMessage.SendData(MessageID.SyncItem, -1, -1, null, n, 1f);
 			}
@@ -223,6 +236,9 @@ namespace TerraCommand.Common.Orbital
 		}
 
 		/// <summary>Authority: anything thrown into the bay, and idle team bodies standing in it, go into the cargo.</summary>
+		/// <summary>Items a ship just put out (index -> until when the bays leave them alone).</summary>
+		static readonly Dictionary<int, uint> justUnloaded = new();
+
 		public static void LoadFromBay(CargoShip ship)
 		{
 			if (!cargo.TryGetValue(ship.NPC.whoAmI, out var items))
@@ -233,6 +249,11 @@ namespace TerraCommand.Common.Orbital
 				Item it = Main.item[i];
 				if (!it.active || it.IsAir || !bay.Intersects(it.Hitbox))
 					continue;
+				if (justUnloaded.TryGetValue(i, out uint until)) {
+					if (Main.GameUpdateCount < until)
+						continue;
+					justUnloaded.Remove(i);
+				}
 				items.Add(it.Clone());
 				it.TurnToAir();
 				it.active = false;
@@ -294,6 +315,44 @@ namespace TerraCommand.Common.Orbital
 		// ------------------------------------------------------------ launching
 
 		/// <summary>Send the team's landed ship nearest to the player back to orbit.</summary>
+		// ------------------------------------------------------------ piloting
+
+		/// <summary>The ship this player is flying, if any (every side knows: the ship carries its pilot).</summary>
+		public static CargoShip PilotedBy(Player p) => Ships().FirstOrDefault(s => s.Pilot == p.whoAmI && s.State == ShipState.Piloted);
+
+		public static void RequestPilot(Player p, CargoShip ship, bool board)
+		{
+			if (IsClient) {
+				ModPacket pk = PacketHandler.Create(PacketType.ShipPilot);
+				pk.Write((short)ship.NPC.whoAmI);
+				pk.Write(board);
+				pk.Send();
+				return;
+			}
+			DoPilot(p, ship, board);
+		}
+
+		static void DoPilot(Player p, CargoShip ship, bool board)
+		{
+			if (board) {
+				if (Vector2.Distance(p.Center, ship.NPC.Center) < HoldReach * 1.5f)
+					ship.Board(p);
+			}
+			else if (ship.Pilot == p.whoAmI)
+				ship.Unpilot();
+		}
+
+		public static void SendPilotInput(CargoShip ship, byte input)
+		{
+			if (IsClient) {
+				ModPacket pk = PacketHandler.Create(PacketType.PilotInput);
+				pk.Write((short)ship.NPC.whoAmI);
+				pk.Write(input);
+				pk.Send();
+			}
+			ship.PilotInput = input;   // (the client predicts nothing: the ship's motion comes from the server)
+		}
+
 		public static void RequestLaunch(Player p)
 		{
 			if (IsClient) {
@@ -336,13 +395,28 @@ namespace TerraCommand.Common.Orbital
 			switch (type) {
 				case PacketType.OrderShip: {
 					int team = r.ReadByte();
+					var style = (ShipStyle)Math.Min(r.ReadByte(), (byte)ShipStyle.Crate);
 					int n = Math.Min(r.ReadInt32(), 50);
 					var manifest = new List<(StockKey, int)>(n);
 					for (int i = 0; i < n; i++)
 						manifest.Add((new StockKey(r.ReadInt32(), r.ReadInt32()), r.ReadInt32()));
 					Vector2 lz = r.ReadVector2();
 					if (Main.netMode == NetmodeID.Server && team == Main.player[from].team)
-						DoShip(team, manifest, lz, payer: from);
+						DoShip(team, manifest, lz, payer: from, style);
+					break;
+				}
+				case PacketType.ShipPilot: {
+					int npc = r.ReadInt16();
+					bool board = r.ReadBoolean();
+					if (Main.netMode == NetmodeID.Server && npc >= 0 && npc < Main.maxNPCs && Main.npc[npc].active && Main.npc[npc].ModNPC is CargoShip ps)
+						DoPilot(Main.player[from], ps, board);
+					break;
+				}
+				case PacketType.PilotInput: {
+					int npc = r.ReadInt16();
+					byte input = r.ReadByte();
+					if (Main.netMode == NetmodeID.Server && npc >= 0 && npc < Main.maxNPCs && Main.npc[npc].ModNPC is CargoShip ps && ps.Pilot == from)
+						ps.PilotInput = input;
 					break;
 				}
 				case PacketType.ShipLaunch: {
@@ -433,8 +507,8 @@ namespace TerraCommand.Common.Orbital
 			if (!PickingLz || Main.gameMenu)
 				return;
 			if (Main.mouseLeft && Main.mouseLeftRelease) {
-				RequestShip(Main.LocalPlayer.team, pendingManifest, Main.MouseWorld);
-				Main.NewText("Cargo ship inbound.", Color.Orange);
+				RequestShip(Main.LocalPlayer.team, pendingManifest, Main.MouseWorld, OrderStyle);
+				Main.NewText($"{OrderStyle} inbound.", Color.Orange);
 				PickingLz = false;
 				Main.mouseLeftRelease = false;
 			}
@@ -465,6 +539,76 @@ namespace TerraCommand.Common.Orbital
 				Player.controlUseItem = false;
 				Player.controlUseTile = false;
 			}
+		}
+	}
+
+	/// <summary>
+	/// Flying a ship (CC: switch into a craft and fly it). While aboard, the body rides inside, hidden and out of harm's way;
+	/// its movement keys fly the ship instead (jump thrusts). Switch body (Q) or the hold's button leaves.
+	/// </summary>
+	public class PilotPlayer : ModPlayer
+	{
+		byte lastSent = 255;
+		int resend;
+		CargoShip wasIn;
+
+		public CargoShip Ship => ShipSystem.PilotedBy(Player);
+		byte captured;
+
+		/// <summary>The body's controls this tick (read by the body physics), turned into the ship's.</summary>
+		internal void Capture(in Actors.ActorInput i) =>
+			captured = (byte)((i.Left ? 1 : 0) | (i.Right ? 2 : 0) | (i.Jump ? 4 : 0) | (i.Prone ? 8 : 0));
+
+		public override void PreUpdateMovement()
+		{
+			if (Player.whoAmI != Main.myPlayer)
+				return;
+			CargoShip ship = Ship;
+			if (ship == null)
+				return;
+			byte input = captured;
+			if (input != lastSent || ++resend > 20) {
+				ShipSystem.SendPilotInput(ship, input);
+				lastSent = input;
+				resend = 0;
+			}
+			Player.controlLeft = Player.controlRight = Player.controlJump = Player.controlUp = Player.controlDown = false;
+			Player.controlUseItem = Player.controlUseTile = false;
+		}
+
+		public override void PostUpdate()
+		{
+			CargoShip ship = Ship;
+			if (ship != null) {
+				// ride inside
+				Player.Bottom = new Vector2(ship.NPC.Center.X, ship.NPC.Bottom.Y - 2f);
+				Player.velocity = Vector2.Zero;
+				Player.fallStart = (int)(Player.position.Y / 16f);
+				Player.immune = true;
+				Player.immuneTime = Math.Max(Player.immuneTime, 2);
+				Player.immuneNoBlink = true;
+				wasIn = ship;
+			}
+			else if (wasIn != null) {
+				// out: step down beside the ship
+				if (Player.whoAmI == Main.myPlayer) {
+					Player.Bottom = new Vector2(wasIn.NPC.Center.X + (wasIn.NPC.width / 2f + 12f) * Player.direction, wasIn.NPC.Bottom.Y - 2f);
+					Player.velocity = Vector2.Zero;
+					Player.fallStart = (int)(Player.position.Y / 16f);
+				}
+				Player.immuneNoBlink = false;
+				wasIn = null;
+				lastSent = 255;
+			}
+		}
+
+		public void Board(CargoShip ship) => ShipSystem.RequestPilot(Player, ship, board: true);
+
+		public void Leave()
+		{
+			CargoShip ship = Ship;
+			if (ship != null)
+				ShipSystem.RequestPilot(Player, ship, board: false);
 		}
 	}
 }

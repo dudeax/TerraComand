@@ -19,8 +19,13 @@ namespace TerraCommand.Common.Units
 
 		public override void ProcessTriggers(TriggersSet triggersSet)
 		{
-			if (TerraCommandKeybinds.SwitchBody.JustPressed)
-				SwitchBody();
+			if (TerraCommandKeybinds.SwitchBody.JustPressed) {
+				var pilot = Player.GetModPlayer<Orbital.PilotPlayer>();
+				if (pilot.Ship != null)
+					pilot.Leave();   // in a ship: switching gets out
+				else
+					SwitchBody();
+			}
 			if (TerraCommandKeybinds.CycleOrders.JustPressed)
 				CycleOrders();
 			if (TerraCommandKeybinds.OrbitalMenu.JustPressed)

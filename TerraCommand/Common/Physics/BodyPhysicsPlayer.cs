@@ -110,6 +110,12 @@ namespace TerraCommand.Common.Physics
 			float reach = Math.Min(Main.screenWidth, Main.screenHeight) * 0.5f;
 			Input.SharpAim = Input.Aim.Length() > reach * 0.1f;
 			prevJump = jump;
+			// flying a ship: the keys are the ship's, the body sits still inside it
+			var pilot = Player.GetModPlayer<Orbital.PilotPlayer>();
+			if (pilot.Ship != null) {
+				pilot.Capture(Input);
+				Input = new ActorInput { Aim = Input.Aim };
+			}
 		}
 
 		// ------------------------------------------------------------ movement

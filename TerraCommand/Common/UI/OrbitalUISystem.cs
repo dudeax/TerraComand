@@ -101,7 +101,7 @@ namespace TerraCommand.Common.UI
 		{
 			Refresh();
 			int stockW = Cols * Slot, recipeW = 5 * Slot;
-			int w = Pad * 3 + stockW + recipeW, h = Pad * 4 + 24 + Rows * Slot + Slot + 46;
+			int w = Pad * 3 + stockW + recipeW, h = Pad * 4 + 24 + Rows * Slot + Slot + 46 + 34;
 			var panel = new Rectangle(Main.screenWidth / 2 - w / 2, Main.screenHeight / 2 - h / 2, w, h);
 			Utils.DrawInvBG(sb, panel, new Color(20, 25, 50, 230));
 			bool hover = panel.Contains(Main.MouseScreen.ToPoint());
@@ -230,9 +230,25 @@ namespace TerraCommand.Common.UI
 			if (canLaunch && Clicked(launchBtn))
 				ShipSystem.RequestLaunch(Main.LocalPlayer);
 
+			// the craft to order: a rocket, a dropship (can be flown) or a drop crate (one-way)
+			Utils.DrawBorderString(sb, "Craft:", new Vector2(launchBtn.X - 60, my + 46), Color.LightBlue, 0.8f);
+			var styles = new[] { Content.NPCs.ShipStyle.Rocket, Content.NPCs.ShipStyle.Dropship, Content.NPCs.ShipStyle.Crate };
+			for (int k = 0; k < styles.Length; k++) {
+				var st = styles[k];
+				var b = new Rectangle(launchBtn.X + k * 92, my + 40, 88, 26);
+				bool sel = ShipSystem.OrderStyle == st;
+				Utils.DrawInvBG(sb, b, sel ? new Color(140, 110, 30, 235) : new Color(50, 60, 100, 210));
+				string label = $"{st} {Economy.Format(Economy.CostOf(st))}";
+				Utils.DrawBorderString(sb, label, b.Center.ToVector2() - font.MeasureString(label) * 0.33f, sel ? Color.White : Color.LightGray, 0.66f);
+				if (Clicked(b)) {
+					ShipSystem.OrderStyle = st;
+					Terraria.Audio.SoundEngine.PlaySound(SoundID.MenuTick);
+				}
+			}
+
 			Utils.DrawBorderString(sb, "Stockpile: click adds to ship cargo (Shift: stack), Ctrl-click sells, R-click a block to build with it",
 				new Vector2(panel.X + Pad, panel.Bottom - 40), Color.Gray, 0.65f);
-			Utils.DrawBorderString(sb, $"Fabricate / Buy: click (Shift: x10 / x5). Ships cost {Economy.Format(Economy.ShipCost)}. Close: X, K or Esc",
+			Utils.DrawBorderString(sb, $"Fabricate / Buy: click (Shift: x10 / x5). Close: X, K or Esc",
 				new Vector2(panel.X + Pad, panel.Bottom - 22), Color.Gray, 0.65f);
 		}
 

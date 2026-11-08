@@ -83,5 +83,21 @@ expect stock ServicePistol >= 1
 sell Wood 5
 wait 30
 expect stock Wood <= 55
+# a dropship, flown by this client through the server
+callcraft dropship 6
+wait 900
+expect landedships >= 1
+goto rel 6 0
+wait 10
+pilot board
+wait 30
+expect piloting true
+mark
+jump 60
+wait 30
+expect shipalt >= 2
+pilot leave
+wait 30
+expect piloting false
 screenshot a-final
 sync done

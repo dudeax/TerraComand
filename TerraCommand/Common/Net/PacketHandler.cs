@@ -29,6 +29,8 @@ namespace TerraCommand.Common.Net
 		ShipCargo,         // S->C: a ship's cargo list
 		ShipHold,          // C->S: take from / put into a landed ship's hold
 		ShipGive,          // S->C: an item taken from a hold, for the player's pack
+		ShipPilot,         // C->S: board / leave a ship's controls
+		PilotInput,        // C->S: the pilot's controls
 		BuildRequest,      // C->S
 		// Units
 		DeployUnit,        // C->S
@@ -90,6 +92,8 @@ namespace TerraCommand.Common.Net
 				case PacketType.ShipCargo:
 				case PacketType.ShipHold:
 				case PacketType.ShipGive:
+				case PacketType.ShipPilot:
+				case PacketType.PilotInput:
 					Orbital.ShipSystem.Receive(type, r, from);
 					break;
 				case PacketType.CraftRequest:

@@ -133,6 +133,30 @@ def ship():
     c.rect(4, 30, 9, 33, DARK); c.rect(5, 32, 8, 33, BLK)  # nozzle
     c.save("Content/NPCs/CargoShip.png")
 
+def craft():
+    HULL=(150,160,120,255); HULL_D=(96,104,76,255); HULL_L=(196,204,166,255); STRIPE=(200,120,40,255)
+    # dropship: a wide hull with twin engine pods and a side hatch, 30x16 art (60x32 px)
+    c = C(30, 16)
+    c.rect(5, 2, 24, 11, HULL); c.rect(5, 2, 24, 2, HULL_L); c.rect(5, 11, 24, 11, HULL_D)
+    c.rect(3, 4, 4, 10, HULL_D); c.rect(25, 4, 26, 10, HULL_D)
+    c.rect(19, 4, 23, 6, BLK); c.rect(20, 4, 22, 5, CYAN)            # cockpit
+    c.rect(9, 5, 15, 10, HULL_D); c.rect(10, 6, 14, 9, (120, 128, 98, 255)); c.set(14, 7, YEL)   # hatch (closed)
+    c.rect(5, 3, 24, 3, STRIPE)
+    for x0 in (0, 26):                                                 # engine pods
+        c.rect(x0, 8, x0 + 3, 14, HULL_D); c.rect(x0, 8, x0 + 3, 8, HULL); c.rect(x0 + 1, 14, x0 + 2, 15, DARK)
+    c.rect(12, 0, 17, 1, HULL_D)                                       # dorsal fin
+    c.save("Content/NPCs/Dropship.png")
+    # drop crate: a braced box with a chute pack on top, 12x12 art (24x24 px)
+    WOOD=(150,110,64,255); WOOD_D=(102,72,40,255)
+    c = C(12, 12)
+    c.rect(0, 2, 11, 11, WOOD); c.rect(0, 2, 11, 2, WOOD_D); c.rect(0, 11, 11, 11, WOOD_D)
+    c.rect(0, 2, 0, 11, WOOD_D); c.rect(11, 2, 11, 11, WOOD_D)
+    for k in range(10):
+        c.set(1 + k, 3 + k * 8 // 10, WOOD_D)
+    c.rect(4, 0, 7, 1, (90, 110, 60, 255))
+    c.rect(4, 6, 7, 7, STEEL)
+    c.save("Content/NPCs/DropCrate.png")
+
 def body_items():
     # packed bodies: a capsule with the body type inside
     def capsule(name, inner):
@@ -253,4 +277,4 @@ def devices():
     c = C(1, 1); c.set(0, 0, (120, 220, 255, 255)); c.save("Content/Projectiles/DigParticle.png")
 
 if __name__ == "__main__":
-    body_item(); wand(); unit_fallback(); icon(); jetpack(); soldier(); brainbot(); ship(); devices(); actor_variants(); body_items()
+    body_item(); wand(); unit_fallback(); icon(); jetpack(); soldier(); brainbot(); ship(); devices(); actor_variants(); body_items(); craft()

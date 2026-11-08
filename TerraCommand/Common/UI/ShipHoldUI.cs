@@ -80,6 +80,20 @@ namespace TerraCommand.Common.UI
 			var panel = new Rectangle(x0 - 8, y0 - 30, Cols * Slot + 16, Rows * Slot + 40);
 			Utils.DrawInvBG(sb, panel, new Color(40, 50, 90, 220));
 			Utils.DrawBorderString(sb, $"Ship hold ({cargo.Sum(i => i.stack)} items) - goes to orbit on launch", new Vector2(x0, y0 - 26), Color.LightBlue, 0.8f);
+			if (Main.npc[OpenShip].ModNPC is CargoShip ship && ship.CanPilot) {
+				var pilotBtn = new Rectangle(x0 + Cols * Slot - 110, y0 - 30, 110, 24);
+				bool hover = pilotBtn.Contains(Main.MouseScreen.ToPoint());
+				Utils.DrawInvBG(sb, pilotBtn, hover ? new Color(90, 140, 60, 230) : new Color(60, 90, 50, 220));
+				Utils.DrawBorderString(sb, "Pilot ship", new Vector2(pilotBtn.X + 14, pilotBtn.Y + 4), Color.White, 0.8f);
+				if (hover && Main.mouseLeft && Main.mouseLeftRelease) {
+					Main.mouseLeftRelease = false;
+					Main.LocalPlayer.GetModPlayer<PilotPlayer>().Board(ship);
+					Main.playerInventory = false;
+					Close();
+					Main.NewText("Flying: move to steer, jump to thrust, Q to get out.", Color.LightBlue);
+					return;
+				}
+			}
 			if (panel.Contains(Main.MouseScreen.ToPoint()))
 				Main.LocalPlayer.mouseInterface = true;
 
