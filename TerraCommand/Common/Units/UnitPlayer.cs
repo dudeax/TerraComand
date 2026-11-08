@@ -59,6 +59,8 @@ namespace TerraCommand.Common.Units
 				return true; // no bodies left: a real death
 
 			// The body dies: it drops everything it carried, and control jumps to the nearest idle body.
+			if (Player.GetModPlayer<Combat.DamagePlayer>().IsViolentDeath(damage))
+				Combat.DamageRules.Gib(Player.Hitbox, new Vector2(hitDirection * 3f, -2f));
 			Player.DropItems();
 			Player.statLife = 1;
 			Player.immune = true;

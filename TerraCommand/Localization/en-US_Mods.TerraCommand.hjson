@@ -43,6 +43,7 @@ Configs: {
 
 		Headers: {
 			Terrain: Terrain
+			Bodies: Bodies
 			Units: Units
 		}
 
@@ -64,6 +65,11 @@ Configs: {
 		CrumbleThreshold: {
 			Label: Crumble threshold
 			Tooltip: Fraction of a tile's pixels that must be removed before the rest collapses
+		}
+
+		NaturalLifeRegen: {
+			Label: Natural health regeneration
+			Tooltip: Off (Cortex Command style): bodies only heal from potions, buffs and accessories
 		}
 
 		TransferControlOnDeath: {

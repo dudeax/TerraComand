@@ -54,8 +54,11 @@ namespace TerraCommand.Common.Testing
 		internal static int Probe;
 		internal static bool NoPickup;
 		internal static int WalkDir, WalkTicks, JumpTicks, DownTicks;
+		internal static bool HoldDown, HoldJump, HoldLeft, HoldRight;   // `hold <down|jump|left|right> on|off`
+		internal static readonly Dictionary<int, (int type, Vector2 pos)> Pinned = new();
 		static Vector2 markPos;
 		static float peakRise;
+		static int shotsLeft, shotGap, shotWait, gibsAtMark;
 
 		static int EnvInt(string name, int def) => int.TryParse(Environment.GetEnvironmentVariable(name), out int v) ? v : def;
 
@@ -73,7 +76,8 @@ namespace TerraCommand.Common.Testing
 			Probe--;
 			Report("PROBE", $"{where}: target={Player.tileTargetX},{Player.tileTargetY} mouseWorld={Main.MouseWorld.ToTileCoordinates()} " +
 				$"held={p.HeldItem.Name} ctrlUse={p.controlUseItem} release={p.releaseUseItem} anim={p.itemAnimation} time={p.itemTime} " +
-				$"mouseInterface={p.mouseInterface} noBuilding={p.noBuilding} focus={Main.hasFocus} playerTile={p.Bottom.ToTileCoordinates()}");
+				$"mouseInterface={p.mouseInterface} noBuilding={p.noBuilding} focus={Main.hasFocus} playerTile={p.Bottom.ToTileCoordinates()} " +
+				$"down={p.controlDown} vel={p.velocity} crouch={p.GetModPlayer<Physics.BodyPhysicsPlayer>().Crouching} spread={p.GetModPlayer<Combat.AimPlayer>().Spread:0.000}");
 		}
 
 		public override void Load()
@@ -192,8 +196,9 @@ namespace TerraCommand.Common.Testing
 			pendingShot = null;
 			shotFrames = 0;
 			AimOffset = null;
-			UseTicks = Probe = WalkTicks = JumpTicks = DownTicks = 0;
-			NoSpawns = NoPickup = false;
+			UseTicks = Probe = WalkTicks = JumpTicks = DownTicks = shotsLeft = 0;
+			NoSpawns = NoPickup = HoldDown = HoldJump = HoldLeft = HoldRight = false;
+			Pinned.Clear();
 			waitingSync = null;
 			scenarioDone = false;
 
@@ -254,6 +259,8 @@ namespace TerraCommand.Common.Testing
 			try {
 				if (!serverMode && (Main.LocalPlayer == null || !Main.LocalPlayer.active))
 					return;
+				if (!serverMode)
+					Main.BlackFadeIn = 0; // the enter-world fade advances per drawn frame, and fast-forward skips most draws
 				if (ticksInWorld++ < 90) // let the world settle
 					return;
 				if (Main.netMode != NetmodeID.MultiplayerClient) {
@@ -262,6 +269,7 @@ namespace TerraCommand.Common.Testing
 				}
 				if (!serverMode && P != null)
 					peakRise = Math.Max(peakRise, (markPos.Y - P.Bottom.Y) / 16f);
+
 				Step();
 			}
 			catch (Exception e) {
@@ -315,6 +323,14 @@ namespace TerraCommand.Common.Testing
 		{
 			if (waitTicks > 0) { waitTicks--; return; }
 			if (WalkTicks > 0 || JumpTicks > 0 || DownTicks > 0) return;
+			if (shotsLeft > 0) {
+				if (UseTicks > 0) return;
+				if (shotWait > 0) { shotWait--; return; }
+				UseTicks = 2;
+				shotWait = shotGap;
+				shotsLeft--;
+				return;
+			}
 			if (waitingSync != null) {
 				if (Directory.GetFiles(syncDir, waitingSync + ".*").Length < peers)
 					return;
@@ -379,6 +395,9 @@ namespace TerraCommand.Common.Testing
 					break;
 				}
 				case "heal": P.statLife = P.statLifeMax2; break;
+				case "maxlife": // max life comes from consumed life crystals (+20 each over the base 100)
+					P.ConsumedLifeCrystals = Math.Clamp((I(a[1]) - 100) / 20, 0, Player.LifeCrystalMax);
+					break;
 				case "flatten": { // clear a w x h area above the player's feet and lay a dirt floor, for repeatable setups
 					int w = I(a[1]), h = I(a[2]);
 					for (int x = t.X - w / 2; x <= t.X + w / 2; x++) {
@@ -418,9 +437,44 @@ namespace TerraCommand.Common.Testing
 				case "walk": WalkDir = a[1] == "left" ? -1 : 1; WalkTicks = I(a[2]); break;
 				case "jump": JumpTicks = I(a[1]); break;
 				case "crouch": DownTicks = I(a[1]); break;
-				case "mark": markPos = P.Bottom; peakRise = 0f; break;
+				case "mark":
+					markPos = P.Bottom;
+					peakRise = 0f;
+					P.GetModPlayer<Combat.AimPlayer>().ShotLog.Clear();
+					P.GetModPlayer<Combat.AimPlayer>().ConeLog.Clear();
+					gibsAtMark = Combat.DamageRules.GibCount;
+					break;
+				case "shoot": shotsLeft = I(a[1]); shotGap = I(a[2]); shotWait = 0; break;
+				case "aimnpc": { // aimnpc <NPCName> head|body : aim at the nearest such NPC
+					NPC n = NearestNpc(a[1]);
+					Vector2 at = a[2] == "head" ? new Vector2(n.Center.X, n.position.Y + n.height * 0.1f) : n.Center + new Vector2(0, n.height * 0.15f);
+					AimOffset = at - P.Center;
+					break;
+				}
 				case "give": P.QuickSpawnItem(P.GetSource_FromThis(), ItemType(a[1]), a.Length > 2 ? I(a[2]) : 1); break;
 				case "clearinv": for (int i = 0; i < 58; i++) P.inventory[i].TurnToAir(); break;
+				case "hold" when a.Length > 2 && (a[2] == "on" || a[2] == "off"): {
+					bool on = a[2] == "on";
+					switch (a[1]) {
+						case "down": HoldDown = on; break;
+						case "jump": HoldJump = on; break;
+						case "left": HoldLeft = on; break;
+						case "right": HoldRight = on; break;
+						default: throw new ArgumentException("hold what? " + a[1]);
+					}
+					break;
+				}
+				case "clearnpcs": // remove every NPC except idle bodies (town NPCs shoot at test targets)
+					foreach (NPC n in Main.npc)
+						if (n.active && n.ModNPC is not Content.NPCs.CloneUnit)
+							n.active = false;
+					break;
+				case "pin": { // pin <NPCName> : freeze the nearest such NPC in place (stationary target)
+					NPC n = NearestNpc(a[1]);
+					Pinned[n.whoAmI] = (n.type, n.position);
+					Report("INFO", $"pinned {a[1]}#{n.whoAmI} at {n.Center.ToTileCoordinates()}");
+					break;
+				}
 				case "hold": {
 					int type = ItemType(a[1]);
 					int slot = Array.FindIndex(P.inventory, it => it.type == type);
@@ -436,12 +490,18 @@ namespace TerraCommand.Common.Testing
 				case "drop": DropItem(P.Center + new Vector2(F(a[3]), F(a[4])), ItemType(a[1]), I(a[2])); break;
 				case "stock": OrbitalStockpile.Change(new StockKey(ItemType(a[1]), 0), a.Length > 2 ? long.Parse(a[2]) : 1); break;
 				case "carve": PixelTerrain.RequestCarve(P.Center + new Vector2(F(a[1]), F(a[2])), F(a[3]), a.Length > 4 ? I(a[4]) : 1000, CarveFlags.None); break;
-				case "projectile": { // projectile <type> <dx> <dy> <vx> <vy>
+				case "projectile": { // projectile <type> <dx> <dy> <vx> <vy> [damage]
 					int type = int.TryParse(a[1], out int id) ? id : ProjectileID.Search.GetId(a[1]);
-					Projectile.NewProjectile(P.GetSource_FromThis(), P.Center + new Vector2(F(a[2]), F(a[3])), new Vector2(F(a[4]), F(a[5])), type, 20, 0f, Main.myPlayer);
+					Projectile.NewProjectile(P.GetSource_FromThis(), P.Center + new Vector2(F(a[2]), F(a[3])), new Vector2(F(a[4]), F(a[5])), type,
+						a.Length > 6 ? I(a[6]) : 20, 0f, Main.myPlayer);
 					break;
 				}
-				case "spawnnpc": NPC.NewNPC(P.GetSource_FromThis(), (int)(P.Center.X + F(a[2])), (int)(P.Center.Y + F(a[3])), NPCID.Search.GetId(a[1])); break;
+				case "spawnnpc": {
+					int idx = NPC.NewNPC(P.GetSource_FromThis(), (int)(P.Center.X + F(a[2])), (int)(P.Center.Y + F(a[3])), NPCID.Search.GetId(a[1]));
+					Pinned.Remove(idx); // a reused slot isn't the NPC that was pinned
+					Report("INFO", $"spawned {a[1]}#{idx} at {Main.npc[idx].Center.ToTileCoordinates()}");
+					break;
+				}
 				case "interact": // interact <dx> <dy> [item count]  (optionally with an item on the cursor, set in the same tick)
 					if (a.Length > 3)
 						Main.mouseItem = new Item(ItemType(a[3]), a.Length > 4 ? I(a[4]) : 1);
@@ -479,8 +539,19 @@ namespace TerraCommand.Common.Testing
 		static void DropItem(Vector2 at, int type, int stack)
 		{
 			int idx = Item.NewItem(P.GetSource_FromThis(), at, type, stack);
+			Main.item[idx].velocity = Vector2.Zero; // deterministic: no random toss
 			if (Main.netMode == NetmodeID.MultiplayerClient)
 				NetMessage.SendData(MessageID.SyncItem, -1, -1, null, idx, 1f);
+		}
+
+		static NPC NearestNpc(string name)
+		{
+			int type = NPCID.Search.GetId(name);
+			NPC best = null;
+			foreach (NPC n in Main.ActiveNPCs)
+				if (n.type == type && (best == null || Vector2.Distance(n.Center, P.Center) < Vector2.Distance(best.Center, P.Center)))
+					best = n;
+			return best ?? throw new ArgumentException("no NPC " + name);
 		}
 
 		static void RunExpect(string[] a)
@@ -524,6 +595,26 @@ namespace TerraCommand.Common.Testing
 				case "mounted": Expect(P.mount.Active == (a[2] == "yes"), $"{desc} (mount active={P.mount.Active})"); break;
 				case "knocked": Expect((P.GetModPlayer<Physics.BodyPhysicsPlayer>().KnockedTicks > 0) == (a[2] == "yes"), desc); break;
 				case "fuel": { float f = P.GetModPlayer<Physics.BodyPhysicsPlayer>().FuelMax; Expect(Cmp(f, a[2], F(a[3])), $"{desc} (max fuel {f:0})"); break; }
+				case "spread": {
+					var log = P.GetModPlayer<Combat.AimPlayer>().ShotLog;
+					float avg = log.Count == 0 ? 0f : log.Average();
+					Expect(log.Count > 0 && Cmp(avg, a[2], F(a[3])), $"{desc} (avg |deviation| {avg:0.000} rad over {log.Count} shots)");
+					break;
+				}
+				case "cone": { // average cone half-angle at the shots since `mark` (deterministic, unlike spread)
+					var log = P.GetModPlayer<Combat.AimPlayer>().ConeLog;
+					float avg = log.Count == 0 ? 0f : log.Average();
+					Expect(log.Count > 0 && Cmp(avg, a[2], F(a[3])), $"{desc} (avg cone {avg:0.000} rad over {log.Count} shots)");
+					break;
+				}
+				case "headshot": Expect(Combat.DamageGlobalNPC.LastHeadshot == (a[2] == "yes"), $"{desc} (last hit headshot={Combat.DamageGlobalNPC.LastHeadshot})"); break;
+				case "wounds": {
+					int n = NearestNpc(a[2]).GetGlobalNPC<Combat.DamageGlobalNPC>().Wounds.Count;
+					Expect(Cmp(n, a[3], F(a[4])), $"{desc} (has {n})");
+					break;
+				}
+				case "mywounds": { int n = P.GetModPlayer<Combat.DamagePlayer>().Wounds.Count; Expect(Cmp(n, a[2], F(a[3])), $"{desc} (has {n})"); break; }
+				case "gibs": { int n = Combat.DamageRules.GibCount - gibsAtMark; Expect(Cmp(n, a[2], F(a[3])), $"{desc} ({n} since mark)"); break; }
 				case "wall": { int x = t.X + I(a[2]), y = t.Y + I(a[3]); Expect(Main.tile[x, y].WallType != WallID.None, $"{desc} (wall {Main.tile[x, y].WallType})"); break; }
 				case "alive": Expect(!P.dead, $"{desc} (life {P.statLife})"); break;
 				case "life": Expect(Cmp(P.statLife, a[2], F(a[3])), $"{desc} (life {P.statLife})"); break;
@@ -609,6 +700,10 @@ namespace TerraCommand.Common.Testing
 				AutoTest.DownTicks--;
 				Player.controlDown = true;
 			}
+			if (AutoTest.HoldDown) Player.controlDown = true;
+			if (AutoTest.HoldJump) Player.controlJump = true;
+			if (AutoTest.HoldLeft) Player.controlLeft = true;
+			if (AutoTest.HoldRight) Player.controlRight = true;
 			AutoTest.ProbeLog(Player, "SetControls");
 		}
 
@@ -627,6 +722,14 @@ namespace TerraCommand.Common.Testing
 
 	public class AutoTestNPC : GlobalNPC
 	{
+		public override void PostAI(NPC npc)
+		{
+			if (AutoTest.Enabled && AutoTest.Pinned.TryGetValue(npc.whoAmI, out var pin) && pin.type == npc.type) {
+				npc.position = pin.pos;
+				npc.velocity = Vector2.Zero;
+			}
+		}
+
 		public override void EditSpawnRate(Player player, ref int spawnRate, ref int maxSpawns)
 		{
 			if (AutoTest.NoSpawns)

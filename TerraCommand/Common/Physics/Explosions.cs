@@ -36,6 +36,8 @@ namespace TerraCommand.Common.Physics
 			// The local player's own body (each client moves its own player).
 			if (!Main.dedServ) {
 				Player lp = Main.LocalPlayer;
+				if (Vector2.Distance(lp.Center, center) < radius)
+					Testing.AutoTest.Trace($"blast catches local player: active={lp.active} dead={lp.dead} life={lp.statLife}");
 				if (lp.active && !lp.dead)
 					lp.GetModPlayer<BodyPhysicsPlayer>().ApplyImpulse(Impulse(center, lp.Center, radius, strength));
 			}
@@ -52,6 +54,20 @@ namespace TerraCommand.Common.Physics
 				n.velocity += imp * resist;
 				n.netUpdate = true;
 			}
+		}
+
+		/// <summary>
+		/// Marks everything inside a blast (on every machine) so that deaths in the next moments gib. Must run
+		/// before vanilla applies the explosion's damage, i.e. from PreKill.
+		/// </summary>
+		public static void MarkBlasted(Vector2 center, float radius)
+		{
+			foreach (Player p in Main.ActivePlayers)
+				if (Vector2.Distance(p.Center, center) < radius)
+					p.GetModPlayer<Combat.DamagePlayer>().BlastedTimer = 15;
+			foreach (NPC n in Main.ActiveNPCs)
+				if (Vector2.Distance(n.Center, center) < radius + Math.Max(n.width, n.height) / 2f)
+					n.GetGlobalNPC<Combat.DamageGlobalNPC>().BlastedTimer = 15;
 		}
 
 		static Vector2 Impulse(Vector2 center, Vector2 target, float radius, float strength)

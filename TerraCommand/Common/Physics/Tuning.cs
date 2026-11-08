@@ -34,6 +34,13 @@ namespace TerraCommand.Common.Physics
 		public const float KnockedFriction = 0.4f;   // a body on its back grinds to a halt
 		public const int KnockdownTicks = 50;
 
+		// aiming (radians): spread = base (+fast weapon) * stance; recoil adds per shot and decays per tick
+		public const float AimBaseSpread = 0.035f;
+		public const float AimFastWeaponSpread = 0.03f; // weapons with useTime < 10
+		public const float AimCrouched = 0.35f, AimMoving = 1.6f, AimAirborne = 2.2f, AimJetting = 2.8f;
+		public const float RecoilPerShot = 0.04f, RecoilMax = 0.3f, RecoilDecay = 0.95f, RecoilDecayCrouched = 0.88f;
+		public const float KickGrounded = 0.04f, KickAirborne = 0.18f;   // x weapon knockback
+
 		// explosions shove things: speed at the blast centre, falling off linearly to the edge
 		public const float BlastImpulse = 9f;
 	}

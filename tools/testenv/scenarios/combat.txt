@@ -1,0 +1,71 @@
+# Cortex Command style aiming and damage.
+nospawn
+clearnpcs                       # town NPCs shoot at test targets
+goto spawn
+flatten 60 24
+wait 30
+give FlintlockPistol
+give MusketBall 999
+give Minishark
+hold FlintlockPistol
+aim 300 -10
+
+# spread by stance (single shots with recoil settled in between)
+hold down on                    # crouched: steady
+wait 5
+mark
+shoot 12 50
+expect cone <= 0.015            # 0.035 x 0.35
+hold down off
+wait 5
+mark                            # standing
+shoot 12 50
+expect cone >= 0.03
+expect cone <= 0.045            # 0.035 standing
+expect spread <= 0.035
+goto rel 0 -20                  # falling: wild (arena is flattened 24 tiles high)
+wait 12                         # let the previous shot's animation finish; the fall takes ~40 ticks
+mark
+shoot 1 0                       # one shot: the cone is deterministic
+expect cone >= 0.07             # airborne/jetpacking
+wait 120
+
+# recoil: holding the trigger on an automatic weapon walks the shots out
+hold Minishark
+wait 60
+mark
+use 90
+expect cone >= 0.1              # recoil climbs under sustained fire
+
+# headshots on an upright target, body shots aren't
+hold FlintlockPistol
+spawnnpc Zombie 160 0
+wait 60                         # let it land first
+pin Zombie
+hold down on
+aimnpc Zombie body
+shoot 1 30
+wait 10
+expect headshot no
+expect wounds Zombie >= 1
+screenshot wounds
+aimnpc Zombie head
+shoot 1 30
+wait 10
+expect headshot yes
+hold down off
+
+# no natural regen
+hurt 40
+wait 300
+expect life <= 60
+expect mywounds >= 1
+
+# a bomb gibs a (pinned) zombie
+mark
+spawnnpc Zombie -120 0
+wait 60
+pin Zombie
+projectile Bomb -120 -30 0 0 100
+wait 200
+expect gibs >= 1

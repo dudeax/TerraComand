@@ -35,8 +35,18 @@ namespace TerraCommand.Common.Destruction
 			orig(self, compareSpot, radius, minI, maxI, minJ, maxJ, wallSplode);
 		}
 
+		public override bool PreKill(Projectile projectile, int timeLeft)
+		{
+			// before vanilla deals the explosion's damage, so blast deaths gib
+			if (IsExplosive(projectile) && projectile.ModProjectile is not Content.Projectiles.LaunchRocket)
+				Physics.Explosions.MarkBlasted(projectile.Center, (Physics.Explosions.BlastRadiusTiles(projectile) + 2) * 16f);
+			return true;
+		}
+
 		public override void OnKill(Projectile projectile, int timeLeft)
 		{
+			if (IsExplosive(projectile))
+				Testing.AutoTest.Trace($"explosive {projectile.Name} died at {projectile.Center.ToTileCoordinates()}");
 			if (IsExplosive(projectile) && projectile.ModProjectile is not Content.Projectiles.LaunchRocket)
 				Physics.Explosions.Blast(projectile.Center, (Physics.Explosions.BlastRadiusTiles(projectile) + 2) * 16f, Physics.Tuning.BlastImpulse);
 			if (Main.netMode == NetmodeID.MultiplayerClient || !TerraCommandConfig.Instance.PixelExplosions)

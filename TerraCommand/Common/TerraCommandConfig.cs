@@ -24,6 +24,10 @@ namespace TerraCommand.Common
 		[DefaultValue(0.8f)]
 		public float CrumbleThreshold { get; set; } = 0.8f;
 
+		[Header("Bodies")]
+		[DefaultValue(false)]
+		public bool NaturalLifeRegen { get; set; } = false;
+
 		[Header("Units")]
 		[DefaultValue(true)]
 		public bool TransferControlOnDeath { get; set; } = true;

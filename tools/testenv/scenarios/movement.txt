@@ -57,8 +57,12 @@ wait 150
 expect life < 100
 expect alive
 
-# a nearby bomb throws you (and knocks you flat)
+# a nearby bomb throws you (and knocks you flat). Your own bomb this close would nearly kill a
+# 100-life body, so this one gets more life for the test.
+maxlife 300
+wait 2
 heal
+expect life >= 250
 wait 60
 mark
 projectile Bomb 40 -10 0 0

@@ -27,7 +27,11 @@ namespace TerraCommand.Common.Physics
 		int impactTimer;
 		bool skipImpact = true;
 
-		public bool Grounded => Player.velocity.Y == 0f;
+		/// <summary>
+		/// Standing on something, as of the end of the last update (after collision). During the update
+		/// vanilla has already added gravity, so velocity.Y == 0 isn't a reliable test there.
+		/// </summary>
+		public bool Grounded { get; private set; } = true;
 
 		// ------------------------------------------------------------ gear -> jetpack
 
@@ -75,7 +79,6 @@ namespace TerraCommand.Common.Physics
 				Player.controlLeft = Player.controlRight = Player.controlJump = Player.controlUp = Player.controlDown = false;
 				Player.controlUseItem = Player.controlUseTile = Player.controlHook = false;
 			}
-			Crouching = Player.controlDown && Grounded && KnockedTicks == 0;
 		}
 
 		// ------------------------------------------------------------ movement
@@ -83,6 +86,7 @@ namespace TerraCommand.Common.Physics
 		public override void PreUpdateMovement()
 		{
 			velBefore = Player.velocity;
+			Crouching = Player.controlDown && Grounded && KnockedTicks == 0;
 			Player.gravity = Tuning.Gravity;
 			Player.maxFallSpeed = Tuning.MaxFallSpeed;
 
@@ -152,6 +156,7 @@ namespace TerraCommand.Common.Physics
 
 		public override void PostUpdate()
 		{
+			Grounded = Player.velocity.Y == 0f;
 			if (KnockedTicks > 0) {
 				KnockedTicks--;
 				Player.fullRotation = knockDir * MathHelper.PiOver2 * Math.Min(1f, KnockedTicks / 10f);
