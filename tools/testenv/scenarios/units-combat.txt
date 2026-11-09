@@ -26,7 +26,7 @@ order follow
 order sentry
 wait 30
 expect unitlife >= 90
-liftunit 25                     # (CC: ~32 tiles would be lethal)
+liftunit 20                     # loaded bodies can exceed the 4800 Ns gib limit at 25 tiles, depending on pose
 wait 150
 expect unitlife < 90
 expect units == 1

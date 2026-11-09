@@ -1,0 +1,38 @@
+# Real tModLoader integration: controlled and idle actors use sprite atoms and terrain-constrained limbs.
+nospawn
+clearnpcs
+goto spawn
+flatten 120 30
+clearinv
+wait 90
+expect contact yes
+expect contactstuck no
+expect shapeinsolid == 0
+expect alive
+mark
+walk right 120
+expect moved > 1
+expect moved < 12
+expect shapeinsolid == 0
+spawnunit 80 0
+wait 90
+expect unitcontact yes
+hold down on
+wait 120
+expect stance prone
+expect contactstuck no
+expect shapeinsolid == 0
+mark
+walk right 180
+expect moved > 1
+expect shapeinsolid == 0
+screenshot contact-crawl
+hold down off
+wait 120
+mark
+jump 50
+wait 20
+expect peak > 1
+expect contactstuck no
+expect alive
+screenshot contact-flight

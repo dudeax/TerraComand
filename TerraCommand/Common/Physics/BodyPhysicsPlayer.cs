@@ -24,10 +24,14 @@ namespace TerraCommand.Common.Physics
 	{
 		public readonly CCActor Actor = new();
 		public ActorInput Input;
-		bool prevJump, skipImpact = true;
+		bool prevJump, skipImpact = true, contactMoved;
+		[ThreadStatic] static Player contactUpdateOwner;
+		bool OwnsCollision => UsesContacts || !Simulated && Actor.Contacts.Initialized;
+		bool UsesContacts => Simulated && Player.grappling[0] < 0 && !Player.pulley && Player.GetModPlayer<Orbital.PilotPlayer>().Ship == null;
 		Vector2 velRequested;
 		float impactAccum;
 		int impactTimer;
+		int width = CC.BodyWidth;
 		int height = CC.StandHeight;   // the hitbox height right now (per posture and body type)
 
 		// ---- API used by aiming, explosions, units and tests
@@ -44,9 +48,9 @@ namespace TerraCommand.Common.Physics
 		/// <summary>Bodies are narrower than a Terraria character (kept centred). Applied to every player on every machine.</summary>
 		public override void PreUpdate()
 		{
-			if (Player.width != CC.BodyWidth && !Player.mount.Active) {
-				Player.position.X += (Player.width - CC.BodyWidth) / 2f;
-				Player.width = CC.BodyWidth;
+			if (Player.width != width && !Player.mount.Active) {
+				Player.position.X += (Player.width - width) / 2f;
+				Player.width = width;
 			}
 		}
 
@@ -72,6 +76,7 @@ namespace TerraCommand.Common.Physics
 			Actor.Apply(stats, Actors.ActorInventory.Mass(Player));
 			Player.statLifeMax2 = (int)(Player.statLifeMax2 * stats.LifeScale);
 			Actor.MaxHealth = Player.statLifeMax2;
+			Actor.Health = Player.statLife;
 
 			// vanilla mobility off: it's legs and a jetpack now
 			Player.wingTimeMax = 0;
@@ -81,6 +86,7 @@ namespace TerraCommand.Common.Physics
 			Player.blockExtraJumps = true;
 			Player.dashType = 0;
 			Player.noFallDmg = true;
+			Player.buffImmune[BuffID.Suffocation] = true; // rectangular tile overlap is not a body contact
 			if (Player.mount.Active)
 				Player.mount.Dismount(Player);
 
@@ -105,6 +111,8 @@ namespace TerraCommand.Common.Physics
 				Right = Player.controlRight,
 				Jump = jump,
 				JumpStart = jump && !prevJump,
+				Reloading = Player.GetModPlayer<Combat.AimPlayer>().Reloading,
+				HoldingDevice = !Player.HeldItem.IsAir,
 				Prone = Player.controlDown,
 				Crouch = TerraCommandKeybinds.Crouch?.Current == true || Testing.AutoTest.Enabled && Testing.AutoTest.HoldCrouch,
 				Fast = TerraCommandKeybinds.Run?.Current == true || Testing.AutoTest.Enabled && Testing.AutoTest.HoldRun,
@@ -139,16 +147,20 @@ namespace TerraCommand.Common.Physics
 
 		public override void PreUpdateMovement()
 		{
+			contactMoved = false;
+			Actor.ContactPhysics = UsesContacts;
 			bool hooked = Player.grappling[0] >= 0 || Player.pulley;
 			if (!Simulated || hooked) {
 				velRequested = Player.velocity;
 				return;
 			}
 			Actor.Vel = Player.velocity; // take in outside changes (hits, hooks, blasts)
+			Actor.GroundSlope = Actor.Grounded ? Actors.BodyGround.Slope(Player.Bottom) : 0;
+			Input.AutoCrouch = ActorContacts.CrouchForClearance(Actor, Player.Bottom, Input, TerrariaActorTerrain.Instance);
 			Actor.Control(Input);
 			Actor.Physics(Input);
 			// balanced on the edge of the hitbox with the feet over nothing: slip off it
-			if (Actor.Grounded && Actor.Status == ActorStatus.Stable && !Actor.Jetting) {
+			if (!Actor.ContactPhysics && Actor.Grounded && Actor.Status == ActorStatus.Stable && !Actor.Jetting) {
 				int slip = Actors.BodyGround.SlipDirection(Player.position, Player.width, Player.height);
 				if (slip != 0 && Math.Sign(Actor.Vel.X) != -slip)
 					Actor.Vel.X = slip * Math.Max(Math.Abs(Actor.Vel.X), 0.6f);
@@ -182,6 +194,13 @@ namespace TerraCommand.Common.Physics
 
 		public override void PostUpdate()
 		{
+			if (Simulated && contactMoved) {
+				if (!skipImpact) Impact(Actor.Contacts.TravelImpulse.Length() / Actor.Mass);
+				skipImpact = false;
+				width = Actor.WantedWidth(); height = Actor.WantedHeight();
+				ApplyHeight();
+				return;
+			}
 			if (Simulated) {
 				bool grounded = Player.velocity.Y == 0f && velRequested.Y >= 0f;
 				// walking down rough ground: a few pixels' drop is a step, not a fall
@@ -214,8 +233,10 @@ namespace TerraCommand.Common.Physics
 				skipImpact = false;
 				UpdateHeight();
 			}
-			else
+			else {
+				if (!Player.dead) Actor.AdvanceRemoteGait(Player.velocity);
 				skipImpact = true;
+			}
 		}
 
 		void Impact(float speedLost)
@@ -234,29 +255,19 @@ namespace TerraCommand.Common.Physics
 		/// <summary>The hitbox follows the posture (standing, crouched, lying); getting taller needs headroom.</summary>
 		void UpdateHeight()
 		{
-			int want = Actor.WantedHeight();
-			if (want > Player.height) {
-				// grow as far as the space above allows
-				int fit = Player.height;
-				for (int h = want; h > Player.height; h -= 2)
-					if (Fits(h)) {
-						fit = h;
-						break;
-					}
-				want = fit;
-			}
-			height = want;
+			Actors.ActorBounds.Fit(Player.position, Player.width, Player.height, Actor, out width, out height);
 			ApplyHeight();
 		}
-
-		bool Fits(int h) =>
-			!Collision.SolidCollision(new Vector2(Player.position.X, Player.position.Y + Player.height - h), Player.width, h - 2);
 
 		/// <summary>Sets the hitbox height, keeping the feet where they are.</summary>
 		public void ApplyHeight()
 		{
 			if (Player.mount.Active || Player.portableStoolInfo.IsInUse)
 				return;
+			if (Player.width != width) {
+				Player.position.X += (Player.width - width) / 2f;
+				Player.width = width;
+			}
 			if (Player.height != height) {
 				Player.position.Y += Player.height - height;
 				Player.height = height;
@@ -266,14 +277,14 @@ namespace TerraCommand.Common.Physics
 		// ------------------------------------------------------------ shoves
 
 		/// <summary>Call after teleporting the body (no impact damage from the position/velocity jump).</summary>
-		public void SkipImpactCheck() => skipImpact = true;
+		public void SkipImpactCheck() { skipImpact = true; Actor.Contacts.Reset(); }
 
 		public void AdoptBody(Actors.ActorMotion motion, Actors.ActorKind kind)
 		{
 			motion.Apply(Actor, kind);
 			Player.velocity = Actor.Vel;
 			Player.direction = Actor.FlipFactor;
-			height = Actor.WantedHeight();
+			Actors.ActorBounds.Fit(Player.position, Player.width, Player.height, Actor, out width, out height);
 			ApplyHeight();
 			impactAccum = 0;
 			impactTimer = 0;
@@ -295,7 +306,7 @@ namespace TerraCommand.Common.Physics
 				return;
 			Player.velocity += impulse;
 			Actor.Shove(Vector2.Zero, knockOver: impulse.Length() > 2f);
-			skipImpact = true; // the shove itself isn't an impact
+			if (!Actor.ContactPhysics) skipImpact = true; // legacy collision loss included the shove itself
 		}
 
 		public override void OnRespawn()
@@ -304,6 +315,9 @@ namespace TerraCommand.Common.Physics
 			Actor.Prone = ProneState.NotProne;
 			Actor.Rot = Actor.AngVel = 0f;
 			Actor.Fuel = Actor.FuelMax;
+			Actor.BurstCooldown = Actor.SharpAimTicks = 0;
+			Actor.SharpAim = 0;
+			width = CC.BodyWidth;
 			height = Actor.StandHeight;
 			skipImpact = true;
 		}
@@ -319,8 +333,8 @@ namespace TerraCommand.Common.Physics
 
 		byte syncedStatus, syncedProne, syncedCrouch;
 		sbyte syncedRot, syncedAim;
-		byte syncedKind;
-		bool syncedFlip;
+		byte syncedKind, syncedMove;
+		bool syncedFlip, syncedContacts, syncedGrounded;
 
 		public override void CopyClientState(ModPlayer targetCopy)
 		{
@@ -331,6 +345,9 @@ namespace TerraCommand.Common.Physics
 			t.syncedRot = QuantRot(Actor.Rot);
 			t.syncedFlip = Actor.Flipped;
 			t.syncedAim = QuantRot(Actor.AimAngle);
+			t.syncedMove = (byte)Actor.Move;
+			t.syncedContacts = Actor.Contacts.Initialized;
+			t.syncedGrounded = Actor.Grounded;
 			t.syncedKind = (byte)Player.GetModPlayer<Actors.RigPlayer>().Kind;
 		}
 
@@ -341,7 +358,9 @@ namespace TerraCommand.Common.Physics
 			var c = (BodyPhysicsPlayer)clientPlayer;
 			if (c.syncedStatus != (byte)Actor.Status || c.syncedProne != (byte)Actor.Prone || c.syncedCrouch != (byte)(Actor.CrouchAmount * 10)
 				|| Math.Abs(c.syncedRot - QuantRot(Actor.Rot)) > 2 || c.syncedFlip != Actor.Flipped
-				|| Math.Abs(c.syncedAim - QuantRot(Actor.AimAngle)) > 2 || c.syncedKind != (byte)Player.GetModPlayer<Actors.RigPlayer>().Kind)
+				|| Math.Abs(c.syncedAim - QuantRot(Actor.AimAngle)) > 2 || c.syncedKind != (byte)Player.GetModPlayer<Actors.RigPlayer>().Kind
+				|| c.syncedMove != (byte)Actor.Move || c.syncedContacts != Actor.Contacts.Initialized || c.syncedGrounded != Actor.Grounded
+				|| Player.velocity.LengthSquared() > 0.01f && Main.GameUpdateCount % 15 == (ulong)(Player.whoAmI % 15))
 				SyncPlayer(-1, Main.myPlayer, false);
 		}
 
@@ -359,6 +378,8 @@ namespace TerraCommand.Common.Physics
 			p.Write((byte)height);
 			p.Write(QuantRot(Actor.AimAngle));
 			p.Write((byte)Player.GetModPlayer<Actors.RigPlayer>().Kind);
+			Actor.WriteGait(p);
+			ContactSnapshot.Capture(Actor.Contacts).Write(p);
 			p.Send(toWho, fromWho);
 		}
 
@@ -373,6 +394,8 @@ namespace TerraCommand.Common.Physics
 			int h = r.ReadByte();
 			float aim = r.ReadSByte() / 32f;
 			var kind = (Actors.ActorKind)r.ReadByte();
+			GaitState gait = GaitState.Read(r);
+			ContactSnapshot contacts = ContactSnapshot.Read(r);
 			if (Main.netMode == NetmodeID.Server)
 				who = from;
 			Player p = Main.player[who];
@@ -385,8 +408,13 @@ namespace TerraCommand.Common.Physics
 			bp.Actor.Rot = rot;
 			bp.Actor.Flipped = flip;
 			bp.Actor.AimAngle = aim;
+			bp.Actor.Apply(ActorStats.Get(kind), 0);
+			gait.Apply(bp.Actor);
+			contacts.Apply(bp.Actor.Contacts);
+			bp.Actor.Contacts.BindPaths(bp.Actor);
 			p.GetModPlayer<Actors.RigPlayer>().Kind = kind;
 			bp.height = Math.Clamp(h, CC.LyingHeight, CC.StandHeight);
+			bp.width = bp.Actor.WantedWidth();
 			bp.ApplyHeight();
 			if (Main.netMode == NetmodeID.Server)
 				bp.SyncPlayer(-1, who, false);
@@ -398,11 +426,61 @@ namespace TerraCommand.Common.Physics
 		/// Vanilla resets the hitbox to 42 high every tick (ResizeHitbox) and puts Center 21px below the top;
 		/// re-apply the posture height and keep Center in the middle of the shorter box.
 		/// </summary>
+		void MoveWithContacts()
+		{
+			if (!UsesContacts) { Player.position += Player.velocity; return; }
+			Vector2 feet = ActorContacts.Step(Actor, Player.Bottom, Input, TerrariaActorTerrain.Instance);
+			Player.Bottom = feet;
+			Player.velocity = Actor.Vel;
+			Player.fallStart = (int)(Player.position.Y / 16);
+			Collision.up = Collision.down = false;
+			contactMoved = true;
+		}
+
+		static bool SkipVanillaSteps => contactUpdateOwner != null && contactUpdateOwner.TryGetModPlayer(out BodyPhysicsPlayer bp) && bp.OwnsCollision;
+		static void ContactStepUp(On_Collision.orig_StepUp orig, ref Vector2 position, ref Vector2 velocity, int width, int height,
+			ref float stepSpeed, ref float gfxOffY, int gravDir, bool holdsMatching, int specialChecksMode)
+		{
+			if (!SkipVanillaSteps) orig(ref position, ref velocity, width, height, ref stepSpeed, ref gfxOffY, gravDir, holdsMatching, specialChecksMode);
+		}
+		static void ContactStepDown(On_Collision.orig_StepDown orig, ref Vector2 position, ref Vector2 velocity, int width, int height,
+			ref float stepSpeed, ref float gfxOffY, int gravDir, bool waterWalk)
+		{
+			if (!SkipVanillaSteps) orig(ref position, ref velocity, width, height, ref stepSpeed, ref gfxOffY, gravDir, waterWalk);
+		}
 		public override void Load()
 		{
+			On_Player.Update += (orig, self, who) => {
+				Player previous = contactUpdateOwner; contactUpdateOwner = self;
+				try { orig(self, who); } finally { contactUpdateOwner = previous; }
+			};
+			On_Collision.StepUp += ContactStepUp;
+			On_Collision.StepDown += ContactStepDown;
+			On_Player.SlopeDownMovement += (orig, self) => {
+				if (!self.TryGetModPlayer(out BodyPhysicsPlayer bp) || !bp.OwnsCollision) orig(self);
+			};
+			On_Player.DryCollision += (orig, self, fallThrough, ignorePlats) => {
+				if (self.TryGetModPlayer(out BodyPhysicsPlayer bp) && bp.OwnsCollision) bp.MoveWithContacts();
+				else orig(self, fallThrough, ignorePlats);
+			};
+			On_Player.WaterCollision += (orig, self, fallThrough, ignorePlats) => {
+				if (self.TryGetModPlayer(out BodyPhysicsPlayer bp) && bp.OwnsCollision) bp.MoveWithContacts();
+				else orig(self, fallThrough, ignorePlats);
+			};
+			On_Player.HoneyCollision += (orig, self, fallThrough, ignorePlats) => {
+				if (self.TryGetModPlayer(out BodyPhysicsPlayer bp) && bp.OwnsCollision) bp.MoveWithContacts();
+				else orig(self, fallThrough, ignorePlats);
+			};
+			On_Player.ShimmerCollision += (orig, self, fallThrough, ignorePlats, shimmering) => {
+				if (self.TryGetModPlayer(out BodyPhysicsPlayer bp) && bp.OwnsCollision) bp.MoveWithContacts();
+				else orig(self, fallThrough, ignorePlats, shimmering);
+			};
+			On_Player.SlopingCollision += (orig, self, fallThrough, ignorePlats) => {
+				if (!self.TryGetModPlayer(out BodyPhysicsPlayer bp) || !bp.OwnsCollision) orig(self, fallThrough, ignorePlats);
+			};
 			On_Player.ResizeHitbox += (orig, self) => {
 				orig(self);
-				if (self.TryGetModPlayer(out BodyPhysicsPlayer bp) && bp.height != Player.defaultHeight)
+				if (self.TryGetModPlayer(out BodyPhysicsPlayer bp) && (bp.height != Player.defaultHeight || self.width != bp.width))
 					bp.ApplyHeight();
 			};
 			MonoModHooks.Add(typeof(Player).GetProperty(nameof(Player.HeightOffsetHitboxCenter)).GetGetMethod(),

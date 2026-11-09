@@ -189,7 +189,8 @@ namespace TerraCommand.Common.Actors
 		/// <summary>The nearest equipment item within reach of the hands, preferring what's in front.</summary>
 		int FindItemInReach()
 		{
-			Vector2 hands = Player.Center + new Vector2(Player.direction * 8f, 0f);
+			var contacts = Player.GetModPlayer<BodyPhysicsPlayer>().Actor.Contacts;
+			Vector2 hands = contacts.Initialized ? contacts.Limbs[2].Position : Player.Center + new Vector2(Player.direction * 8f, 0f);
 			int best = -1;
 			float bestD = float.MaxValue;
 			for (int i = 0; i < Main.maxItems; i++) {

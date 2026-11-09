@@ -1,0 +1,14 @@
+Terra Command v0.8.0 — imported Cortex Command artwork
+
+Artwork: Data Realms and Cortex Command Community Project contributors.
+Reference commit: cca55f154ba49a17436cf91d91e1302fe45395db
+Upstream: https://github.com/cortex-command-community/Cortex-Command-Community-Project
+
+Distributed under the upstream repository GNU AGPL-3.0 license; see LICENSE.
+Source files, adaptations and the complete 163-asset provenance manifest:
+https://github.com/dudeax/TerraComand/tree/v0.8.0/docs
+
+The import converts palette magenta to transparency. Some sprites are fitted
+to the existing mod proportions; craft and helmet layers are composited.
+Tools/import instructions and corresponding mod source:
+https://github.com/dudeax/TerraComand/tree/v0.8.0

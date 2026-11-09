@@ -77,6 +77,27 @@ namespace TerraCommand.Common.Testing
 				return;
 			groundProbe--;
 			probeTicks++;
+			var contactBody = P.GetModPlayer<Physics.BodyPhysicsPlayer>();
+			if (contactBody.Actor.ContactPhysics && contactBody.Actor.Contacts.Initialized) {
+				var actor = contactBody.Actor;
+				float gap = float.MaxValue;
+				void Probe(Vector2 point) {
+					for (float y = 0; y <= 24; y += 0.25f) {
+						if (!Actors.TerrariaActorTerrain.Instance.Sample(point + new Vector2(0, y), out var material) || material.OneWay && point.Y > material.Top + 2) continue;
+						gap = Math.Min(gap, y); break;
+					}
+				}
+				int count = Actors.ContactGeometry.Build(actor, P.Bottom, actor.Rot, actor.Contacts.Atoms);
+				for (int i = 0; i < count; i++) Probe(actor.Contacts.Atoms[i]);
+				foreach (var limb in actor.Contacts.Limbs) Probe(limb.Position);
+				if (contactBody.Grounded) {
+					gapMin = Math.Min(gapMin, gap); gapMax = Math.Max(gapMax, gap);
+					if (gap > 1) floatTicks++;
+				}
+				if (contactBody.Grounded != lastGrounded && gap < 3) airFlickers++;
+				lastGrounded = contactBody.Grounded;
+				return;
+			}
 			// the ground under the feet (the middle of the hitbox): the highest solid pixel, searching from 12px above them
 			float best = float.MaxValue;
 			float cx = P.position.X + P.width / 2f;
@@ -127,7 +148,7 @@ namespace TerraCommand.Common.Testing
 				return;
 			Probe--;
 			var ac = p.GetModPlayer<Physics.BodyPhysicsPlayer>().Actor;
-			Report("PROBE", $"{where}: actor move={ac.Move} prone={ac.Prone} status={ac.Status} grounded={ac.Grounded} vel={p.velocity.X:0.00},{p.velocity.Y:0.00} rot={ac.Rot:0.00} h={p.height} " +
+			Report("PROBE", $"{where}: actor move={ac.Move} prone={ac.Prone} status={ac.Status} grounded={ac.Grounded} vel={p.velocity.X:0.00},{p.velocity.Y:0.00} rot={ac.Rot:0.00} omega={ac.AngVel:0.00} h={p.height} contact={ac.Contacts.ContactCount}/{ac.Contacts.Stuck} feet={ac.Contacts.Anchor} entity={p.Bottom} auto={p.GetModPlayer<Physics.BodyPhysicsPlayer>().Input.AutoCrouch:0.00} " +
 				$"legs={ac.Legs[0].Segment}/{ac.Legs[0].Planted},{ac.Legs[1].Segment}/{ac.Legs[1].Planted}");
 			Report("PROBE", $"{where}: target={Player.tileTargetX},{Player.tileTargetY} mouseWorld={Main.MouseWorld.ToTileCoordinates()} " +
 				$"held={p.HeldItem.Name} ctrlUse={p.controlUseItem} release={p.releaseUseItem} anim={p.itemAnimation} time={p.itemTime} " +
@@ -418,7 +439,9 @@ namespace TerraCommand.Common.Testing
 		static Player P => Main.LocalPlayer;
 		static float F(string s) => float.Parse(s, CultureInfo.InvariantCulture);
 		static int I(string s) => int.Parse(s, CultureInfo.InvariantCulture);
-		static Point PlayerTile => serverMode ? new Point(Main.spawnTileX, Main.spawnTileY) : P.Bottom.ToTileCoordinates();
+		// Contact points remain just outside a solid pixel; use the cell beneath that skin for tile fixtures.
+		static Point PlayerTile => serverMode ? new Point(Main.spawnTileX, Main.spawnTileY)
+			: (P.Bottom + new Vector2(0, P.GetModPlayer<Physics.BodyPhysicsPlayer>().Actor.ContactPhysics ? 2 : 0)).ToTileCoordinates();
 
 		static int ItemType(string s)
 		{
@@ -448,7 +471,7 @@ namespace TerraCommand.Common.Testing
 				case "quit": FinishScenario("quit"); break;
 				case "nospawn": NoSpawns = true; foreach (NPC n in Main.npc) if (n.active && !n.friendly && !n.townNPC) n.active = false; break;
 				case "goto": { // goto spawn | goto x y | goto rel dx dy   (tiles)
-					Vector2 to = a[1] == "spawn" ? new Vector2(Main.spawnTileX * 16, Main.spawnTileY * 16)
+					Vector2 to = a[1] == "spawn" ? new Vector2(Main.spawnTileX * 16 + 8, Main.spawnTileY * 16)
 						: a[1] == "rel" ? P.Bottom + new Vector2(F(a[2]) * 16, F(a[3]) * 16)
 						: new Vector2(I(a[1]) * 16, I(a[2]) * 16);
 					P.Bottom = to; P.velocity = Vector2.Zero; P.fallStart = (int)(P.position.Y / 16);
@@ -896,6 +919,18 @@ namespace TerraCommand.Common.Testing
 				case "peak": Expect(Cmp(peakRise, a[2], F(a[3])), $"{desc} (peak {peakRise:0.0} tiles above mark)"); break;
 				case "mounted": Expect(P.mount.Active == (a[2] == "yes"), $"{desc} (mount active={P.mount.Active})"); break;
 				case "stance": { var st = P.GetModPlayer<Physics.BodyPhysicsPlayer>().Stance; Expect(st.ToString().ToLower() == a[2], $"{desc} (stance {st}, height {P.height})"); break; }
+				case "contact": Expect(P.GetModPlayer<Physics.BodyPhysicsPlayer>().Actor.ContactPhysics == (a[2] == "yes"), desc); break;
+				case "contactstuck": Expect(P.GetModPlayer<Physics.BodyPhysicsPlayer>().Actor.Contacts.Stuck == (a[2] == "yes"), desc); break;
+				case "shapeinsolid": {
+					var actor = P.GetModPlayer<Physics.BodyPhysicsPlayer>().Actor;
+					var points = new Vector2[1024]; int count = Actors.ContactGeometry.Build(actor, actor.Contacts.Anchor, actor.Rot, points);
+					int solid = 0; for (int i = 0; i < count; i++) if (Actors.TerrariaActorTerrain.Instance.Sample(points[i], out var material) && !material.OneWay) solid++;
+					Expect(Cmp(solid, a[2], F(a[3])), $"{desc} ({solid} sprite atoms in solid terrain)"); break;
+				}
+				case "unitcontact": {
+					var unit = UnitSystem.TeamUnits(P.team).First();
+					Expect(unit.Actor.ContactPhysics && unit.Actor.Contacts.Initialized && !unit.Actor.Contacts.Stuck, desc); break;
+				}
 				case "startingtools": Expect(Cmp(startingTools, a[2], F(a[3])), $"{desc} (starter tools {startingTools})"); break;
 				case "velocityx": Expect(Cmp(P.velocity.X, a[2], F(a[3])), $"{desc} (velocity {P.velocity.X:0.00})"); break;
 				case "unitfuel": { float f = UnitSystem.TeamUnits(P.team).First().Actor.Fuel; Expect(Cmp(f, a[2], F(a[3])), $"{desc} (idle fuel {f:0.0})"); break; }
@@ -957,6 +992,7 @@ namespace TerraCommand.Common.Testing
 					Expect(u != null && u.Loadout.Kind.ToString().ToLower() == a[2], $"{desc} (unit kind {u?.Loadout.Kind})");
 					break;
 				}
+				case "width": Expect(Cmp(P.width, a[2], F(a[3])), $"{desc} (width {P.width})"); break;
 				case "height": Expect(Cmp(P.height, a[2], F(a[3])), $"{desc} (height {P.height})"); break;
 				case "knocked": Expect((P.GetModPlayer<Physics.BodyPhysicsPlayer>().KnockedTicks > 0) == (a[2] == "yes"), desc); break;
 				case "fuel": { float f = P.GetModPlayer<Physics.BodyPhysicsPlayer>().FuelMax; Expect(Cmp(f, a[2], F(a[3])), $"{desc} (max fuel {f:0})"); break; }

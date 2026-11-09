@@ -1,5 +1,7 @@
 # Conversion rescue: first playable slice
 
+The historical notes below describe the first data port. The subsequent [CC art import](cc-art.md) replaces its sprite placeholders, and the [physics pass](physics-parity.md) replaces normal rectangle terrain movement.
+
 The goal is a CC battlefield in a Terraria landscape. The previous default preserved Terraria progression and gave a new brain copper tools and two unarmed soldiers. The conversion now starts with a constructor and delivers two armed Coalition riflemen, a light digger and three frag grenades. Soldiers can fight immediately after switching into them. Buy replacement riflemen and weapons in orbit; all four Coalition guns refill their own magazines.
 
 Full conversion is enabled by default in the server configuration. It suppresses ambient NPC spawning and removes vanilla starting items from newly created characters. Turning it off restores those two vanilla behaviours. Existing characters, NPCs and terrain are not erased. The enemy faction remains configurable separately; its bunker appears after 20 seconds and its first attack uses the existing configured timer (default ten minutes). You can attack the bunker before its first wave.

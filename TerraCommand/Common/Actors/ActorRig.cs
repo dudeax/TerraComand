@@ -12,16 +12,16 @@ using TerraCommand.Common.Physics;
 
 namespace TerraCommand.Common.Actors
 {
-	public enum ActorKind : byte { Soldier, Brain, Light, Heavy, Crab, Turret }
-
 	/// <summary>
-	/// One actor type's part sprites and proportions (px). Parts are original art (tools/gen_art.py), drawn facing right:
-	/// limbs hang down from their joint, the torso stands on the hip, the head sits on the neck. Replace the PNGs in
+	/// One actor type's part sprites and proportions (px). Parts are imported CC palette art (tools/import_cc_art.py), drawn facing right:
+	/// complete limb frames extend along +X from their joint; torso and head anchor to hip and neck. Replace the PNGs in
 	/// Content/Actors/&lt;Kind&gt;/ to restyle an actor.
 	/// </summary>
 	public sealed class ActorArt
 	{
-		public Asset<Texture2D> Head, Torso, Thigh, Shin, Foot, UpperArm, Forearm;
+		public Asset<Texture2D> Head, Torso, Thigh, Shin, Foot, UpperArm, Forearm, Hand;
+		public Asset<Texture2D>[] FrontLeg, BackLeg, FrontArm, BackArm;
+		public Vector2 LegOrigin = new(1, 9), ArmOrigin = new(2.5f, 2);
 		public float HipHeight = 15f, CrouchHipHeight = 9f;   // hip above the soles
 		public float ThighLen = 7f, ShinLen = 7f, AnkleToSole = 2f;
 		public float UpperArmLen = 7f, ForearmLen = 7f;
@@ -37,9 +37,14 @@ namespace TerraCommand.Common.Actors
 			if (all.TryGetValue(kind, out ActorArt a))
 				return a;
 			string dir = kind.ToString();
-			Asset<Texture2D> R(string n) => ModContent.Request<Texture2D>($"TerraCommand/Content/Actors/{dir}/{n}");
+			Asset<Texture2D> R(string n) => ModContent.Request<Texture2D>($"TerraCommand/Content/Actors/{dir}/{n}", AssetRequestMode.ImmediateLoad);
+			Asset<Texture2D>[] Frames(string part, int count) {
+				var frames = new Asset<Texture2D>[count];
+				for (int i = 0; i < count; i++) frames[i] = R(part + i);
+				return frames;
+			}
 			if (kind == ActorKind.Crab) {
-				all[kind] = a = new ActorArt { Torso = R("Body"), Thigh = R("Thigh"), Shin = R("Shin"), HipHeight = 10f, ThighLen = 6f, ShinLen = 6f, HasJetpack = false };
+				all[kind] = a = new ActorArt { Torso = R("Body"), Thigh = R("Thigh"), Shin = R("Shin"), HipHeight = 10f, ThighLen = 6f, ShinLen = 6f, HasJetpack = false, FrontLeg = Frames("LegFront", 5), BackLeg = Frames("LegBack", 5) };
 				return a;
 			}
 			if (kind == ActorKind.Turret) {
@@ -48,18 +53,22 @@ namespace TerraCommand.Common.Actors
 			}
 			a = new ActorArt {
 				Head = R("Head"), Torso = R("Torso"), Thigh = R("Thigh"), Shin = R("Shin"), Foot = R("Foot"),
-				UpperArm = R("UpperArm"), Forearm = R("Forearm"),
+				UpperArm = R("UpperArm"), Forearm = R("Forearm"), Hand = R("Hand"),
+				FrontLeg = Frames("LegFront", kind == ActorKind.Brain ? 6 : 5), BackLeg = Frames("LegBack", kind == ActorKind.Brain ? 6 : 5),
+				FrontArm = Frames("ArmFront", kind == ActorKind.Brain ? 6 : 5), BackArm = Frames("ArmBack", kind == ActorKind.Brain ? 6 : 5),
+				FootAnkle = new(4, 2),
 			};
 			if (kind == ActorKind.Heavy) {
 				a.Shoulder = new(1f, -15f);
 				a.Neck = new(1f, -17f);
-				a.FootAnkle = new(3f, 1f);
+				a.ArmOrigin = new(5, 4);
 				a.JetpackAt = new(-8f, -10f);
 			}
 			if (kind == ActorKind.Brain) {
 				a.Shoulder = new(0f, -12f);
-				a.Neck = new(0f, -18f);
-				a.FootAnkle = new(3f, 1f);
+				a.Neck = new(0f, -8f);
+				a.ArmOrigin = new(2, 4); a.LegOrigin = new(2, 7);
+				a.FootAnkle = new(8, 3);
 				a.UpperArmLen = a.ForearmLen = 6f;
 				a.HasJetpack = false;
 				a.CrouchHipHeight = 11f;
@@ -82,6 +91,13 @@ namespace TerraCommand.Common.Actors
 		public float Crouch;            // 0..1
 		public bool Prone, Unstable, Grounded;
 		public float VelX;
+		public Vector2 FrontFoot, BackFoot, FrontHand, BackHand;
+		public bool FrontHandCrawls, BackHandCrawls;
+		public bool SimulatedFeet;
+		public bool ContactPose;
+		public Vector2 ContactHip, ContactFoot0, ContactFoot1, ContactHand0, ContactHand1;
+		public float ContactRotation;
+		public float GroundSlope;
 		public float WalkDist;          // ground covered (drives the gait)
 		public Item Held;
 		public bool HeldInUse;          // vanilla is animating a swing: don't draw our copy
@@ -135,6 +151,7 @@ namespace TerraCommand.Common.Actors
 		public static Vector2 Grip(in RigPose p)
 		{
 			ActorArt art = ActorArt.Get(p.Kind);
+			if (p.ContactPose) return Hip(p, art) + (p.ContactHand0 - p.ContactHip).RotatedBy(p.Rot - p.ContactRotation);
 			Vector2 shoulder = Hip(p, art) + new Vector2(art.Shoulder.X * p.Dir, art.Shoulder.Y).RotatedBy(p.Rot);
 			return shoulder + AimWorld(p).ToRotationVector2() * 8f + new Vector2(0f, 1.5f);
 		}
@@ -155,10 +172,11 @@ namespace TerraCommand.Common.Actors
 			int dir = p.Dir;
 			float rot = p.Rot;
 			Vector2 hip = Hip(p, art);
+			Vector2 ContactPoint(Vector2 point) => hip + (point - p.ContactHip).RotatedBy(rot - p.ContactRotation);
 			SpriteEffects fx = dir > 0 ? SpriteEffects.None : SpriteEffects.FlipHorizontally;
 			Color light = p.Light, back = p.Light.MultiplyRGB(new Color(165, 165, 165));
 			bool lying = p.Prone || p.Unstable;
-			float legFrame = lying ? rot : 0f;   // upright legs keep world orientation; only the torso leans
+			float legFrame = lying ? rot : p.GroundSlope;   // upright legs keep world orientation; only the torso leans
 			bool holding = IsHoldable(p.Held) && !p.Unstable;
 			Vector2 W(Vector2 local) => hip + local.RotatedBy(rot);
 
@@ -168,6 +186,11 @@ namespace TerraCommand.Common.Actors
 				if (p.Unstable)
 					return new Vector2((leg == 0 ? 2 : -3) * dir, art.HipHeight - 2f);
 				bool moving = Math.Abs(p.VelX) > 0.05f && p.Grounded;
+				if (moving && p.SimulatedFeet) {
+					Vector2 at = leg == 0 ? p.FrontFoot : p.BackFoot;
+					bool backwards = Math.Sign(p.VelX) != dir;
+					return new Vector2(at.X * (backwards ? -dir : dir), at.Y);
+				}
 				if (moving) {
 					LimbPath path = p.Prone ? LimbPaths.Crawl : Math.Abs(p.VelX) > 1.1f ? LimbPaths.Run : LimbPaths.Walk;
 					float prog = (p.WalkDist / path.Length + (leg == 0 ? 0f : 0.5f)) % 1f;
@@ -188,8 +211,8 @@ namespace TerraCommand.Common.Actors
 			{
 				Vector2 joint = hip + new Vector2((leg == 0 ? 1 : -1) * dir, 0f).RotatedBy(legFrame);
 				Vector2 local = FootLocal(leg);
-				Vector2 sole = hip + local.RotatedBy(legFrame);
-				if (!lying && p.Grounded) {
+				Vector2 sole = p.ContactPose ? ContactPoint(leg == 0 ? p.ContactFoot0 : p.ContactFoot1) : hip + local.RotatedBy(legFrame);
+				if (!p.ContactPose && !lying && p.Grounded) {
 					// plant the foot on the actual ground (pixel terrain): feet step onto bumps and into dips
 					float ground = GroundBelow(new Vector2(sole.X, hip.Y), art.HipHeight + 6f);
 					if (sole.Y > ground)
@@ -198,8 +221,7 @@ namespace TerraCommand.Common.Actors
 				Vector2 ankle = sole - new Vector2(0f, art.AnkleToSole).RotatedBy(legFrame);
 				Vector2 knee = Ik(joint, ankle, art.ThighLen, art.ShinLen, (new Vector2(dir, 0f)).RotatedBy(legFrame));
 				ankle = knee + (ankle - knee).SafeNormalize(Vector2.UnitY) * art.ShinLen; // where the leg actually reaches
-				Bone(art.Thigh.Value, joint, knee, c);
-				Bone(art.Shin.Value, knee, ankle, c);
+				NativeLimb(outList, leg == 0 ? art.FrontLeg : art.BackLeg, joint, ankle, art.LegOrigin, art.ThighLen + art.ShinLen, dir, c);
 				Texture2D foot = art.Foot.Value;
 				Vector2 o = dir > 0 ? art.FootAnkle : new Vector2(foot.Width - art.FootAnkle.X, art.FootAnkle.Y);
 				outList.Add(new RigPiece(foot, ankle, null, c, legFrame, o, 1f, fx));
@@ -208,13 +230,19 @@ namespace TerraCommand.Common.Actors
 			// ---------------- arms
 			Vector2 frontShoulder = W(new Vector2(art.Shoulder.X * dir, art.Shoulder.Y));
 			Vector2 aimDir = AimWorld(p).ToRotationVector2();
-			Vector2 grip = frontShoulder + aimDir * (8f - p.Kick) + new Vector2(0f, 1.5f);
+			Vector2 grip = p.ContactPose ? ContactPoint(p.ContactHand0) - aimDir * p.Kick : frontShoulder + aimDir * (8f - p.Kick) + new Vector2(0f, 1.5f);
 
 			void Arm(int arm, Color c)
 			{
 				Vector2 shoulder = arm == 0 ? frontShoulder : W(new Vector2(-art.Shoulder.X * dir, art.Shoulder.Y));
 				Vector2 hand;
-				if (holding)
+				bool crawlingHand = p.Prone && !p.Unstable && (arm == 0 ? p.FrontHandCrawls : p.BackHandCrawls);
+				if (p.ContactPose) hand = ContactPoint(arm == 0 ? p.ContactHand0 : p.ContactHand1);
+				else if (crawlingHand) {
+					Vector2 target = arm == 0 ? p.FrontHand : p.BackHand;
+					hand = shoulder + new Vector2(target.X * dir, target.Y).RotatedBy(rot);
+				}
+				else if (holding)
 					hand = arm == 0 ? grip : grip + aimDir * (IsGunLike(p.Held) ? 6f : 2f);
 				else {
 					// arms hang and swing a little with the stride; thrown bodies flail
@@ -223,8 +251,9 @@ namespace TerraCommand.Common.Actors
 				}
 				Vector2 elbow = Ik(shoulder, hand, art.UpperArmLen, art.ForearmLen, new Vector2(0f, 1f).RotatedBy(holding ? 0f : rot) - new Vector2(dir * 0.3f, 0f));
 				hand = elbow + (hand - elbow).SafeNormalize(Vector2.UnitY) * art.ForearmLen;
-				Bone(art.UpperArm.Value, shoulder, elbow, c);
-				Bone(art.Forearm.Value, elbow, hand, c);
+				NativeLimb(outList, arm == 0 ? art.FrontArm : art.BackArm, shoulder, hand, art.ArmOrigin, art.UpperArmLen + art.ForearmLen, dir, c);
+				Texture2D palm = art.Hand.Value;
+				outList.Add(new RigPiece(palm, hand, null, c, holding ? AimWorld(p) : rot, palm.Size() / 2f, 1f, fx));
 			}
 
 			// ---------------- draw order (facing): back arm, back leg, jetpack, torso, head, front leg, held item, front arm
@@ -280,11 +309,16 @@ namespace TerraCommand.Common.Actors
 				}
 			}
 
-			void Bone(Texture2D tex, Vector2 from, Vector2 to, Color c)
-			{
-				float r = (to - from).ToRotation() - MathHelper.PiOver2;   // sprites hang straight down from the joint
-				outList.Add(new RigPiece(tex, from, null, c, r, new Vector2(tex.Width / 2f, 1f), 1f, fx));
-			}
+		}
+
+		static void NativeLimb(List<RigPiece> pieces, Asset<Texture2D>[] frames, Vector2 joint, Vector2 tip, Vector2 origin, float maximum, int direction, Color light) {
+			float extension = Vector2.Distance(joint, tip);
+			int frame = Math.Clamp((int)MathF.Floor((extension / maximum - 0.5f) * 2 * frames.Length), 0, frames.Length - 1);
+			Texture2D texture = frames[frame].Value;
+			float rotation = (tip - joint).ToRotation();
+			SpriteEffects flip = SpriteEffects.None;
+			if (direction < 0) { flip = SpriteEffects.FlipHorizontally; origin.X = texture.Width - origin.X; rotation += MathHelper.Pi; }
+			pieces.Add(new RigPiece(texture, joint, null, light, rotation, origin, 1, flip));
 		}
 
 		/// <summary>Only weapons and tools are carried in the hands; everything else stays in the inventory.</summary>
@@ -304,11 +338,12 @@ namespace TerraCommand.Common.Actors
 			Color light = p.Light, back = p.Light.MultiplyRGB(new Color(165, 165, 165));
 			Vector2 W(Vector2 local) => body + local.RotatedBy(rot);
 			bool moving = Math.Abs(p.VelX) > 0.05f && p.Grounded;
-			void Leg(float hipX, float phase, Color c)
+			void Leg(int index, float hipX, float phase, Color c)
 			{
 				Vector2 hip = W(new Vector2(hipX, 3f));
 				Vector2 foot;
-				if (moving && !p.Unstable) {
+				if (p.ContactPose) foot = index switch { 0 => p.ContactFoot0, 1 => p.ContactFoot1, 2 => p.ContactHand0, _ => p.ContactHand1 };
+				else if (moving && !p.Unstable) {
 					LimbPath path = LimbPaths.Walk;
 					float prog = (p.WalkDist / (path.Length * 0.6f) + phase) % 1f;
 					Vector2 at = path.At(prog * path.Length, out _) * 0.6f;
@@ -317,27 +352,21 @@ namespace TerraCommand.Common.Actors
 				}
 				else
 					foot = hip + new Vector2(hipX * 0.5f, 9f).RotatedBy(p.Unstable ? rot : 0f);
-				if (p.Grounded && !p.Unstable) {
+				if (!p.ContactPose && p.Grounded && !p.Unstable) {
 					float ground = GroundBelow(new Vector2(foot.X, hip.Y), 16f);
 					if (foot.Y > ground)
 						foot.Y = ground;
 				}
 				Vector2 knee = Ik(hip, foot, art.ThighLen, art.ShinLen, new Vector2(0f, -1f).RotatedBy(rot));
 				foot = knee + (foot - knee).SafeNormalize(Vector2.UnitY) * art.ShinLen;
-				Bone(art.Thigh.Value, hip, knee, c);
-				Bone(art.Shin.Value, knee, foot, c);
+				NativeLimb(outList, index % 2 == 0 ? art.FrontLeg : art.BackLeg, hip, foot, art.LegOrigin, art.ThighLen + art.ShinLen, dir, c);
 			}
-			void Bone(Texture2D tex, Vector2 from, Vector2 to, Color c)
-			{
-				float r = (to - from).ToRotation() - MathHelper.PiOver2;
-				outList.Add(new RigPiece(tex, from, null, c, r, new Vector2(tex.Width / 2f, 1f), 1f, fx));
-			}
-			Leg(-6f * dir, 0.25f, back);
-			Leg(6f * dir, 0.75f, back);
+			Leg(0, -6f * dir, 0.25f, back);
+			Leg(1, 6f * dir, 0.75f, back);
 			Texture2D bt = art.Torso.Value;
 			outList.Add(new RigPiece(bt, body, null, light, rot, bt.Size() / 2f, 1f, fx));
-			Leg(-4f * dir, 0f, light);
-			Leg(8f * dir, 0.5f, light);
+			Leg(2, -4f * dir, 0f, light);
+			Leg(3, 8f * dir, 0.5f, light);
 			if (p.Held != null && !p.Held.IsAir && !p.Unstable)
 				Mounted(p, W(new Vector2(2f * dir, -6f)), light, outList);
 		}
@@ -452,10 +481,20 @@ namespace TerraCommand.Common.Actors
 				Crouch = a.Status == ActorStatus.Stable && a.Prone == ProneState.NotProne ? a.CrouchAmount : 0f,
 				Prone = a.Prone != ProneState.NotProne && a.Status == ActorStatus.Stable,
 				Unstable = a.Status != ActorStatus.Stable,
-				Grounded = Player.velocity.Y == 0f,
-				Sink = Player.velocity.Y == 0f && a.Status == ActorStatus.Stable ? BodyGround.FeetSink(Player.position, Player.width, Player.height) : 0f,
+				Grounded = a.Grounded,
+				Sink = !a.Contacts.Initialized && Player.velocity.Y == 0f && a.Status == ActorStatus.Stable ? BodyGround.FeetSink(Player.position, Player.width, Player.height) : 0f,
 				VelX = Player.velocity.X,
 				WalkDist = WalkDist,
+				FrontFoot = a.Legs[0].Foot(LimbPaths.Stand) * a.StrideScale,
+				BackFoot = a.Legs[1].Foot(LimbPaths.Stand) * a.StrideScale,
+				SimulatedFeet = a.Legs[0].Path != null || a.Legs[1].Path != null,
+				GroundSlope = a.GroundSlope,
+				ContactPose = a.Contacts.Initialized,
+				ContactHip = a.Contacts.Anchor + ContactGeometry.HipOffset(a), ContactRotation = a.Rot,
+				ContactFoot0 = a.Contacts.Limbs[0].Position, ContactFoot1 = a.Contacts.Limbs[1].Position,
+				ContactHand0 = a.Contacts.Limbs[2].Position, ContactHand1 = a.Contacts.Limbs[3].Position,
+				FrontHand = a.Hands[0].Foot(Vector2.Zero), BackHand = a.Hands[1].Foot(Vector2.Zero),
+				FrontHandCrawls = a.Hands[0].Path != null, BackHandCrawls = a.Hands[1].Path != null,
 				Held = Player.HeldItem,
 				HeldInUse = Player.itemAnimation > 0 && !RigRenderer.IsGunLike(Player.HeldItem),
 				Kick = Player.GetModPlayer<Combat.AimPlayer>().GunKick,

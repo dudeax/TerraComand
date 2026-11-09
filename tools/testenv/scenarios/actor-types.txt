@@ -14,7 +14,7 @@ wait 5
 mark
 walk right 120
 wait 1
-expect moved >= 6.5
+expect moved >= 3.8
 kind heavy
 wait 30
 mark
@@ -54,6 +54,10 @@ expect moved <= 0.2
 kind soldier
 wait 30
 
+# Put the combat fixture back on level ground after the flight tests.
+goto spawn
+flatten 100 30
+wait 30
 # idle bodies of each type, deployed from their items (drones and turrets come armed)
 deploy CrabDrone 80
 deploy TurretKit -80

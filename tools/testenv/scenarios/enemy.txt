@@ -54,5 +54,6 @@ spawnunit 20 0 FieldRifle Heavy
 order brainhunt
 wait 3000
 expect enemybrains == 0
+wait 2                          # faction victory is evaluated after the NPC death update
 expect defeated true
 screenshot enemy-won

@@ -1,9 +1,11 @@
 using System;
+using System.IO;
 using Microsoft.Xna.Framework;
-using Terraria;
 
 namespace TerraCommand.Common.Actors
 {
+	public enum ActorKind : byte { Soldier, Brain, Light, Heavy, Crab, Turret }
+
 	/// <summary>
 	/// Unit conversions and Cortex Command constants (see docs/cc-actor-design.md). CC simulates at 60 Hz with 20 px per metre,
 	/// the same tick rate as Terraria, so its pixels map 1:1.
@@ -20,7 +22,8 @@ namespace TerraCommand.Common.Actors
 		public static float ToMps(float pxPerTick) => pxPerTick * 60f / PPM;
 
 		public static readonly float Gravity = Accel(20f);           // scene GlobalAcceleration (0, 20)
-		public const float Mass = 140f;                             // Soldier Light: body + head + limbs + jetpack (kg); carried items add to it
+		// Soldier Light: torso, head, helmet, arms, legs, feet and jetpack; carried items add to it.
+		public const float Mass = 48f + 32f + 4f + 2f * 8f + 2f * 12f + 2f * 4f + 1f;
 
 		// stability: faster than this and the body is thrown off its feet (StableVelocityThreshold 15, 25 m/s)
 		public static readonly float StableVelX = Speed(15f), StableVelY = Speed(25f);
@@ -30,10 +33,14 @@ namespace TerraCommand.Common.Actors
 		public const float ImpulseDamageThreshold = 2400f, GibImpulseLimit = 4800f;
 
 		// jetpack ("Jetpack Heavy" on Soldier Light)
-		public const float JetForce = 4050f;                        // 10800/min x 1.25 kg x 18 m/s
+		// Resolved Coalition Light: 12000/min across the three inherited emissions.
+		public const float JetForce = (12000f / 60f / 3f) * 1.25f * (18f + 17.5f + 15f);
 		public const float JetThrottleFull = 1.3f, JetThrottleEmpty = 0.7f;
-		public const float JetBurstImpulse = 360f;                  // 8 particles x 2 burst scale x 1.25 kg x 18 m/s
-		public const float JetBurstFuelTicks = 8f;
+		// BurstSize=8 resolves to 3 particles per emission, with velocity scale 2.
+		public const float JetBurstImpulse = 3f * 2f * 1.25f * (18f + 17.5f + 15f);
+		public const float JetBurstFuelTicks = 9f;
+		public const int JetBurstSpacingTicks = 10; // 160 ms, tested at 60 Hz
+		public const int SharpAimDelayTicks = 15; // Coalition Light: 250 ms
 		public const float JetTimeTicks = 90f;                      // JumpTime 1.5 s
 		public const float JetReplenish = 1.5f;                     // JumpReplenishRate
 		public const float JetMinStartTicks = 15f;                  // 250 ms
@@ -62,15 +69,16 @@ namespace TerraCommand.Common.Actors
 	/// <summary>What sets the actor types apart (CC: each actor's Mass, health, jetpack and limbs).</summary>
 	public sealed class ActorStats
 	{
+		public ActorKind Kind;
 		public float Mass = CC.Mass, LifeScale = 1f, Fuel = CC.JetTimeTicks, JetForce = CC.JetForce, Speed = 1f;
 		public bool CanRun = true, CanJet = true, CanCrouch = true, Moves = true;
 		public int StandHeight = CC.StandHeight;
 
-		static readonly ActorStats soldier = new(), brain = new() { Fuel = 0, CanJet = false, Speed = 0.6f, CanRun = false },
-			light = new() { Mass = 110f, LifeScale = 0.8f, Fuel = 110f, JetForce = 2900f, Speed = 1.15f },
-			heavy = new() { Mass = 200f, LifeScale = 1.6f, Fuel = 60f, JetForce = 5800f, Speed = 0.85f },
-			crab = new() { Mass = 120f, LifeScale = 1.2f, Fuel = 0, CanJet = false, CanRun = false, CanCrouch = false, Speed = 0.9f, StandHeight = 22 },
-			turret = new() { Mass = 300f, LifeScale = 2f, Fuel = 0, CanJet = false, CanRun = false, CanCrouch = false, Moves = false, Speed = 0f, StandHeight = 26 };
+		static readonly ActorStats soldier = new(), brain = new() { Kind = ActorKind.Brain, Fuel = 0, CanJet = false, Speed = 0.6f, CanRun = false },
+			light = new() { Kind = ActorKind.Light, Mass = 110f, LifeScale = 0.8f, Fuel = 110f, JetForce = 2900f, Speed = 1.15f },
+			heavy = new() { Kind = ActorKind.Heavy, Mass = 200f, LifeScale = 1.6f, Fuel = 60f, JetForce = 5800f, Speed = 0.85f },
+			crab = new() { Kind = ActorKind.Crab, Mass = 120f, LifeScale = 1.2f, Fuel = 0, CanJet = false, CanRun = false, CanCrouch = false, Speed = 0.9f, StandHeight = 22 },
+			turret = new() { Kind = ActorKind.Turret, Mass = 300f, LifeScale = 2f, Fuel = 0, CanJet = false, CanRun = false, CanCrouch = false, Moves = false, Speed = 0f, StandHeight = 26 };
 
 		public static ActorStats Get(ActorKind k) => k switch {
 			ActorKind.Brain => brain, ActorKind.Light => light, ActorKind.Heavy => heavy,
@@ -87,9 +95,10 @@ namespace TerraCommand.Common.Actors
 	/// <summary>One tick of control input, CC's Controller states.</summary>
 	public struct ActorInput
 	{
-		public bool Left, Right, Jump, JumpStart, Crouch, Prone, Fast, SharpAim;
+		public bool Left, Right, Jump, JumpStart, Crouch, Prone, Fast, SharpAim, Reloading, HoldingDevice;
 		/// <summary>World-space vector from the body's centre to the aim point (mouse).</summary>
 		public Vector2 Aim;
+		public float AutoCrouch;
 	}
 
 	/// <summary>
@@ -99,6 +108,10 @@ namespace TerraCommand.Common.Actors
 	/// </summary>
 	public class CCActor
 	{
+		public ActorKind Kind;
+		public bool ContactPhysics;
+		public readonly ActorContactState Contacts = new();
+
 		// ---- state
 		public Vector2 Vel;                 // px/tick
 		public float Rot, AngVel;           // rad (screen-clockwise), rad/s
@@ -113,8 +126,14 @@ namespace TerraCommand.Common.Actors
 		public bool Jetting, WasJetting, Grounded = true;
 		public int UnstableTicks;           // ticks spent unstable (recovery timer)
 		public int ProneTicks;
+		public int BurstCooldown, SharpAimTicks, SharpAimRevertTicks = CC.SharpAimDelayTicks;
+		public float Health = 100f;
+		public float GroundSlope; // screen-space terrain angle, clamped to +/-40 degrees
+		public Vector2 StrideScale = Vector2.One;
 		public float LastImpulse;           // N*s of the last terrain impact (for tests)
 
+		public readonly Gait[] Hands = { new(), new() };
+		public bool FrontArmFree = true;
 		public readonly Gait[] Legs = { new(), new() };   // [0] front (FG), [1] back (BG)
 
 		public int FlipFactor => Flipped ? -1 : 1;
@@ -131,6 +150,8 @@ namespace TerraCommand.Common.Actors
 		/// <summary>Takes on an actor type's build (mass, legs, jetpack, height). Carried mass is added by the host.</summary>
 		public void Apply(ActorStats s, float carriedMass)
 		{
+			if (Kind != s.Kind) Contacts.Reset();
+			Kind = s.Kind;
 			Mass = s.Mass + carriedMass;
 			SpeedScale = s.Speed;
 			CanRun = s.CanRun;
@@ -149,6 +170,7 @@ namespace TerraCommand.Common.Actors
 		public void Control(in ActorInput inputIn)
 		{
 			ActorInput input = inputIn;
+			FrontArmFree = !input.HoldingDevice;
 			bool active = Status == ActorStatus.Stable;
 
 			// aim: mouse sets the angle directly; aiming behind turns the body around
@@ -165,15 +187,23 @@ namespace TerraCommand.Common.Actors
 				AimAngle = Math.Clamp(a, -CC.AimRange, CC.AimRange);
 			}
 
-			// jetpack (AEJetpack::UpdateBurstState)
+			// jetpack (AEJetpack::UpdateBurstState + AEmitter burst spacing)
+			if (BurstCooldown > 0)
+				BurstCooldown--;
+			float throttle = Throttle();
+			bool burst = false;
 			WasJetting = Jetting;
 			Jetting = false;
 			bool canStart = Fuel > CC.JetMinStartTicks || WasJetting || Fuel >= FuelMax;
 			if (Status != ActorStatus.Dying && Status != ActorStatus.Dead && canStart && Fuel > 0f && (input.JumpStart || input.Jump)) {
 				Jetting = true;
 				if (input.JumpStart) {
-					Vel += JetDirection(input) * (CC.JetBurstImpulse / Mass) * (CC.PPM / 60f);
-					Fuel -= CC.JetBurstFuelTicks;
+					burst = BurstCooldown == 0;
+					if (burst) {
+						Vel += JetDirection(input) * (CC.JetBurstImpulse / Mass) * (CC.PPM / 60f);
+						BurstCooldown = CC.JetBurstSpacingTicks;
+					}
+					Fuel -= CC.JetBurstFuelTicks * (burst ? 1f : 0.5f);
 				}
 				Fuel -= 1f;
 				Move = MoveState.Jump;
@@ -185,7 +215,7 @@ namespace TerraCommand.Common.Actors
 			}
 			Fuel = Math.Clamp(Fuel, 0f, FuelMax);
 			if (Jetting)
-				Vel += JetDirection(input) * CC.Accel(JetForce * Throttle() / Mass);
+				Vel += JetDirection(input) * CC.Accel(JetForce * throttle * (burst ? 2f : 1f) / Mass);
 
 			// prone / crouch / walk / run / crawl
 			bool moving = (input.Left || input.Right) && active;
@@ -216,20 +246,35 @@ namespace TerraCommand.Common.Actors
 			if (!input.Prone && Prone != ProneState.NotProne)
 				Prone = ProneState.NotProne;
 
-			float wantCrouch = input.Crouch && !input.Prone ? 1f : 0f;
+			float wantCrouch = input.Prone ? 0 : Math.Max(input.Crouch ? 1f : 0f, input.AutoCrouch);
 			CrouchAmount = Math.Clamp(MathHelper.Lerp(CrouchAmount, wantCrouch, 0.3f), 0f, 1f);
 			if (Math.Abs(CrouchAmount - wantCrouch) < 0.01f)
 				CrouchAmount = wantCrouch;
 
 			// sharp aim: ramps up after a short delay while steady; the further the cursor, the further it reaches
-			bool canSharp = input.SharpAim && active && !input.Jump && Vel.Length() < CC.Speed(5f)
+			bool canSharp = input.SharpAim && input.HoldingDevice && active && !input.Jump && Vel.Length() < CC.Speed(5f)
 				&& Move is MoveState.Stand or MoveState.Crouch or MoveState.Prone or MoveState.NoMove or MoveState.Walk;
 			if (canSharp) {
+				SharpAimTicks++;
 				float mag = Move == MoveState.Walk ? 0.3f : 1f;
-				SharpAim = SharpAim < mag ? SharpAim + (mag - SharpAim) * 0.035f : mag;
+				if (SharpAimTicks > CC.SharpAimDelayTicks) {
+					SharpAim = SharpAim < mag ? SharpAim + (mag - SharpAim) * 0.035f : mag;
+					SharpAimRevertTicks = 0;
+				}
+				else {
+					SharpAim *= 0.95f;
+					SharpAimRevertTicks = CC.SharpAimDelayTicks - SharpAimTicks;
+				}
 			}
-			else
+			else {
 				SharpAim = Math.Max(SharpAim * 0.95f - 0.1f, 0f);
+				SharpAimRevertTicks++;
+				SharpAimTicks = SharpAimRevertTicks > CC.SharpAimDelayTicks ? 0 : CC.SharpAimDelayTicks - SharpAimRevertTicks;
+			}
+			if (input.Reloading) {
+				SharpAim = 0;
+				SharpAimTicks = 0;
+			}
 		}
 
 		float Throttle()
@@ -249,7 +294,8 @@ namespace TerraCommand.Common.Actors
 			// thrust points up, tilted forward by -jetAngle (CC angle, facing space), then rotated with the torso
 			float forward = -jetAngle; // >0 tilts toward the facing
 			Vector2 dir = new(MathF.Sin(forward) * FlipFactor, -MathF.Cos(forward));
-			return dir.RotatedBy(Rot);
+			float cos = MathF.Cos(Rot), sin = MathF.Sin(Rot);
+			return new Vector2(dir.X * cos - dir.Y * sin, dir.X * sin + dir.Y * cos);
 		}
 
 		// ------------------------------------------------------------ physics
@@ -262,7 +308,7 @@ namespace TerraCommand.Common.Actors
 		{
 			Vel.Y += CC.Gravity;
 
-			if (Status == ActorStatus.Stable && Grounded) {
+			if (!ContactPhysics && Status == ActorStatus.Stable && Grounded) {
 				int moveDir = input.Right ? 1 : input.Left ? -1 : 0;
 				float pathSpeed = 0f, push = 0f;
 				switch (Move) {
@@ -292,12 +338,18 @@ namespace TerraCommand.Common.Actors
 				// slow bodies move their legs faster to get going (UpdateLimbPathSpeed)
 				float maxBody = CC.Speed(pathSpeed) * 0.5f;
 				if (pathSpeed > 0 && maxBody > 0) {
-					float mult = MathHelper.Lerp(CC.Speed(2f) / maxBody, 1f, Math.Clamp(Math.Abs(Vel.X) / maxBody, 0f, 1f));
+					float fraction = Math.Clamp(Math.Abs(Vel.X) / maxBody, 0f, 1f);
+					StrideScale = new Vector2(MathHelper.Lerp(0.8f, 1.2f, fraction), MathHelper.Lerp(0.9f, 1f, fraction));
+					float crouchSpeed = Move == MoveState.Walk ? MathHelper.Lerp(1f, CC.CrouchWalkMultiplier, CrouchAmount) : 1f;
+					float mult = crouchSpeed * MathHelper.Lerp(CC.Speed(2f) / maxBody, 1f, fraction);
 					foreach (Gait g in Legs)
 						g.SpeedMultiplier = mult;
 				}
-				if (push > 0f && (pathSpeed == 0f || AnyFootPlanted())) {
-					float maxDv = CC.Accel(push / Mass);
+				// CC calls PushAsLimb separately for each supporting leg. Both may contribute in double support.
+				int supports = pathSpeed == 0f ? 2 : PlantedFeet();
+				float armPush = Move == MoveState.Crawl ? 3400f * ((Hands[0].Planted ? 1 : 0) + (Hands[1].Planted ? 1 : 0)) : 0f;
+				if (push * supports + armPush > 0) {
+					float maxDv = CC.Accel((push * supports + armPush) / Mass);
 					float dv = target - Vel.X;
 					// pushing back against the travel direction is weak (CC cuts it to 30%) - you can't brake hard while walking
 					if (moveDir != 0 && Math.Sign(dv) != moveDir)
@@ -306,16 +358,32 @@ namespace TerraCommand.Common.Actors
 				}
 			}
 			// a torso lying on the ground drags on it (CC: terrain friction on the body's atoms)
-			if (Grounded && (Status == ActorStatus.Unstable || Math.Abs(MathF.Sin(Rot)) > 0.5f)) {
+			if (!ContactPhysics && Grounded && (Status == ActorStatus.Unstable || Math.Abs(MathF.Sin(Rot)) > 0.5f)) {
 				float f = CC.LyingFriction;
 				Vel.X = Math.Abs(Vel.X) <= f ? 0f : Vel.X - Math.Sign(Vel.X) * f;
 			}
 
+			if (ContactPhysics) UpdateContactPathSpeed();
 			UpdateGait(input);
 			UpdateRotation();
 		}
 
-		bool AnyFootPlanted() => Legs[0].Planted || Legs[1].Planted;
+		void UpdateContactPathSpeed()
+		{
+			float travel = Kind == ActorKind.Crab ? LimbPaths.Crab.TravelSpeed : Move switch {
+				MoveState.Walk => CC.WalkSpeed, MoveState.Run => CC.RunSpeed, MoveState.Crawl => CC.CrawlSpeed, _ => 0
+			};
+			if (travel <= 0) return;
+			float crouch = Move == MoveState.Walk ? MathHelper.Lerp(1, CC.CrouchWalkMultiplier, CrouchAmount) : 1;
+			float maxBody = travel * SpeedScale * crouch * 0.5f;
+			if (maxBody <= 0) return;
+			float fraction = Math.Clamp(Math.Abs(CC.ToMps(Vel.X)) / maxBody, 0, 1);
+			StrideScale = new Vector2(MathHelper.Lerp(0.8f, 1.2f, fraction), MathHelper.Lerp(0.9f, 1, fraction));
+			foreach (Gait leg in Legs) leg.SpeedMultiplier = crouch * MathHelper.Lerp(2 / maxBody, 1, fraction);
+			if (Kind == ActorKind.Crab) foreach (Gait leg in Hands) leg.SpeedMultiplier = Legs[0].SpeedMultiplier;
+		}
+
+		int PlantedFeet() => (Legs[0].Planted ? 1 : 0) + (Legs[1].Planted ? 1 : 0);
 
 		void UpdateGait(in ActorInput input)
 		{
@@ -325,23 +393,44 @@ namespace TerraCommand.Common.Actors
 				MoveState.Crawl => LimbPaths.Crawl,
 				_ => null,
 			};
-			if (path == null || !Grounded || Status != ActorStatus.Stable) {
+			if (path == null || !ContactPhysics && !Grounded || Status != ActorStatus.Stable) {
 				foreach (Gait g in Legs)
 					g.Terminate();
+				foreach (Gait hand in Hands) hand.Terminate();
 				return;
 			}
-			// legs alternate: one may only restart its stride once the other is half-way through
+			if (Kind == ActorKind.Crab) path = LimbPaths.Crab;
+			AdvancePair(Legs, path);
+			if (Kind == ActorKind.Crab) AdvancePair(Hands, path);
+			else if (Move == MoveState.Crawl && Prone == ProneState.LayingProne)
+				AdvancePair(Hands, LimbPaths.ArmCrawl, !FrontArmFree);
+			else foreach (Gait hand in Hands) hand.Terminate();
+		}
+
+		void AdvancePair(Gait[] limbs, LimbPath path, bool frontOccupied = false)
+		{
+			// A limb restarts once its partner has reached half a stroke.
 			for (int i = 0; i < 2; i++) {
-				Gait g = Legs[i], other = Legs[1 - i];
+				Gait g = limbs[i], other = limbs[1 - i];
+				if (i == 0 && frontOccupied) { g.Terminate(); continue; }
 				if (g.Path != path)
-					g.Begin(path, i == 0 ? 0f : 0.5f);
-				if (g.Ended && other.Progress < 0.5f && !other.Ended)
+					g.Begin(path, (i == 0 ? 0f : 0.5f) + (Kind == ActorKind.Crab && ReferenceEquals(limbs, Hands) ? 0.25f : 0));
+				if (g.Ended && other.RegularProgress < 0.5f && !(i == 0 && (other.Ended || Vel.Length() < CC.Speed(0.5f))))
 					continue;
 				if (g.Ended)
 					g.Begin(path, 0f);
-				g.Advance(CC.Speed(path.TravelSpeed) * g.SpeedMultiplier);
+				if (!ContactPhysics) g.Advance(CC.Speed(path.TravelSpeed) * SpeedScale * g.SpeedMultiplier);
 			}
 		}
+
+		public void AdvanceRemoteGait(Vector2 velocity)
+		{
+			Vel = velocity;
+			UpdateGait(default);
+		}
+
+		public void WriteGait(BinaryWriter writer) => GaitState.Capture(this).Write(writer);
+		public void ReadGait(BinaryReader reader) => GaitState.Read(reader).Apply(this);
 
 		/// <summary>The torso's balancing spring (AHuman::Update "Balance stuff").</summary>
 		void UpdateRotation()
@@ -395,7 +484,7 @@ namespace TerraCommand.Common.Actors
 					if (Math.Abs(diff) > MathHelper.Pi * 0.75f)
 						rot = target;
 					else
-						angVel = angVel * (0.98f - 0.06f) - diff * 0.5f; // health ratio taken as 1: the spring is per-tick in CC
+						angVel = angVel * (0.98f - 0.06f * Math.Clamp(Health / Math.Max(1f, MaxHealth), 0f, 1f)) - diff * 0.5f; // the reference spring is per-tick
 				}
 			}
 			else if (Status == ActorStatus.Unstable) {
@@ -406,7 +495,7 @@ namespace TerraCommand.Common.Actors
 					angVel += diff * 3f * dt;
 				// CC topples a thrown body through its atoms' collisions; without them, a body on its feet tips over like an
 				// inverted pendulum toward the target side, and settles once flat
-				if (Grounded) {
+				if (!ContactPhysics && Grounded) {
 					if (Math.Abs(diff) > 0.15f)
 						angVel += Math.Sign(diff) * 0.6f;
 					else
@@ -414,7 +503,7 @@ namespace TerraCommand.Common.Actors
 				}
 			}
 
-			rot += angVel * dt;
+			if (!ContactPhysics) rot += angVel * dt;
 			Rot = -rot;
 			AngVel = -angVel;
 		}
@@ -465,13 +554,21 @@ namespace TerraCommand.Common.Actors
 			}
 		}
 
+		public int WantedWidth()
+		{
+			if (Kind == ActorKind.Crab || Kind == ActorKind.Turret) return ActorSpriteMasks.Get(Kind, Kind == ActorKind.Crab ? "Body" : "Base").Width;
+			if (Status == ActorStatus.Stable && Prone == ProneState.NotProne)
+				return CC.BodyWidth;
+			return (int)MathF.Round(CC.BodyWidth + (StandHeight - CC.BodyWidth) * Math.Abs(MathF.Sin(Rot)));
+		}
+
 		/// <summary>Hitbox height for the current posture.</summary>
 		public int WantedHeight()
 		{
 			if (Status == ActorStatus.Stable && Prone == ProneState.NotProne)
 				return (int)MathF.Round(MathHelper.Lerp(StandHeight, Math.Min(StandHeight, CC.CrouchHeight), CrouchAmount));
-			float lying = Math.Abs(MathF.Sin(Rot));
-			return (int)MathF.Round(MathHelper.Lerp(StandHeight, Math.Min(StandHeight, CC.LyingHeight), Math.Clamp((lying - 0.3f) / 0.5f, 0f, 1f)));
+			float thickness = Math.Min(StandHeight, CC.LyingHeight);
+			return (int)MathF.Round(thickness + (StandHeight - thickness) * Math.Abs(MathF.Cos(Rot)));
 		}
 	}
 
@@ -486,6 +583,7 @@ namespace TerraCommand.Common.Actors
 		public readonly float Length;
 		/// <summary>The path is laid along the body (crawling): its "down" strokes push the body forward.</summary>
 		public bool AlongBody;
+		public int EndSegments, StartSegments;
 
 		public LimbPath(Vector2 start, float travelSpeed, params Vector2[] segs)
 		{
@@ -494,6 +592,12 @@ namespace TerraCommand.Common.Actors
 			TravelSpeed = travelSpeed;
 			foreach (Vector2 s in segs)
 				Length += s.Length();
+		}
+
+		public Vector2 SegmentTarget(int segment) {
+			Vector2 target = Start;
+			for (int i = 0; i <= segment; i++) target += Segs[i];
+			return target;
 		}
 
 		/// <summary>Point at a distance along the path.</summary>
@@ -517,15 +621,54 @@ namespace TerraCommand.Common.Actors
 		// Data/Base.rte/Actors/Shared.ini (CC Community Project, AGPL-3.0)
 		public static readonly LimbPath Walk = new(new(10, -2), 2.5f,
 			new(0, 3), new(0, 3), new(0, 5), new(0, 3), new(-3, 2), new(-5, 1), new(-5, 1), new(-6, 1), new(-4, 0),
-			new(0, -2), new(3, -3), new(4, -2), new(5, -1));
+			new(0, -2), new(3, -3), new(4, -2), new(5, -1)) { EndSegments = 4, StartSegments = 3 };
 		public static readonly LimbPath Run = new(new(13, -2), 4.7f,
 			new(0, 3), new(0, 3), new(0, 5), new(0, 3), new(-5, 2), new(-6, 1), new(-6, 1), new(-6, 1), new(-4, -1),
-			new(0, -2), new(3, -3), new(4, -2), new(5, -1));
+			new(0, -2), new(3, -3), new(4, -2), new(5, -1)) { EndSegments = 4, StartSegments = 3 };
 		public static readonly LimbPath Crawl = new(new(-10, -8), 1.8f,
-			new(8, 0), new(5, 0), new(3, 2), new(1, 8), new(0, 10), new(-4, 0), new(0, -10)) { AlongBody = true };
+			new(8, 0), new(5, 0), new(3, 2), new(1, 8), new(0, 10), new(-4, 0), new(0, -10)) { AlongBody = true, EndSegments = 2, StartSegments = 2 };
 		/// <summary>Where a standing foot rests (Soldier Stand Path is a static point under the hip).</summary>
+		public static readonly LimbPath Crab = new(new(0, -9), 3,
+			new(15, 6), new(-2, 6), new(-1, 3), new(-2, 2), new(-10, 0), new(-10, 0), new(6, -3), new(6, -3)) { EndSegments = 2, StartSegments = 2 };
+		public static readonly LimbPath ArmCrawl = new(new(-8, -6), 1.5f,
+			new(0, -4), new(3, -4), new(5, -1), new(5, 1), new(1, 8), new(-2, 10)) { AlongBody = true, StartSegments = 3 };
 		public static readonly Vector2 Stand = new(0, 12);
 		public static readonly Vector2 Crouch = new(-4, 7);
+	}
+
+	/// <summary>A value snapshot can be fully consumed even when an inactive/own actor ignores the packet.</summary>
+	public readonly record struct GaitState(MoveState Move, bool Grounded, byte Front, byte Back, float Slope,
+		Vector2 Scale, float Speed, bool FrontArmFree, byte FrontHand, byte BackHand)
+	{
+		static byte Phase(Gait limb) => (byte)Math.Clamp((int)(limb.Progress * 255), 0, 255);
+		public static GaitState Capture(CCActor actor) => new(actor.Move, actor.Grounded,
+			Phase(actor.Legs[0]), Phase(actor.Legs[1]), actor.GroundSlope, actor.StrideScale,
+			actor.Legs[0].SpeedMultiplier, actor.FrontArmFree, Phase(actor.Hands[0]), Phase(actor.Hands[1]));
+
+		public void Write(BinaryWriter writer)
+		{
+			writer.Write((byte)Move); writer.Write(Grounded); writer.Write(Front); writer.Write(Back);
+			writer.Write(Slope); writer.Write(Scale.X); writer.Write(Scale.Y); writer.Write(Speed);
+			writer.Write(FrontArmFree); writer.Write(FrontHand); writer.Write(BackHand);
+		}
+		public static GaitState Read(BinaryReader reader) => new((MoveState)reader.ReadByte(), reader.ReadBoolean(),
+			reader.ReadByte(), reader.ReadByte(), reader.ReadSingle(), new Vector2(reader.ReadSingle(), reader.ReadSingle()),
+			reader.ReadSingle(), reader.ReadBoolean(), reader.ReadByte(), reader.ReadByte());
+
+		public void Apply(CCActor actor)
+		{
+			actor.Move = Move; actor.Grounded = Grounded; actor.GroundSlope = Slope;
+			actor.StrideScale = Scale; actor.FrontArmFree = FrontArmFree;
+			LimbPath path = Move switch { MoveState.Walk when actor.Kind == ActorKind.Crab => LimbPaths.Crab, MoveState.Walk => LimbPaths.Walk, MoveState.Run => LimbPaths.Run, MoveState.Crawl => LimbPaths.Crawl, _ => null };
+			for (int i = 0; i < 2; i++) {
+				actor.Legs[i].SpeedMultiplier = Speed;
+				if (path == null) actor.Legs[i].Terminate();
+				else actor.Legs[i].Begin(path, (i == 0 ? Front : Back) / 255f);
+				if (actor.Kind == ActorKind.Crab && path != null) actor.Hands[i].Begin(path, (i == 0 ? FrontHand : BackHand) / 255f);
+				else if (Move != MoveState.Crawl || i == 0 && !FrontArmFree) actor.Hands[i].Terminate();
+				else actor.Hands[i].Begin(LimbPaths.ArmCrawl, (i == 0 ? FrontHand : BackHand) / 255f);
+			}
+		}
 	}
 
 	/// <summary>A foot's progress along a limb path.</summary>
@@ -536,6 +679,16 @@ namespace TerraCommand.Common.Actors
 		public float SpeedMultiplier = 1f;
 		public bool Ended = true;
 		public int Segment;
+		public int Cycle;
+
+		public float RegularProgress {
+			get {
+				if (Path == null || Ended) return 0;
+				float initial = 0;
+				for (int i = 0; i < Path.StartSegments; i++) initial += Path.Segs[i].Length();
+				return (Dist - initial) / Math.Max(0.01f, Path.Length - initial);
+			}
+		}
 
 		public float Progress => Path == null || Path.Length <= 0 ? 0f : Dist / Path.Length;
 
@@ -545,6 +698,7 @@ namespace TerraCommand.Common.Actors
 		public void Begin(LimbPath path, float progress)
 		{
 			Path = path;
+			Cycle++;
 			Dist = progress * path.Length;
 			Ended = false;
 			Path.At(Dist, out Segment);
@@ -560,6 +714,29 @@ namespace TerraCommand.Common.Actors
 				Ended = true;
 			}
 			Path.At(Dist, out Segment);
+		}
+
+		/// <summary>CC LimbPath::ReportProgress: follow actual limb position, searching only forward.</summary>
+		public void ReportPosition(Vector2 position) {
+			if (Path == null || Ended) return;
+			bool collisionsDisabled = Path.EndSegments > 0 && Path.Segs.Length - Segment <= Path.EndSegments;
+			int closest = Segment;
+			float distance = float.MaxValue;
+			for (int i = Segment; i < Path.Segs.Length; i++) {
+				if (!collisionsDisabled && Path.EndSegments > 0 && Path.Segs.Length - i <= Path.EndSegments) break;
+				float candidate = Vector2.DistanceSquared(position, Path.SegmentTarget(i));
+				if (candidate < distance) { distance = candidate; closest = i; }
+			}
+			Segment = closest;
+			if (distance < 2.5f * 2.5f) {
+				if (Segment == Path.Segs.Length - 1) Ended = true;
+				else Segment++;
+			}
+			Dist = 0;
+			for (int i = 0; i < Segment; i++) Dist += Path.Segs[i].Length();
+			float length = Path.Segs[Segment].Length();
+			Dist += Math.Max(0, length - Vector2.Distance(position, Path.SegmentTarget(Segment)));
+			if (Ended) Dist = Path.Length;
 		}
 
 		public void Terminate()

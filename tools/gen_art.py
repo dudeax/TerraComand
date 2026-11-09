@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generates the mod's placeholder pixel art (no external deps). Run: python3 tools/gen_art.py"""
+"""Historical prototype art generator (stdlib only). Requires --placeholders; normal art comes from import_cc_art.py."""
 import os, struct, zlib, sys
 
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "TerraCommand")
@@ -277,4 +277,6 @@ def devices():
     c = C(1, 1); c.set(0, 0, (120, 220, 255, 255)); c.save("Content/Projectiles/DigParticle.png")
 
 if __name__ == "__main__":
+    if "--placeholders" not in sys.argv:
+        raise SystemExit("Placeholder art is retired. Use tools/import_cc_art.py to refresh CC art, or explicitly pass --placeholders to restore the old prototypes.")
     body_item(); wand(); unit_fallback(); icon(); jetpack(); soldier(); brainbot(); ship(); devices(); actor_variants(); body_items(); craft()

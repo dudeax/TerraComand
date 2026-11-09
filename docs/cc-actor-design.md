@@ -1,5 +1,7 @@
 # Cortex Command actors in Terraria — design
 
+Current source audit and verification: [physics parity work](physics-parity.md). The historical phase notes below include superseded estimates and implementation plans.
+
 Goal: the bodies players control play **1:1 like Cortex Command actors** (AHuman); only the world (terrain, progression, enemies)
 is Terraria's. Playtest feedback (2026-11-08): movement/jumping, look/animation and item use all still felt like Terraria.
 

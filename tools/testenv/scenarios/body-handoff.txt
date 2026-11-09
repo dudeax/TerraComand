@@ -17,5 +17,6 @@ switch
 expect status unstable
 expect fuelnow <= 20
 expect velocityx >= 2.5
-wait 150
+wait 240
+expect alive
 expect status stable

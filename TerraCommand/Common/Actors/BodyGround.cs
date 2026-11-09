@@ -1,3 +1,4 @@
+using System;
 using Microsoft.Xna.Framework;
 using Terraria;
 
@@ -15,6 +16,20 @@ namespace TerraCommand.Common.Actors
 		public const float MaxStepDown = 6f;
 
 		static bool Solid(float x, float y, float w, float h) => Collision.SolidCollision(new Vector2(x, y), (int)w, (int)h);
+
+		/// <summary>AHuman::UpdateWalkAngle: two down rays 10px either side from the feet, clamped to 40 degrees.</summary>
+		public static float Slope(Vector2 feet)
+		{
+			float? Ray(float x) {
+				for (int y = -12; y <= 18; y++)
+					if (Solid(x, feet.Y + y, 1, 1)) return feet.Y + y;
+				return null;
+			}
+			float? left = Ray(feet.X - 10), right = Ray(feet.X + 10);
+			if (!left.HasValue || !right.HasValue || left.Value <= feet.Y - 12 || right.Value <= feet.Y - 12)
+				return 0;
+			return Math.Clamp(MathF.Atan2(right.Value - left.Value, 20f), -MathHelper.ToRadians(40), MathHelper.ToRadians(40));
+		}
 
 		/// <summary>
 		/// Standing on the very edge of the hitbox with the feet over nothing: which way to slip (-1 / +1), or 0 if the feet

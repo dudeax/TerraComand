@@ -39,11 +39,9 @@ namespace TerraCommand.Content.NPCs
 		public static int OreSentUp;   // tests
 
 		int targetIndex = -1, targetPlayer = -1;
-		int fireCooldown, reloadTicks, stuckTicks, jetTicks;
+		int fireCooldown, reloadTicks, stuckTicks, jetTicks, clearJetTicks;
 		bool prevJump, skipImpact = true;
-		Vector2 velRequested;
-		float impactAccum;
-		int impactTimer;
+		float obstacleStartX;
 		float walkDist;
 
 		public int KnockedTicks => Actor.Status == ActorStatus.Unstable ? Math.Max(1, CC.StableRecoverTicks - Actor.UnstableTicks) : 0;
@@ -66,6 +64,7 @@ namespace TerraCommand.Content.NPCs
 			NPC.friendly = true;
 			NPC.aiStyle = -1;
 			NPC.knockBackResist = 0f;      // pushed by blast physics (Explosions) and its own recoil, not vanilla knockback
+			NPC.noTileCollide = true;
 			NPC.noGravity = true;          // the actor applies CC gravity itself
 			NPC.HitSound = SoundID.PlayerHit;
 			NPC.DeathSound = SoundID.PlayerKilled;
@@ -103,12 +102,12 @@ namespace TerraCommand.Content.NPCs
 		{
 			NPC.velocity += impulse;
 			Actor.Shove(Vector2.Zero, knockOver: impulse.Length() > 2f);
-			skipImpact = true;
+			if (!Actor.ContactPhysics) skipImpact = true;
 			NPC.netUpdate = true;
 		}
 
 		/// <summary>Moved by a teleport (orders, catch-up): not an impact.</summary>
-		public void SkipImpactCheck() => skipImpact = true;
+		public void SkipImpactCheck() { skipImpact = true; Actor.Contacts.Reset(); }
 
 		// ------------------------------------------------------------ AI (server / singleplayer)
 
@@ -118,40 +117,32 @@ namespace TerraCommand.Content.NPCs
 			if (NPC.velocity.Y == 0f)
 				walkDist += Math.Abs(NPC.velocity.X);
 			NPC.direction = NPC.spriteDirection = Actor.FlipFactor;
-			if (Main.netMode == NetmodeID.MultiplayerClient)
-				return; // posture arrives from the server (ReceiveExtraAI); vanilla moves the body by the synced velocity
+			if (Main.netMode == NetmodeID.MultiplayerClient) {
+				Actor.AdvanceRemoteGait(NPC.velocity);
+				return;
+			} // posture arrives from the server (ReceiveExtraAI); vanilla moves the body by the synced velocity
 
-			// what the terrain did to last tick's move
-			bool grounded = NPC.velocity.Y == 0f && velRequested.Y >= 0f;
-			// walking down rough ground: a few pixels' drop is a step, not a fall
-			if (!grounded && Actor.Grounded && !Actor.Jetting && Actor.Status == ActorStatus.Stable && NPC.velocity.Y >= 0f && NPC.velocity.Y < 1.5f) {
-				float drop = BodyGround.DropToGround(NPC.position, NPC.width, NPC.height);
-				if (drop >= 0f) {
-					NPC.position.Y += drop;
-					NPC.velocity.Y = 0f;
-					velRequested.Y = 0f;
-					grounded = true;
-				}
-			}
-			TrackImpacts();
-			Actor.AfterMove(NPC.velocity, grounded);
 			UpdateBodyStats();
-
+			Actor.ContactPhysics = true;
 			ActorInput input = Think();
 			Actor.Vel = NPC.velocity;
+			input.AutoCrouch = ActorContacts.CrouchForClearance(Actor, NPC.Bottom, input, TerrariaActorTerrain.Instance);
 			Actor.Control(input);
 			Actor.Physics(input);
-			if (Actor.Grounded && Actor.Status == ActorStatus.Stable && !Actor.Jetting) {
-				int slip = BodyGround.SlipDirection(NPC.position, NPC.width, NPC.height);
-				if (slip != 0 && Math.Sign(Actor.Vel.X) != -slip)
-					Actor.Vel.X = slip * Math.Max(Math.Abs(Actor.Vel.X), 0.6f);
+			Vector2 feet = ActorContacts.Step(Actor, NPC.Bottom, input, TerrariaActorTerrain.Instance);
+			if (!skipImpact) {
+				float damage = Actor.ImpactDamage(Actor.Contacts.TravelImpulse.Length() / Actor.Mass);
+				if (damage > 0) {
+					global::TerraCommand.Common.Testing.AutoTest.Trace($"unit impact {Actor.LastImpulse:0} Ns mass {Actor.Mass:0.0} damage {damage:0.00}");
+					NPC.SimpleStrikeNPC(Math.Max(1, (int)(damage * NPC.lifeMax)), 0, noPlayerInteraction: true);
+				}
 			}
-			if (input.Left || input.Right)
-				Collision.StepUp(ref NPC.position, ref Actor.Vel, NPC.width, NPC.height, ref NPC.stepSpeed, ref NPC.gfxOffY);
+			skipImpact = false;
+			// The engine still advances a noTileCollide NPC once after AI. Bias the position to avoid a second move.
+			NPC.width = Actor.WantedWidth(); NPC.height = Actor.WantedHeight();
+			NPC.Bottom = feet - Actor.Vel;
 			NPC.velocity = Actor.Vel;
-			velRequested = NPC.velocity;
-			if (Actor.Jetting && !Main.dedServ)
-				JetEffects();
+			if (Actor.Jetting && !Main.dedServ) JetEffects();
 
 			SyncIfChanged();
 		}
@@ -160,7 +151,8 @@ namespace TerraCommand.Content.NPCs
 		{
 			ActorStats stats = ActorStats.Get(Loadout.Kind);
 			Actor.MaxHealth = NPC.lifeMax;
-			if (Main.GameUpdateCount % 60 == (ulong)(NPC.whoAmI % 60) || Actor.StandHeight != stats.StandHeight) {
+			Actor.Health = NPC.life;
+			{
 				float m = 0f;
 				foreach (Item it in Loadout.Inventory)
 					m += ActorInventory.ItemMass(it);
@@ -169,39 +161,14 @@ namespace TerraCommand.Content.NPCs
 				Actor.FuelMax = stats.Fuel;
 				Actor.JetForce = stats.JetForce;
 				Actor.Apply(stats, m);
-				// the hitbox fits the body type (drones and turrets are short), feet kept in place
-				if (NPC.height != stats.StandHeight) {
-					NPC.position.Y += NPC.height - stats.StandHeight;
-					NPC.height = stats.StandHeight;
-				}
-			}
-		}
 
-		/// <summary>Terraria stops a body over a couple of ticks; speed lost over consecutive ticks is one impact (CC damage).</summary>
-		void TrackImpacts()
-		{
-			float loss = (velRequested - NPC.velocity).Length();
-			if (skipImpact) {
-				impactAccum = 0f;
-				impactTimer = 0;
-				skipImpact = false;
-			}
-			else if (loss > 0.5f) {
-				impactAccum += loss;
-				impactTimer = 2;
-			}
-			else if (impactTimer > 0 && --impactTimer == 0) {
-				float damage = Actor.ImpactDamage(impactAccum);
-				if (damage > 0f)
-					NPC.SimpleStrikeNPC(Math.Max(1, (int)(damage * NPC.lifeMax)), 0, noPlayerInteraction: true);
-				impactAccum = 0f;
 			}
 		}
 
 		/// <summary>The unit's "controller": a simple CC-style AI that presses the same buttons a player would.</summary>
 		ActorInput Think()
 		{
-			var input = new ActorInput();
+			var input = new ActorInput { HoldingDevice = !Loadout.Held.IsAir };
 			FindTarget();
 			Entity target = targetIndex >= 0 && Main.npc[targetIndex].active ? Main.npc[targetIndex]
 				: targetPlayer >= 0 && Main.player[targetPlayer].active && !Main.player[targetPlayer].dead ? Main.player[targetPlayer] : null;
@@ -223,20 +190,43 @@ namespace TerraCommand.Content.NPCs
 			input.Right = moveDir > 0;
 			input.Fast = moveDir != 0 && Math.Abs(dx) > 16 * 20;
 
-			// blocked (walking into something without getting anywhere), or the goal is well above: jetpack
-			if (moveDir != 0 && Actor.Grounded && Math.Abs(NPC.velocity.X) < 0.2f)
+			// Require real terrain ahead; a force-driven stride can start slowly on clear ground.
+			Vector2 hip = NPC.Bottom + ContactGeometry.HipOffset(Actor);
+			bool obstacle = false;
+			if (moveDir != 0) {
+				for (int sample = 0; sample < 3; sample++) {
+					float height = sample == 0 ? 3 : sample == 1 ? 10 : 20;
+					Vector2 probe = hip + new Vector2(moveDir * (NPC.width / 2f + 3), -height);
+					if (TerrariaActorTerrain.Instance.Sample(probe, out var surface) && !surface.OneWay) { obstacle = true; break; }
+				}
+			}
+			if (obstacle && Actor.Grounded) {
+				if (stuckTicks == 0) obstacleStartX = NPC.Center.X;
 				stuckTicks++;
-			else if (Actor.Grounded)
-				stuckTicks = 0;
+				// A stride can rock backwards and forwards against a wall. Measure
+				// net advance over a support window instead of resetting on each bounce.
+				if (stuckTicks > 20 && (NPC.Center.X - obstacleStartX) * moveDir > 3) stuckTicks = 0;
+			}
+			else if (Actor.Grounded) stuckTicks = 0;
 			if (Order == UnitOrder.Patrol && stuckTicks > 90) {
 				patrolDir = -patrolDir;   // a patrol turns back at walls it can't get over
 				stuckTicks = 0;
 			}
 			bool climb = goal != null && dy < -16 * 4 && (moveDir != 0 || Math.Abs(dx) <= arrive + 16);
 			if (stable && (stuckTicks > 20 || climb && Actor.Grounded) && Actor.Fuel > CC.JetMinStartTicks) {
-				jetTicks = 40;
+				jetTicks = 65;
+				clearJetTicks = 0;
 				stuckTicks = Math.Min(stuckTicks, 20) - 20;
 			}
+			if (jetTicks > 0 && jetTicks < 50 && !obstacle && !climb) {
+				// Clearing the head is not enough: keep thrust until the soles clear,
+				// then allow time to carry the entire body across the obstacle.
+				Vector2 lowerAhead = NPC.Bottom + new Vector2(moveDir * (NPC.width / 2f + 18), 4);
+				bool lowerBlocked = TerrariaActorTerrain.Instance.Sample(lowerAhead, out var lowerSurface) && !lowerSurface.OneWay;
+				clearJetTicks = lowerBlocked ? 0 : clearJetTicks + 1;
+				if (clearJetTicks >= 12) jetTicks = 0;
+			}
+			else clearJetTicks = 0;
 			if (jetTicks > 0) {
 				jetTicks--;
 				input.Jump = true;
@@ -246,6 +236,13 @@ namespace TerraCommand.Content.NPCs
 
 			// aim: at the target, at the ore being dug, or along the way it's going
 			input.Aim = target != null ? target.Center - shoulder : new Vector2((moveDir != 0 ? moveDir : Actor.FlipFactor) * 100f, 0f);
+			// CC's nozzle follows aim. A forward aim drives into the wall;
+			// aim upward until the whole body is above the leading edge.
+			if (input.Jump && moveDir != 0) {
+				Vector2 ahead = NPC.Bottom + new Vector2(moveDir * (NPC.width / 2f + 18), 4);
+				if (TerrariaActorTerrain.Instance.Sample(ahead, out var surface) && !surface.OneWay)
+					input.Aim = new Vector2(moveDir * 40, -100);
+			}
 			input.SharpAim = target != null && moveDir == 0;
 
 			if (target != null && stable)
@@ -259,6 +256,7 @@ namespace TerraCommand.Content.NPCs
 			}
 			if (fireCooldown > 0)
 				fireCooldown--;
+			input.Reloading = reloadTicks > 0;
 			return input;
 		}
 
@@ -571,7 +569,8 @@ namespace TerraCommand.Content.NPCs
 
 		sbyte sentRot, sentAim;
 		ActorStatus sentStatus;
-		bool sentFlip;
+		MoveState sentMove;
+		bool sentFlip, sentGrounded;
 
 		void SyncIfChanged()
 		{
@@ -579,7 +578,7 @@ namespace TerraCommand.Content.NPCs
 				return;
 			sbyte rot = Quant(Actor.Rot), aim = Quant(Actor.AimAngle);
 			if (Math.Abs(rot - sentRot) > 3 || Math.Abs(aim - sentAim) > 3 || Actor.Status != sentStatus || Actor.Flipped != sentFlip
-				|| Main.GameUpdateCount % 30 == (ulong)(NPC.whoAmI % 30) && Math.Abs(NPC.velocity.X) > 0.1f)
+				|| Actor.Move != sentMove || Actor.Grounded != sentGrounded || Main.GameUpdateCount % 30 == (ulong)(NPC.whoAmI % 30) && NPC.velocity.LengthSquared() > 0.01f)
 				NPC.netUpdate = true;
 		}
 
@@ -598,7 +597,11 @@ namespace TerraCommand.Content.NPCs
 			writer.Write(sentAim = Quant(Actor.AimAngle));
 			writer.Write((byte)(Actor.CrouchAmount * 10));
 			sentStatus = Actor.Status;
+			sentMove = Actor.Move;
+			sentGrounded = Actor.Grounded;
 			sentFlip = Actor.Flipped;
+			Actor.WriteGait(writer);
+			ContactSnapshot.Capture(Actor.Contacts).Write(writer);
 			Loadout.Write(writer, visualsOnly: true);
 		}
 
@@ -615,7 +618,15 @@ namespace TerraCommand.Content.NPCs
 			Actor.Rot = reader.ReadSByte() / 32f;
 			Actor.AimAngle = reader.ReadSByte() / 32f;
 			Actor.CrouchAmount = reader.ReadByte() / 10f;
+			GaitState gait = GaitState.Read(reader);
+			ContactSnapshot contacts = ContactSnapshot.Read(reader);
 			Loadout = UnitLoadout.Read(reader);
+			Actor.Apply(ActorStats.Get(Loadout.Kind), 0);
+			gait.Apply(Actor);
+			contacts.Apply(Actor.Contacts);
+			Actor.Contacts.BindPaths(Actor);
+			NPC.width = Actor.WantedWidth(); NPC.height = Actor.WantedHeight();
+			if (Actor.Contacts.Initialized) NPC.Bottom = Actor.Contacts.Anchor;
 		}
 
 		// ------------------------------------------------------------ death
@@ -638,10 +649,20 @@ namespace TerraCommand.Content.NPCs
 			Crouch = Actor.Status == ActorStatus.Stable && Actor.Prone == ProneState.NotProne ? Actor.CrouchAmount : 0f,
 			Prone = Actor.Prone != ProneState.NotProne && Actor.Status == ActorStatus.Stable,
 			Unstable = Actor.Status != ActorStatus.Stable,
-			Grounded = NPC.velocity.Y == 0f,
-			Sink = NPC.velocity.Y == 0f && Actor.Status == ActorStatus.Stable ? BodyGround.FeetSink(NPC.position, NPC.width, NPC.height) : 0f,
+			Grounded = Actor.Grounded,
+			Sink = !Actor.Contacts.Initialized && NPC.velocity.Y == 0f && Actor.Status == ActorStatus.Stable ? BodyGround.FeetSink(NPC.position, NPC.width, NPC.height) : 0f,
 			VelX = NPC.velocity.X,
 			WalkDist = walkDist,
+			FrontFoot = Actor.Legs[0].Foot(LimbPaths.Stand) * Actor.StrideScale,
+			BackFoot = Actor.Legs[1].Foot(LimbPaths.Stand) * Actor.StrideScale,
+			SimulatedFeet = Actor.Legs[0].Path != null || Actor.Legs[1].Path != null,
+			GroundSlope = Actor.GroundSlope,
+			ContactPose = Actor.Contacts.Initialized,
+			ContactHip = Actor.Contacts.Anchor + ContactGeometry.HipOffset(Actor), ContactRotation = Actor.Rot,
+			ContactFoot0 = Actor.Contacts.Limbs[0].Position, ContactFoot1 = Actor.Contacts.Limbs[1].Position,
+			ContactHand0 = Actor.Contacts.Limbs[2].Position, ContactHand1 = Actor.Contacts.Limbs[3].Position,
+			FrontHand = Actor.Hands[0].Foot(Vector2.Zero), BackHand = Actor.Hands[1].Foot(Vector2.Zero),
+			FrontHandCrawls = Actor.Hands[0].Path != null, BackHandCrawls = Actor.Hands[1].Path != null,
 			Held = Loadout.Held,
 			Light = light,
 		};

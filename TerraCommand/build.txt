@@ -1,4 +1,4 @@
 displayName = Terra Command
 author = alex
-version = 0.7.0
-homepage = https://github.com/cortex-command-community/Cortex-Command-Community-Project
+version = 0.8.0
+homepage = https://github.com/dudeax/TerraComand

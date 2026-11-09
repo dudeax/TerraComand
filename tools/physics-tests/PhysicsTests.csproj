@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <TmlDir Condition="'$(TmlDir)' == ''">../../.tml/</TmlDir>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="Program.cs" />
+    <Compile Include="../../TerraCommand/Common/Actors/ActorContacts.cs" />
+    <Compile Include="../../TerraCommand/Common/Actors/ContactGeometry.cs" />
+    <Compile Include="../../TerraCommand/Common/Actors/ActorSpriteMasks.Generated.cs" />
+    <Compile Include="../../TerraCommand/Common/Actors/CCActor.cs" Link="CCActor.cs" />
+    <Compile Include="../../TerraCommand/Common/Actors/ActorMotion.cs" Link="ActorMotion.cs" />
+    <Reference Include="FNA"><HintPath>$(TmlDir)Libraries/FNA/1.0.0/FNA.dll</HintPath></Reference>
+  </ItemGroup>
+</Project>

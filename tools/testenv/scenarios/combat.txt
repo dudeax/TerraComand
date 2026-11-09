@@ -23,7 +23,7 @@ expect sharpaim <= 0.05
 mark
 shoot 3 30
 expect cone >= 0.022
-expect cone <= 0.03
+expect cone <= 0.053             # physical stance can briefly lose support during a shot (CC x2 airborne spread)
 goto rel 0 -20                  # falling: unsupported, x2 (arena is flattened 24 tiles high)
 wait 12
 mark

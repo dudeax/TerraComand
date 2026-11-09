@@ -1,0 +1,1150 @@
+{
+  "reference_commit": "cca55f154ba49a17436cf91d91e1302fe45395db",
+  "assets": [
+    {
+      "output": "TerraCommand/Content/Actors/Soldier/Torso.png",
+      "sources": [
+        "Coalition.rte/Actors/Infantry/CoalitionLight/TorsoA.png"
+      ],
+      "operation": "palette transparency; nearest-neighbour fit"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Soldier/Head.png",
+      "sources": [
+        "Coalition.rte/Actors/Infantry/CoalitionLight/HeadA.png",
+        "Coalition.rte/Actors/Infantry/CoalitionLight/HelmetA000.png"
+      ],
+      "operation": "palette transparency; helmet composite"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Soldier/Foot.png",
+      "sources": [
+        "Coalition.rte/Actors/Infantry/CoalitionLight/FootFGA000.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Soldier/Hand.png",
+      "sources": [
+        "Coalition.rte/Actors/Infantry/CoalitionLight/HandFGA.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Soldier/ArmFront0.png",
+      "sources": [
+        "Coalition.rte/Actors/Infantry/CoalitionLight/ArmFGA000.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Soldier/ArmFront1.png",
+      "sources": [
+        "Coalition.rte/Actors/Infantry/CoalitionLight/ArmFGA001.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Soldier/ArmFront2.png",
+      "sources": [
+        "Coalition.rte/Actors/Infantry/CoalitionLight/ArmFGA002.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Soldier/ArmFront3.png",
+      "sources": [
+        "Coalition.rte/Actors/Infantry/CoalitionLight/ArmFGA003.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Soldier/ArmFront4.png",
+      "sources": [
+        "Coalition.rte/Actors/Infantry/CoalitionLight/ArmFGA004.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Soldier/ArmBack0.png",
+      "sources": [
+        "Coalition.rte/Actors/Infantry/CoalitionLight/ArmBGA000.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Soldier/ArmBack1.png",
+      "sources": [
+        "Coalition.rte/Actors/Infantry/CoalitionLight/ArmBGA001.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Soldier/ArmBack2.png",
+      "sources": [
+        "Coalition.rte/Actors/Infantry/CoalitionLight/ArmBGA002.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Soldier/ArmBack3.png",
+      "sources": [
+        "Coalition.rte/Actors/Infantry/CoalitionLight/ArmBGA003.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Soldier/ArmBack4.png",
+      "sources": [
+        "Coalition.rte/Actors/Infantry/CoalitionLight/ArmBGA004.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Soldier/UpperArm.png",
+      "sources": [
+        "Coalition.rte/Actors/Infantry/CoalitionLight/ArmFGA004.png"
+      ],
+      "operation": "compatibility split, rotated and fitted; normal rendering uses native frames"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Soldier/Forearm.png",
+      "sources": [
+        "Coalition.rte/Actors/Infantry/CoalitionLight/ArmFGA004.png"
+      ],
+      "operation": "compatibility split, rotated and fitted; normal rendering uses native frames"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Soldier/LegFront0.png",
+      "sources": [
+        "Coalition.rte/Actors/Infantry/CoalitionLight/LegFGA000.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Soldier/LegFront1.png",
+      "sources": [
+        "Coalition.rte/Actors/Infantry/CoalitionLight/LegFGA001.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Soldier/LegFront2.png",
+      "sources": [
+        "Coalition.rte/Actors/Infantry/CoalitionLight/LegFGA002.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Soldier/LegFront3.png",
+      "sources": [
+        "Coalition.rte/Actors/Infantry/CoalitionLight/LegFGA003.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Soldier/LegFront4.png",
+      "sources": [
+        "Coalition.rte/Actors/Infantry/CoalitionLight/LegFGA004.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Soldier/LegBack0.png",
+      "sources": [
+        "Coalition.rte/Actors/Infantry/CoalitionLight/LegBGA000.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Soldier/LegBack1.png",
+      "sources": [
+        "Coalition.rte/Actors/Infantry/CoalitionLight/LegBGA001.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Soldier/LegBack2.png",
+      "sources": [
+        "Coalition.rte/Actors/Infantry/CoalitionLight/LegBGA002.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Soldier/LegBack3.png",
+      "sources": [
+        "Coalition.rte/Actors/Infantry/CoalitionLight/LegBGA003.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Soldier/LegBack4.png",
+      "sources": [
+        "Coalition.rte/Actors/Infantry/CoalitionLight/LegBGA004.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Soldier/Thigh.png",
+      "sources": [
+        "Coalition.rte/Actors/Infantry/CoalitionLight/LegFGA004.png"
+      ],
+      "operation": "compatibility split, rotated and fitted; normal rendering uses native frames"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Soldier/Shin.png",
+      "sources": [
+        "Coalition.rte/Actors/Infantry/CoalitionLight/LegFGA004.png"
+      ],
+      "operation": "compatibility split, rotated and fitted; normal rendering uses native frames"
+    },
+    {
+      "output": "TerraCommand/Content/Items/CloneBody.png",
+      "sources": [
+        "Coalition.rte/Actors/Infantry/CoalitionLight/Icon.png"
+      ],
+      "operation": "palette transparency; nearest-neighbour fit"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Light/Torso.png",
+      "sources": [
+        "Coalition.rte/Actors/Infantry/CoalitionLight/TorsoA.png"
+      ],
+      "operation": "palette transparency; nearest-neighbour fit"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Light/Head.png",
+      "sources": [
+        "Coalition.rte/Actors/Infantry/CoalitionLight/HeadA.png"
+      ],
+      "operation": "palette transparency; nearest-neighbour fit"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Light/Foot.png",
+      "sources": [
+        "Coalition.rte/Actors/Infantry/CoalitionLight/FootFGA000.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Light/Hand.png",
+      "sources": [
+        "Coalition.rte/Actors/Infantry/CoalitionLight/HandFGA.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Light/ArmFront0.png",
+      "sources": [
+        "Coalition.rte/Actors/Infantry/CoalitionLight/ArmFGA000.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Light/ArmFront1.png",
+      "sources": [
+        "Coalition.rte/Actors/Infantry/CoalitionLight/ArmFGA001.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Light/ArmFront2.png",
+      "sources": [
+        "Coalition.rte/Actors/Infantry/CoalitionLight/ArmFGA002.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Light/ArmFront3.png",
+      "sources": [
+        "Coalition.rte/Actors/Infantry/CoalitionLight/ArmFGA003.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Light/ArmFront4.png",
+      "sources": [
+        "Coalition.rte/Actors/Infantry/CoalitionLight/ArmFGA004.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Light/ArmBack0.png",
+      "sources": [
+        "Coalition.rte/Actors/Infantry/CoalitionLight/ArmBGA000.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Light/ArmBack1.png",
+      "sources": [
+        "Coalition.rte/Actors/Infantry/CoalitionLight/ArmBGA001.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Light/ArmBack2.png",
+      "sources": [
+        "Coalition.rte/Actors/Infantry/CoalitionLight/ArmBGA002.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Light/ArmBack3.png",
+      "sources": [
+        "Coalition.rte/Actors/Infantry/CoalitionLight/ArmBGA003.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Light/ArmBack4.png",
+      "sources": [
+        "Coalition.rte/Actors/Infantry/CoalitionLight/ArmBGA004.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Light/UpperArm.png",
+      "sources": [
+        "Coalition.rte/Actors/Infantry/CoalitionLight/ArmFGA004.png"
+      ],
+      "operation": "compatibility split, rotated and fitted; normal rendering uses native frames"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Light/Forearm.png",
+      "sources": [
+        "Coalition.rte/Actors/Infantry/CoalitionLight/ArmFGA004.png"
+      ],
+      "operation": "compatibility split, rotated and fitted; normal rendering uses native frames"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Light/LegFront0.png",
+      "sources": [
+        "Coalition.rte/Actors/Infantry/CoalitionLight/LegFGA000.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Light/LegFront1.png",
+      "sources": [
+        "Coalition.rte/Actors/Infantry/CoalitionLight/LegFGA001.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Light/LegFront2.png",
+      "sources": [
+        "Coalition.rte/Actors/Infantry/CoalitionLight/LegFGA002.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Light/LegFront3.png",
+      "sources": [
+        "Coalition.rte/Actors/Infantry/CoalitionLight/LegFGA003.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Light/LegFront4.png",
+      "sources": [
+        "Coalition.rte/Actors/Infantry/CoalitionLight/LegFGA004.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Light/LegBack0.png",
+      "sources": [
+        "Coalition.rte/Actors/Infantry/CoalitionLight/LegBGA000.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Light/LegBack1.png",
+      "sources": [
+        "Coalition.rte/Actors/Infantry/CoalitionLight/LegBGA001.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Light/LegBack2.png",
+      "sources": [
+        "Coalition.rte/Actors/Infantry/CoalitionLight/LegBGA002.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Light/LegBack3.png",
+      "sources": [
+        "Coalition.rte/Actors/Infantry/CoalitionLight/LegBGA003.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Light/LegBack4.png",
+      "sources": [
+        "Coalition.rte/Actors/Infantry/CoalitionLight/LegBGA004.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Light/Thigh.png",
+      "sources": [
+        "Coalition.rte/Actors/Infantry/CoalitionLight/LegFGA004.png"
+      ],
+      "operation": "compatibility split, rotated and fitted; normal rendering uses native frames"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Light/Shin.png",
+      "sources": [
+        "Coalition.rte/Actors/Infantry/CoalitionLight/LegFGA004.png"
+      ],
+      "operation": "compatibility split, rotated and fitted; normal rendering uses native frames"
+    },
+    {
+      "output": "TerraCommand/Content/Items/LightBody.png",
+      "sources": [
+        "Coalition.rte/Actors/Infantry/CoalitionLight/Icon.png"
+      ],
+      "operation": "palette transparency; nearest-neighbour fit"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Heavy/Torso.png",
+      "sources": [
+        "Coalition.rte/Actors/Infantry/CoalitionHeavy/TorsoB.png"
+      ],
+      "operation": "palette transparency; nearest-neighbour fit"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Heavy/Head.png",
+      "sources": [
+        "Coalition.rte/Actors/Infantry/CoalitionHeavy/HeadB.png"
+      ],
+      "operation": "palette transparency; nearest-neighbour fit"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Heavy/Foot.png",
+      "sources": [
+        "Coalition.rte/Actors/Infantry/CoalitionLight/FootFGA000.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Heavy/Hand.png",
+      "sources": [
+        "Coalition.rte/Actors/Infantry/CoalitionLight/HandFGA.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Heavy/ArmFront0.png",
+      "sources": [
+        "Coalition.rte/Actors/Infantry/CoalitionHeavy/ArmFGB000.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Heavy/ArmFront1.png",
+      "sources": [
+        "Coalition.rte/Actors/Infantry/CoalitionHeavy/ArmFGB001.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Heavy/ArmFront2.png",
+      "sources": [
+        "Coalition.rte/Actors/Infantry/CoalitionHeavy/ArmFGB002.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Heavy/ArmFront3.png",
+      "sources": [
+        "Coalition.rte/Actors/Infantry/CoalitionHeavy/ArmFGB003.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Heavy/ArmFront4.png",
+      "sources": [
+        "Coalition.rte/Actors/Infantry/CoalitionHeavy/ArmFGB004.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Heavy/ArmBack0.png",
+      "sources": [
+        "Coalition.rte/Actors/Infantry/CoalitionHeavy/ArmBGB000.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Heavy/ArmBack1.png",
+      "sources": [
+        "Coalition.rte/Actors/Infantry/CoalitionHeavy/ArmBGB001.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Heavy/ArmBack2.png",
+      "sources": [
+        "Coalition.rte/Actors/Infantry/CoalitionHeavy/ArmBGB002.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Heavy/ArmBack3.png",
+      "sources": [
+        "Coalition.rte/Actors/Infantry/CoalitionHeavy/ArmBGB003.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Heavy/ArmBack4.png",
+      "sources": [
+        "Coalition.rte/Actors/Infantry/CoalitionHeavy/ArmBGB004.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Heavy/UpperArm.png",
+      "sources": [
+        "Coalition.rte/Actors/Infantry/CoalitionHeavy/ArmFGB004.png"
+      ],
+      "operation": "compatibility split, rotated and fitted; normal rendering uses native frames"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Heavy/Forearm.png",
+      "sources": [
+        "Coalition.rte/Actors/Infantry/CoalitionHeavy/ArmFGB004.png"
+      ],
+      "operation": "compatibility split, rotated and fitted; normal rendering uses native frames"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Heavy/LegFront0.png",
+      "sources": [
+        "Coalition.rte/Actors/Infantry/CoalitionHeavy/LegFGB000.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Heavy/LegFront1.png",
+      "sources": [
+        "Coalition.rte/Actors/Infantry/CoalitionHeavy/LegFGB001.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Heavy/LegFront2.png",
+      "sources": [
+        "Coalition.rte/Actors/Infantry/CoalitionHeavy/LegFGB002.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Heavy/LegFront3.png",
+      "sources": [
+        "Coalition.rte/Actors/Infantry/CoalitionHeavy/LegFGB003.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Heavy/LegFront4.png",
+      "sources": [
+        "Coalition.rte/Actors/Infantry/CoalitionHeavy/LegFGB004.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Heavy/LegBack0.png",
+      "sources": [
+        "Coalition.rte/Actors/Infantry/CoalitionHeavy/LegBGB000.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Heavy/LegBack1.png",
+      "sources": [
+        "Coalition.rte/Actors/Infantry/CoalitionHeavy/LegBGB001.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Heavy/LegBack2.png",
+      "sources": [
+        "Coalition.rte/Actors/Infantry/CoalitionHeavy/LegBGB002.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Heavy/LegBack3.png",
+      "sources": [
+        "Coalition.rte/Actors/Infantry/CoalitionHeavy/LegBGB003.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Heavy/LegBack4.png",
+      "sources": [
+        "Coalition.rte/Actors/Infantry/CoalitionHeavy/LegBGB004.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Heavy/Thigh.png",
+      "sources": [
+        "Coalition.rte/Actors/Infantry/CoalitionHeavy/LegFGB004.png"
+      ],
+      "operation": "compatibility split, rotated and fitted; normal rendering uses native frames"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Heavy/Shin.png",
+      "sources": [
+        "Coalition.rte/Actors/Infantry/CoalitionHeavy/LegFGB004.png"
+      ],
+      "operation": "compatibility split, rotated and fitted; normal rendering uses native frames"
+    },
+    {
+      "output": "TerraCommand/Content/Items/HeavyBody.png",
+      "sources": [
+        "Coalition.rte/Actors/Infantry/CoalitionHeavy/Icon.png"
+      ],
+      "operation": "palette transparency; nearest-neighbour fit"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Brain/Torso.png",
+      "sources": [
+        "Base.rte/Actors/Brains/Brainbot/Torso.png"
+      ],
+      "operation": "palette transparency; nearest-neighbour fit"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Brain/Head.png",
+      "sources": [
+        "Base.rte/Actors/Brains/Brainbot/MobileBrain000.png"
+      ],
+      "operation": "palette transparency; nearest-neighbour fit"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Brain/Foot.png",
+      "sources": [
+        "Base.rte/Actors/Brains/Brainbot/FootFG000.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Brain/Hand.png",
+      "sources": [
+        "Base.rte/Actors/Brains/Brainbot/HandFG.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Brain/ArmFront0.png",
+      "sources": [
+        "Base.rte/Actors/Brains/Brainbot/ArmFG000.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Brain/ArmFront1.png",
+      "sources": [
+        "Base.rte/Actors/Brains/Brainbot/ArmFG001.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Brain/ArmFront2.png",
+      "sources": [
+        "Base.rte/Actors/Brains/Brainbot/ArmFG002.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Brain/ArmFront3.png",
+      "sources": [
+        "Base.rte/Actors/Brains/Brainbot/ArmFG003.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Brain/ArmFront4.png",
+      "sources": [
+        "Base.rte/Actors/Brains/Brainbot/ArmFG004.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Brain/ArmFront5.png",
+      "sources": [
+        "Base.rte/Actors/Brains/Brainbot/ArmFG005.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Brain/ArmBack0.png",
+      "sources": [
+        "Base.rte/Actors/Brains/Brainbot/ArmBG000.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Brain/ArmBack1.png",
+      "sources": [
+        "Base.rte/Actors/Brains/Brainbot/ArmBG001.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Brain/ArmBack2.png",
+      "sources": [
+        "Base.rte/Actors/Brains/Brainbot/ArmBG002.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Brain/ArmBack3.png",
+      "sources": [
+        "Base.rte/Actors/Brains/Brainbot/ArmBG003.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Brain/ArmBack4.png",
+      "sources": [
+        "Base.rte/Actors/Brains/Brainbot/ArmBG004.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Brain/ArmBack5.png",
+      "sources": [
+        "Base.rte/Actors/Brains/Brainbot/ArmBG005.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Brain/UpperArm.png",
+      "sources": [
+        "Base.rte/Actors/Brains/Brainbot/ArmFG005.png"
+      ],
+      "operation": "compatibility split, rotated and fitted; normal rendering uses native frames"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Brain/Forearm.png",
+      "sources": [
+        "Base.rte/Actors/Brains/Brainbot/ArmFG005.png"
+      ],
+      "operation": "compatibility split, rotated and fitted; normal rendering uses native frames"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Brain/LegFront0.png",
+      "sources": [
+        "Base.rte/Actors/Brains/Brainbot/LegFG000.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Brain/LegFront1.png",
+      "sources": [
+        "Base.rte/Actors/Brains/Brainbot/LegFG001.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Brain/LegFront2.png",
+      "sources": [
+        "Base.rte/Actors/Brains/Brainbot/LegFG002.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Brain/LegFront3.png",
+      "sources": [
+        "Base.rte/Actors/Brains/Brainbot/LegFG003.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Brain/LegFront4.png",
+      "sources": [
+        "Base.rte/Actors/Brains/Brainbot/LegFG004.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Brain/LegFront5.png",
+      "sources": [
+        "Base.rte/Actors/Brains/Brainbot/LegFG005.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Brain/LegBack0.png",
+      "sources": [
+        "Base.rte/Actors/Brains/Brainbot/LegBG000.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Brain/LegBack1.png",
+      "sources": [
+        "Base.rte/Actors/Brains/Brainbot/LegBG001.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Brain/LegBack2.png",
+      "sources": [
+        "Base.rte/Actors/Brains/Brainbot/LegBG002.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Brain/LegBack3.png",
+      "sources": [
+        "Base.rte/Actors/Brains/Brainbot/LegBG003.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Brain/LegBack4.png",
+      "sources": [
+        "Base.rte/Actors/Brains/Brainbot/LegBG004.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Brain/LegBack5.png",
+      "sources": [
+        "Base.rte/Actors/Brains/Brainbot/LegBG005.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Brain/Thigh.png",
+      "sources": [
+        "Base.rte/Actors/Brains/Brainbot/LegFG005.png"
+      ],
+      "operation": "compatibility split, rotated and fitted; normal rendering uses native frames"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Brain/Shin.png",
+      "sources": [
+        "Base.rte/Actors/Brains/Brainbot/LegFG005.png"
+      ],
+      "operation": "compatibility split, rotated and fitted; normal rendering uses native frames"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Jetpack.png",
+      "sources": [
+        "Base.rte/Actors/Shared/Jetpack.png"
+      ],
+      "operation": "palette transparency; nearest-neighbour fit"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Crab/Body.png",
+      "sources": [
+        "Coalition.rte/Actors/Mecha/GatlingDrone/MountMobile000.png"
+      ],
+      "operation": "palette transparency; nearest-neighbour fit"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Crab/LegFront0.png",
+      "sources": [
+        "Coalition.rte/Actors/Mecha/GatlingDrone/LegFGA000.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Crab/LegBack0.png",
+      "sources": [
+        "Coalition.rte/Actors/Mecha/GatlingDrone/LegBGA000.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Crab/LegFront1.png",
+      "sources": [
+        "Coalition.rte/Actors/Mecha/GatlingDrone/LegFGA001.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Crab/LegBack1.png",
+      "sources": [
+        "Coalition.rte/Actors/Mecha/GatlingDrone/LegBGA001.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Crab/LegFront2.png",
+      "sources": [
+        "Coalition.rte/Actors/Mecha/GatlingDrone/LegFGA002.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Crab/LegBack2.png",
+      "sources": [
+        "Coalition.rte/Actors/Mecha/GatlingDrone/LegBGA002.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Crab/LegFront3.png",
+      "sources": [
+        "Coalition.rte/Actors/Mecha/GatlingDrone/LegFGA003.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Crab/LegBack3.png",
+      "sources": [
+        "Coalition.rte/Actors/Mecha/GatlingDrone/LegBGA003.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Crab/LegFront4.png",
+      "sources": [
+        "Coalition.rte/Actors/Mecha/GatlingDrone/LegFGA004.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Crab/LegBack4.png",
+      "sources": [
+        "Coalition.rte/Actors/Mecha/GatlingDrone/LegBGA004.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Crab/Thigh.png",
+      "sources": [
+        "Coalition.rte/Actors/Mecha/GatlingDrone/LegFGA004.png"
+      ],
+      "operation": "palette transparency; nearest-neighbour fit"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Crab/Shin.png",
+      "sources": [
+        "Coalition.rte/Actors/Mecha/GatlingDrone/LegFGA004.png"
+      ],
+      "operation": "palette transparency; nearest-neighbour fit"
+    },
+    {
+      "output": "TerraCommand/Content/Items/CrabDrone.png",
+      "sources": [
+        "Coalition.rte/Actors/Mecha/GatlingDrone/Icon.png"
+      ],
+      "operation": "palette transparency; nearest-neighbour fit"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Turret/Base.png",
+      "sources": [
+        "Base.rte/Actors/Turrets/SmallTurret/MountStaticA000.png"
+      ],
+      "operation": "palette transparency; nearest-neighbour fit"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/Turret/Head.png",
+      "sources": [
+        "Base.rte/Actors/Turrets/SmallTurret/TurretSmallA.png"
+      ],
+      "operation": "palette transparency; nearest-neighbour fit"
+    },
+    {
+      "output": "TerraCommand/Content/Items/TurretKit.png",
+      "sources": [
+        "Base.rte/Actors/Turrets/SmallTurret/TurretSmallA.png"
+      ],
+      "operation": "palette transparency; nearest-neighbour fit"
+    },
+    {
+      "output": "TerraCommand/Content/Items/Devices/ServicePistol.png",
+      "sources": [
+        "Coalition.rte/Devices/Weapons/Pistol/Pistol000.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Items/Devices/FieldRifle.png",
+      "sources": [
+        "Coalition.rte/Devices/Weapons/AssaultRifle/AssaultRifle000.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Items/Devices/TriBurstRifle.png",
+      "sources": [
+        "Coalition.rte/Devices/Weapons/CompactAssaultRifle/CompactAssaultRifle000.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Items/Devices/Longshot.png",
+      "sources": [
+        "Coalition.rte/Devices/Weapons/SniperRifle/SniperRifle000.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Items/Devices/Scattergun.png",
+      "sources": [
+        "Coalition.rte/Devices/Weapons/Shotgun/Shotgun000.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Items/Devices/Spinner.png",
+      "sources": [
+        "Coalition.rte/Devices/Weapons/GatlingGun/GatlingGun000.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Items/Devices/RocketTube.png",
+      "sources": [
+        "Base.rte/Devices/Weapons/RocketLauncher/RocketLauncher.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Items/Devices/LightDigger.png",
+      "sources": [
+        "Base.rte/Devices/Tools/Digger/LightDigger000.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Items/Devices/HeavyDigger.png",
+      "sources": [
+        "Base.rte/Devices/Tools/Digger/HeavyDigger000.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Items/Devices/FragGrenade.png",
+      "sources": [
+        "Coalition.rte/Devices/Explosives/FragGrenade/FragGrenade000.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Items/Devices/ImpactGrenade.png",
+      "sources": [
+        "Coalition.rte/Devices/Explosives/IncendiaryGrenade/IncendiaryGrenade.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Items/Devices/ClusterGrenade.png",
+      "sources": [
+        "Coalition.rte/Devices/Explosives/ClusterGrenade/ClusterGrenade000.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Items/Devices/StickyCharge.png",
+      "sources": [
+        "Coalition.rte/Devices/Explosives/TimedExplosive/TimedExplosive000.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Items/Devices/RemoteCharge.png",
+      "sources": [
+        "Base.rte/Devices/Explosives/RemoteExplosive/RemoteExplosive000.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Items/Devices/RemoteDetonator.png",
+      "sources": [
+        "Base.rte/Devices/Explosives/RemoteExplosive/Detonator000.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Items/Devices/RiotShield.png",
+      "sources": [
+        "Coalition.rte/Devices/Shields/CombatShield/CombatShield000.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Items/Devices/Medikit.png",
+      "sources": [
+        "Base.rte/Devices/Special/Medikit/MedikitA.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Items/OrbitalConstructor.png",
+      "sources": [
+        "Base.rte/Devices/Tools/Constructor/ConstructorA000.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/NPCs/Dropship.png",
+      "sources": [
+        "Base.rte/Craft/Dropships/HullA000.png",
+        "Base.rte/Craft/Dropships/EngineALeft.png",
+        "Base.rte/Craft/Dropships/EngineARight.png"
+      ],
+      "operation": "hull/engine composite; nearest-neighbour fit to mod craft dimensions"
+    },
+    {
+      "output": "TerraCommand/Content/NPCs/CargoShip.png",
+      "sources": [
+        "Base.rte/Craft/Rockets/MK2/RocketMK2000.png"
+      ],
+      "operation": "palette transparency; nearest-neighbour fit"
+    },
+    {
+      "output": "TerraCommand/Content/NPCs/DropCrate.png",
+      "sources": [
+        "Base.rte/Craft/StorageCrate/CrateBodyA000.png"
+      ],
+      "operation": "palette transparency; nearest-neighbour fit"
+    },
+    {
+      "output": "TerraCommand/Content/Items/Devices/Sawthrower.png",
+      "sources": [
+        "Ronin.rte/Devices/Weapons/RocketPropelledChainsaw/RPCLauncher.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Projectiles/SawBlade.png",
+      "sources": [
+        "Ronin.rte/Devices/Weapons/RocketPropelledChainsaw/RPC.png"
+      ],
+      "operation": "palette transparency; nearest-neighbour fit"
+    },
+    {
+      "output": "TerraCommand/Content/Projectiles/DigParticle.png",
+      "sources": [
+        "Base.rte/Effects/Wounds/Spark01000.png"
+      ],
+      "operation": "palette transparency; nearest-neighbour fit"
+    },
+    {
+      "output": "TerraCommand/Content/NPCs/CloneUnit.png",
+      "sources": [
+        "Coalition.rte/Actors/Infantry/CoalitionLight/TorsoA.png",
+        "Coalition.rte/Actors/Infantry/CoalitionLight/HeadA.png"
+      ],
+      "operation": "fallback torso/head composite; normal actors use articulated renderer"
+    },
+    {
+      "output": "TerraCommand/icon.png",
+      "sources": [
+        "Coalition.rte/ModuleIcon.png"
+      ],
+      "operation": "palette transparency; nearest-neighbour fit"
+    }
+  ]
+}
