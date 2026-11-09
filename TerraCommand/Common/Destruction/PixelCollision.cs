@@ -129,10 +129,11 @@ namespace TerraCommand.Common.Destruction
 			if (OverlapsCarved(pos.X, pos.Y, w, h, tiles, n))
 				return v;
 
-			// Axis-separated sweep against carved pixels, X then Y, in 1px steps.
-			if (v.X != 0f && OverlapsCarved(pos.X + v.X, pos.Y, w, h, tiles, n))
+			// Sweep the whole path, including when the endpoint is beyond a thin remnant.
+			// Axis-separated, X then Y, in 1px steps.
+			if (v.X != 0f)
 				v.X = Sweep(pos.X, v.X, x => OverlapsCarved(x, pos.Y, w, h, tiles, n));
-			if (v.Y != 0f && OverlapsCarved(pos.X + v.X, pos.Y + v.Y, w, h, tiles, n)) {
+			if (v.Y != 0f) {
 				float px = pos.X + v.X;
 				v.Y = Sweep(pos.Y, v.Y, y => OverlapsCarved(px, y, w, h, tiles, n));
 			}

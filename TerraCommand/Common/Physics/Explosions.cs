@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using Microsoft.Xna.Framework;
 using Terraria;
 using Terraria.ID;
@@ -46,7 +47,27 @@ namespace TerraCommand.Common.Physics
 			// NPCs and idle bodies: the server / singleplayer.
 			if (Main.netMode == NetmodeID.MultiplayerClient)
 				return;
-			foreach (NPC n in Main.ActiveNPCs) {
+			// Parts created by this blast must not receive the same field impulse a second time.
+			foreach (NPC n in Main.npc.Where(n=>n.active).ToArray()) {
+				if(!n.active) continue;
+				if(n.ModNPC is CraftWreck wreck) {
+					var body=wreck.Physics.Motion; body.Position=n.Center; body.Velocity=n.velocity;
+					Vector2 impulse=Impulse(center,n.Center,radius+Math.Max(n.width,n.height)/2f,strength)*Actors.CC.BlastScale*Actors.CC.Mass;
+					if(impulse!=Vector2.Zero) { body.Impulse(impulse,Vector2.Clamp(center,n.position,n.position+n.Size)); n.velocity=body.Velocity; n.netUpdate=true; }
+					continue;
+				}
+				if (n.ModNPC is CargoShip craft) {
+					var body = craft.Physics.Motion;
+					body.Position = n.Bottom; body.Velocity = n.velocity;
+					Vector2 push = Impulse(center, craft.Physics.Centre, radius + n.width / 2f, strength);
+					if (push != Vector2.Zero) {
+						Vector2 impact = Vector2.Clamp(center, n.position, n.position + n.Size);
+						body.Impulse(push * Actors.CC.BlastScale * Actors.CC.Mass, impact);
+						craft.AttachmentImpulse(impact,push * Actors.CC.BlastScale * Actors.CC.Mass);
+						n.velocity = body.Velocity; n.netUpdate = true;
+					}
+					continue;
+				}
 				if (n.boss || n.knockBackResist <= 0f && n.ModNPC is not CloneUnit)
 					continue;
 				Vector2 imp = Impulse(center, n.Center, radius, strength);

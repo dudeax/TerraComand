@@ -7,7 +7,16 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="Program.cs" />
+    <Compile Include="../../TerraCommand/Common/Physics/BulletTravel.cs" />
+    <Compile Include="../../TerraCommand/Common/Actors/DetachedLimbMasks.Generated.cs" />
+    <Compile Include="../../TerraCommand/Common/Physics/LimbWreckPhysics.cs" />
+    <Compile Include="../../TerraCommand/Common/Actors/LimbState.cs" />
+    <Compile Include="../../TerraCommand/Common/Physics/CraftAttachments.cs" />
+    <Compile Include="../../TerraCommand/Common/Physics/MaterialSolver.cs" />
+    <Compile Include="../../TerraCommand/Common/Physics/ShipPhysics.cs" />
+    <Compile Include="../../TerraCommand/Common/Physics/ShipCollisionMasks.Generated.cs" />
     <Compile Include="../../TerraCommand/Common/Actors/ActorContacts.cs" />
+    <Compile Include="../../TerraCommand/Common/Actors/RigidBodyTravel.cs" />
     <Compile Include="../../TerraCommand/Common/Actors/ContactGeometry.cs" />
     <Compile Include="../../TerraCommand/Common/Actors/ActorSpriteMasks.Generated.cs" />
     <Compile Include="../../TerraCommand/Common/Actors/CCActor.cs" Link="CCActor.cs" />

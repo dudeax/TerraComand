@@ -84,11 +84,7 @@ namespace TerraCommand.Common.Destruction
 		}
 
 		/// <summary>What a material settles as: grass gives its soil, everything else itself.</summary>
-		public static ushort LooseMaterial(int type) => type switch {
-			TileID.JungleGrass or TileID.MushroomGrass or TileID.AshGrass => type == TileID.AshGrass ? TileID.Ash : TileID.Mud,
-			_ when TileID.Sets.Grass[type] => TileID.Dirt,
-			_ => (ushort)type,
-		};
+		public static ushort LooseMaterial(int type) => TerrainRules.Substrate(type);
 
 		static bool Solid(Vector2 p) => PixelTerrain.IsPixelSolid(p.X, p.Y);
 

@@ -1,0 +1,27 @@
+goto spawn
+clearinv
+wait 90
+sync start
+callcraft dropship 5 CloneBody 1
+wait 400
+expect shipstate waiting
+expect shipmass >= 3422
+expect shipmass <= 3500
+goto rel 5 0
+pilot board
+wait 30
+expect piloting true
+expect shipmass >= 3555
+sync boarded
+jump 20
+expect shipvy < -1
+walk right 8
+wait 10
+expect shipvx > 0.5
+sync flying
+sync observed
+pilot leave
+wait 150
+expect piloting false
+expect shipstate waiting
+sync done

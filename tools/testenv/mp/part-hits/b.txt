@@ -1,0 +1,9 @@
+goto spawn
+wait 30
+expect attached LeftGear true
+sync intact
+sync fired
+expect attached LeftGear false
+expect shipmass == 878
+expect wrecks == 1
+expect alive

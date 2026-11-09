@@ -50,6 +50,7 @@ wait 60
 pin Zombie
 npclife Zombie 12                  # one more hit kills it
 aimnpc Zombie head
+wait 150                         # settle sharp aim before checking the hit zone
 shoot 1 0
 wait 20
 expect npcs Zombie == 0

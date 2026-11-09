@@ -1,0 +1,34 @@
+# Physical rocket thrust, cargo mass, and pilot handoff.
+nospawn
+clearnpcs
+goto spawn
+flatten 120 40
+wait 30
+stock CloneBody 1
+stock GoldCoin 2
+ship 4 CloneBody 1
+wait 500
+expect shipstate waiting
+expect shipmass >= 948
+expect shipmass <= 1000
+expect units == 1
+goto rel 4 0
+pilot board
+wait 5
+expect piloting true
+expect shipmass >= 1080
+mark
+jump 40
+expect shipalt >= 2
+expect shipvy < -2
+wait 10
+expect shipvy < -1
+# A side jet must change heading as well as translation.
+walk right 8
+wait 8
+expect shipangle > 0.01
+expect shipspin > 0.01
+pilot leave
+wait 1
+expect piloting false
+expect alive

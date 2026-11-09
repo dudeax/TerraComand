@@ -22,7 +22,7 @@ namespace TerraCommand.Common.Actors
 		{
 			float? Ray(float x) {
 				for (int y = -12; y <= 18; y++)
-					if (Solid(x, feet.Y + y, 1, 1)) return feet.Y + y;
+					if (TerrariaActorTerrain.Instance.Sample(new Vector2(x,feet.Y + y),out _)) return feet.Y + y;
 				return null;
 			}
 			float? left = Ray(feet.X - 10), right = Ray(feet.X + 10);

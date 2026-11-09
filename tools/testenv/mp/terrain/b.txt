@@ -1,0 +1,14 @@
+goto spawn
+clearinv
+wait 90
+mark
+expect pixel -60 -14 open
+expect pixel -60 -3 solid
+sync ready
+sync fired
+expect pixel 80 -24 open
+expect pixel 112 -24 open
+wait 30
+expect projectiles Bullet == 0
+expect damaged >= 2
+sync observed

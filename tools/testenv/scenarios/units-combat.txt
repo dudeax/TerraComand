@@ -6,7 +6,7 @@ wait 30
 give FlintlockPistol
 give MusketBall 100
 hold FlintlockPistol
-give CloneBody 2
+give CloneBody 1
 hold CloneBody
 aim 90 -30
 use 2
@@ -26,6 +26,7 @@ order follow
 order sentry
 wait 30
 expect unitlife >= 90
+fill -20 0 20 3 LihzahrdBrick  # a yielding soil landing can cushion this fall
 liftunit 20                     # loaded bodies can exceed the 4800 Ns gib limit at 25 tiles, depending on pose
 wait 150
 expect unitlife < 90

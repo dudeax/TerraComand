@@ -1,0 +1,186 @@
+# Repeated impacts must widen a bullet notch and keep advancing into solid terrain.
+nospawn
+clearnpcs
+goto spawn
+flatten 100 24
+clearinv
+wait 60
+fill 4 -6 16 -1 Dirt
+mark
+expect pixel 80 -24 solid
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+expect pixel 80 -24 open
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+expect pixel 112 -24 open
+expect alive
+screenshot sustained-bullet-carving
+
+# A fast bullet must hit a four-pixel remnant even though it ends beyond the tile.
+goto spawn
+flatten 100 24
+wait 60
+settile 4 -2 Dirt
+carverect 68 -32 80 -16
+mark
+expect pixel 57 -24 solid
+projectile Bullet 32 -3 64 0 30
+wait 3
+expect pixel 57 -24 open

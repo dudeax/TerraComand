@@ -129,6 +129,7 @@ namespace TerraCommand.Content.NPCs
 			input.AutoCrouch = ActorContacts.CrouchForClearance(Actor, NPC.Bottom, input, TerrariaActorTerrain.Instance);
 			Actor.Control(input);
 			Actor.Physics(input);
+			Actor.GroundSlope = Actor.Grounded ? BodyGround.Slope(NPC.Bottom) : 0;
 			Vector2 feet = ActorContacts.Step(Actor, NPC.Bottom, input, TerrariaActorTerrain.Instance);
 			if (!skipImpact) {
 				float damage = Actor.ImpactDamage(Actor.Contacts.TravelImpulse.Length() / Actor.Mass);
@@ -235,7 +236,7 @@ namespace TerraCommand.Content.NPCs
 			prevJump = input.Jump;
 
 			// aim: at the target, at the ore being dug, or along the way it's going
-			input.Aim = target != null ? target.Center - shoulder : new Vector2((moveDir != 0 ? moveDir : Actor.FlipFactor) * 100f, 0f);
+			input.Aim = target != null ? TargetAim(target,shoulder) : new Vector2((moveDir != 0 ? moveDir : Actor.FlipFactor) * 100f, 0f);
 			// CC's nozzle follows aim. A forward aim drives into the wall;
 			// aim upward until the whole body is above the leading edge.
 			if (input.Jump && moveDir != 0) {
@@ -497,15 +498,27 @@ namespace TerraCommand.Content.NPCs
 			return best;
 		}
 
+        Vector2 TargetAim(Entity target,Vector2 origin) {
+            Item gun=Loadout.Held;var cc=gun.ModItem as CCFirearm;
+            int type=cc?.Spec.Projectile??(gun.useAmmo==AmmoID.Bullet?ProjectileID.Bullet:gun.shoot);
+            Vector2 displacement=target.Center-origin;
+            if(Common.TerraCommandConfig.Instance.ProjectilesChipTerrain && ContentSamples.ProjectilesByType.TryGetValue(type,out var sample) && Common.Physics.KineticBullet.Eligible(sample)) {
+                float speed=cc?.Spec.FireVelocity??Math.Max(gun.shootSpeed+5f,6f)*(sample.extraUpdates+1);
+                return Common.Physics.BulletTravel.AimVelocity(displacement,speed,sample.extraUpdates+1);
+            }
+            return displacement;
+        }
+
 		/// <summary>Fire the held weapon CC-style: from the muzzle along the aim, with magazine, reload and shake.</summary>
 		void TryAttack(Entity target, RigPose pose)
 		{
+			if(Actor.Kind!=ActorKind.Crab && Actor.Kind!=ActorKind.Turret && !Actor.Limbs.Arms) return;
 			Item it = Loadout.Held;
 			if (it.IsAir || it.damage <= 0 || it.pick > 0 || it.axe > 0 || it.hammer > 0 || fireCooldown > 0 || reloadTicks > 0)
 				return;
 			// only once the aim has swung onto the target
 			Vector2 shoulder = RigRenderer.Shoulder(pose);
-			float wantAngle = (target.Center - shoulder).ToRotation();
+			float wantAngle = TargetAim(target,shoulder).ToRotation();
 			float aimAngle = RigRenderer.AimWorld(pose);
 			if (Math.Abs(MathHelper.WrapAngle(wantAngle - aimAngle)) > 0.15f)
 				return;
@@ -539,8 +552,8 @@ namespace TerraCommand.Content.NPCs
 				}
 				mag.Rounds--;
 			}
-			if (!Actor.Grounded)
-				shakeDeg *= 2f;
+			if (!Actor.Grounded || !Actor.Limbs.SupportsWeapon(Actor.Kind,cc?.Spec.OneHanded==true))
+				shakeDeg *= Devices.IsFirearm(it)?Devices.Stats(it).NoSupportFactor:2f;
 			Vector2 dir = aimAngle.ToRotationVector2();
 			float dev = Devices.Gaussian() * MathHelper.ToRadians(shakeDeg / 2f);
 			Vector2 muzzle = RigRenderer.GunAt(pose) + dir * 16f;
@@ -602,6 +615,7 @@ namespace TerraCommand.Content.NPCs
 			sentFlip = Actor.Flipped;
 			Actor.WriteGait(writer);
 			ContactSnapshot.Capture(Actor.Contacts).Write(writer);
+			Actor.Limbs.Write(writer);writer.Write(Actor.BodyId);
 			Loadout.Write(writer, visualsOnly: true);
 		}
 
@@ -620,6 +634,7 @@ namespace TerraCommand.Content.NPCs
 			Actor.CrouchAmount = reader.ReadByte() / 10f;
 			GaitState gait = GaitState.Read(reader);
 			ContactSnapshot contacts = ContactSnapshot.Read(reader);
+			Actor.Limbs.CopyFrom(LimbState.Read(reader));Actor.BodyId=reader.ReadUInt64();
 			Loadout = UnitLoadout.Read(reader);
 			Actor.Apply(ActorStats.Get(Loadout.Kind), 0);
 			gait.Apply(Actor);
@@ -657,7 +672,7 @@ namespace TerraCommand.Content.NPCs
 			BackFoot = Actor.Legs[1].Foot(LimbPaths.Stand) * Actor.StrideScale,
 			SimulatedFeet = Actor.Legs[0].Path != null || Actor.Legs[1].Path != null,
 			GroundSlope = Actor.GroundSlope,
-			ContactPose = Actor.Contacts.Initialized,
+			MissingLimbs=Actor.Limbs.Missing, ContactPose = Actor.Contacts.Initialized,
 			ContactHip = Actor.Contacts.Anchor + ContactGeometry.HipOffset(Actor), ContactRotation = Actor.Rot,
 			ContactFoot0 = Actor.Contacts.Limbs[0].Position, ContactFoot1 = Actor.Contacts.Limbs[1].Position,
 			ContactHand0 = Actor.Contacts.Limbs[2].Position, ContactHand1 = Actor.Contacts.Limbs[3].Position,

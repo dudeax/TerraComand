@@ -60,7 +60,8 @@ namespace TerraCommand.Common.Actors
 				Part(a.Kind == ActorKind.Crab ? "Body" : "Base", feet - new Vector2(0, torso.Height / 2f), rotation, new Vector2(torso.Width / 2f, torso.Height / 2f));
 				if (a.Kind == ActorKind.Crab && limbs && a.Contacts.Initialized) {
 					for (int i = 0; i < 4; i++) {
-						Vector2 joint = Joint(a, hip, rotation, i), tip = a.Contacts.Limbs[i].Position;
+						if(!a.Limbs.Has(i)) continue;
+				Vector2 joint = Joint(a, hip, rotation, i), tip = a.Contacts.Limbs[i].Position;
 						Vector2 knee = Knee(joint, tip, 6, Rotate(-Vector2.UnitY, rotation));
 						tip = knee + Normalized(tip - knee, Vector2.UnitY) * 6;
 						for (int bone = 0; bone < 2; bone++) {
@@ -88,6 +89,7 @@ namespace TerraCommand.Common.Actors
 			}
 			if (!limbs || !a.Contacts.Initialized) return n;
 			for (int i = 0; i < 4; i++) {
+				if(!a.Limbs.Has(i)) continue;
 				Vector2 joint = Joint(a, hip, rotation, i), tip = a.Contacts.Limbs[i].Position;
 				float length = i < 2 ? 7 : a.Kind == ActorKind.Brain ? 6 : 7;
 				float frame = a.Lying ? rotation : a.GroundSlope;

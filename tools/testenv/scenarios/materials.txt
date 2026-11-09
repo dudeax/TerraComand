@@ -1,0 +1,20 @@
+nospawn
+clearnpcs
+goto spawn
+flatten 100 30
+wait 30
+spawnwreck LeftEngine 100 -70 0 20
+wait 30
+expect wrecks == 1
+expect penetrations >= 1
+expect damaged >= 1
+screenshot engine-penetration
+
+# A loose mechanical part receives a real blast impulse and off-centre torque.
+clearnpcs
+spawnwreck LeftEngine 100 -200 0 0
+wait 1
+blastwreck
+wait 1
+expect wreckvx > 0.1
+expect wreckspin > 0.01

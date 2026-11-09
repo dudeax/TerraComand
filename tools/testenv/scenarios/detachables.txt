@@ -1,0 +1,42 @@
+# Missing craft parts change the actual assembly, and leave physical wreck NPCs.
+nospawn
+clearnpcs
+goto spawn
+flatten 140 40
+stock GoldCoin 5
+wait 30
+callcraft dropship 5
+wait 760
+expect shipstate waiting
+expect shipmass == 3422
+expect attached LeftEngine true
+detach LeftEngine
+wait 1
+expect attached LeftEngine false
+expect attached RightEngine true
+expect shipmass == 3122
+expect wrecks == 1
+# Repeated detachment must not duplicate parts.
+detach LeftEngine
+wait 1
+expect wrecks == 1
+screenshot detached-engine
+clearnpcs
+flatten 140 40                  # reset the crater left by the disabled dropship
+wait 30
+ship 5
+wait 500
+expect shipstate waiting
+detach LeftGear
+wait 1
+expect attached LeftGear false
+expect attached RightGear true
+expect shipmass == 878
+expect wrecks == 1
+screenshot detached-gear
+
+# Destroying the hull releases surviving parts without reusing its slot during death processing.
+shiphit 5000
+wait 2
+expect ships == 0
+expect wrecks == 2

@@ -6,7 +6,6 @@ flatten 30 12
 wait 30
 settile 2 -1 LihzahrdBrick
 settile -2 -1 Stone
-settile -4 -1 Dirt
 hold CopperPickaxe
 aimtile 2 -1
 use 30
@@ -21,10 +20,11 @@ use 60                         # vanilla: copper breaks stone in 3 hits
 wait 5
 expect tile -2 -1 empty
 expect inv StoneBlock >= 1     # mining drops the block's item
-aimtile -4 -1
+settile -3 -1 Dirt              # inside the digger’s 56px reach from the physical hand
+aimtile -3 -1
 use 2
 wait 30
-expect tile -4 -1 partial       # dirt: 2 hits with copper
+expect tile -3 -1 partial       # dirt: 2 hits with copper
 use 2
 wait 30
-expect tile -4 -1 empty
+expect tile -3 -1 empty

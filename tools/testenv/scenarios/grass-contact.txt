@@ -1,0 +1,61 @@
+# Grass growth must not refill carved dirt or snag the contact rig.
+nospawn
+clearnpcs
+goto spawn
+flatten 100 24
+clearinv
+wait 60
+fill -10 0 35 0 Grass
+fill 1 -1 3 -1 Plants
+settile 6 -1 Dirt
+carverect 96 -16 112 -6
+mark
+expect pixel 97 -14 open
+expect pixel 97 -3 solid
+retile 6 -1 Grass
+expect pixel 97 -14 open
+expect pixel 97 -3 solid
+expect pixel 24 -10 open
+retile 6 -1 CorruptGrass
+expect pixel 97 -14 open
+retile 6 -1 CrimsonGrass
+expect pixel 97 -14 open
+retile 6 -1 HallowedGrass
+expect pixel 97 -14 open
+retile 6 -1 Grass
+expect pixel 97 -14 open
+# A different substrate is a real replacement, not grass growing on the same soil.
+settile 10 -1 Dirt
+carverect 160 -16 176 -6
+expect pixel 161 -14 open
+retile 10 -1 Stone
+expect pixel 161 -14 solid
+carverect 160 -16 176 0
+settile 12 -1 Mud
+carverect 192 -16 208 -6
+retile 12 -1 JungleGrass
+expect pixel 193 -14 open
+retile 12 -1 CorruptJungleGrass
+expect pixel 193 -14 open
+retile 12 -1 CrimsonJungleGrass
+expect pixel 193 -14 open
+retile 12 -1 MushroomGrass
+expect pixel 193 -14 open
+settile 14 -1 Ash
+carverect 224 -16 240 -6
+retile 14 -1 AshGrass
+expect pixel 225 -14 open
+walk right 480
+expect moved >= 8                # the whole body crosses the bump at tiles 6..7
+expect contactstuck no
+expect shapeinsolid == 0
+screenshot grass-walk
+
+# Settled material must respect both controlled and idle contact bodies,
+# including refilling holes in an already-present partial tile.
+expect bodydeposit player
+spawnunit -80 0
+wait 90
+expect unitcontact yes
+expect bodydeposit unit
+expect shapeinsolid == 0

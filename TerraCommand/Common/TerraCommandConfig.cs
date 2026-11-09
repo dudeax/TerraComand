@@ -23,6 +23,9 @@ namespace TerraCommand.Common
 		[DefaultValue(true)]
 		public bool ProjectilesChipTerrain { get; set; } = true;
 
+		[DefaultValue(true)]
+		public bool PhysicalTerrainPenetration { get; set; } = true;
+
 		[Range(0.5f, 1f)]
 		[Increment(0.05f)]
 		[DefaultValue(0.8f)]

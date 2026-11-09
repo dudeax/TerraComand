@@ -6,6 +6,8 @@ namespace TerraCommand.Common.Actors
 	/// <summary>Physical state belongs to the body, including while control changes owners.</summary>
 	public sealed class ActorMotion
 	{
+		public ulong BodyId;
+		public LimbState Limbs=new();
 		public Vector2 Velocity;
 		public ContactSnapshot ContactState;
 		public byte[] GaitState = System.Array.Empty<byte>();
@@ -15,6 +17,8 @@ namespace TerraCommand.Common.Actors
 		public bool Grounded = true, Flipped;
 		public int RecoveryTicks, BurstCooldown, ProneTicks;
 
+		static LimbState CaptureLimbs(CCActor actor) { var state=new LimbState(); state.CopyFrom(actor.Limbs); return state; }
+
 		static byte[] CaptureGait(CCActor actor)
 		{
 			using var stream = new MemoryStream();
@@ -23,7 +27,7 @@ namespace TerraCommand.Common.Actors
 		}
 
 		public static ActorMotion Capture(CCActor actor, Vector2 velocity) => new() {
-			GaitState = CaptureGait(actor), ContactState = ContactSnapshot.Capture(actor.Contacts),
+			BodyId=actor.BodyId, Limbs=CaptureLimbs(actor), GaitState = CaptureGait(actor), ContactState = ContactSnapshot.Capture(actor.Contacts),
 			Velocity = velocity, Rotation = actor.Rot, AngularVelocity = actor.AngVel,
 			Fuel = actor.Fuel, Crouch = actor.CrouchAmount, Aim = actor.AimAngle,
 			Status = actor.Status, Prone = actor.Prone, Grounded = actor.Grounded,
@@ -36,6 +40,8 @@ namespace TerraCommand.Common.Actors
 			ActorStats stats = ActorStats.Get(kind);
 			actor.FuelMax = stats.Fuel;
 			actor.JetForce = stats.JetForce;
+			if(BodyId!=0)actor.BodyId=BodyId;
+			actor.Limbs.CopyFrom(Limbs);
 			actor.Apply(stats, 0);
 			ContactState.Apply(actor.Contacts);
 			actor.Vel = Velocity;
@@ -72,16 +78,18 @@ namespace TerraCommand.Common.Actors
 			w.Write(Fuel); w.Write(Crouch); w.Write(Aim); w.Write((byte)Status); w.Write((byte)Prone);
 			w.Write(Grounded); w.Write(Flipped); w.Write(RecoveryTicks); w.Write(BurstCooldown); w.Write(ProneTicks);
 			w.Write((byte)GaitState.Length); w.Write(GaitState);
-			ContactState.Write(w);
+			ContactState.Write(w); Limbs.Write(w); w.Write(BodyId);
 		}
 
-		public static ActorMotion Read(BinaryReader r, bool extended = true, bool gait = true, bool contacts = true) => new() {
+		public static ActorMotion Read(BinaryReader r, bool extended = true, bool gait = true, bool contacts = true, bool anatomy=true,bool identity=true) => new() {
 			Velocity = new Vector2(r.ReadSingle(), r.ReadSingle()), Rotation = r.ReadSingle(), AngularVelocity = r.ReadSingle(),
 			Fuel = r.ReadSingle(), Crouch = r.ReadSingle(), Aim = r.ReadSingle(), Status = (ActorStatus)r.ReadByte(),
 			Prone = (ProneState)r.ReadByte(), Grounded = r.ReadBoolean(), Flipped = r.ReadBoolean(), RecoveryTicks = r.ReadInt32(),
 			BurstCooldown = extended ? r.ReadInt32() : 0, ProneTicks = extended ? r.ReadInt32() : 0,
 			GaitState = gait ? r.ReadBytes(r.ReadByte()) : System.Array.Empty<byte>(),
 			ContactState = contacts ? ContactSnapshot.Read(r) : default,
+			Limbs = anatomy ? LimbState.Read(r) : new(),
+			BodyId=identity?r.ReadUInt64():0,
 		};
 
 		// Store the same compact representation in world saves; old bodies load with fresh physical state.
@@ -99,8 +107,10 @@ namespace TerraCommand.Common.Actors
 				return new();
 			using var stream = new MemoryStream(bytes);
 			using var reader = new BinaryReader(stream);
-			var result = Read(reader, bytes.Length > 36, bytes.Length > 44, false);
-			if (stream.Position < stream.Length) result.ContactState = ContactSnapshot.Read(reader);
+			var result = Read(reader, bytes.Length > 36, bytes.Length > 44, false, false, false);
+			if (stream.Length-stream.Position >= 73) result.ContactState = ContactSnapshot.Read(reader);
+			if(stream.Length-stream.Position>=5) result.Limbs=LimbState.Read(reader);
+			if(stream.Length-stream.Position>=8)result.BodyId=reader.ReadUInt64();
 			return result;
 		}
 	}

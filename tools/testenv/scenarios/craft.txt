@@ -46,8 +46,11 @@ wait 1
 expect moved >= 2                  # (the pilot rides along: the ship moved)
 screenshot craft-flying
 wait 240
-expect landedships == 1            # it set down again (gravity)
+expect landedships == 0            # neutral controls hold altitude, as in CC
+expect shipvy >= -0.5
+expect shipvy <= 0.5
 pilot leave
-wait 10
+wait 240
+expect landedships == 1            # autopilot lands after leaving
 expect piloting false
 expect life >= 90

@@ -7,6 +7,7 @@ using Terraria.DataStructures;
 using Terraria.ID;
 using Terraria.Localization;
 using Terraria.ModLoader;
+using Terraria.ModLoader.IO;
 using TerraCommand.Common.Actors;
 using TerraCommand.Common.Net;
 
@@ -279,9 +280,13 @@ namespace TerraCommand.Common.Physics
 		/// <summary>Call after teleporting the body (no impact damage from the position/velocity jump).</summary>
 		public void SkipImpactCheck() { skipImpact = true; Actor.Contacts.Reset(); }
 
+		public byte SpawnedLimbs; public bool BodyLocked;
+		public override void SaveData(TagCompound tag) { using var stream=new MemoryStream(); Actor.Limbs.Write(new BinaryWriter(stream));tag["limbs"]=stream.ToArray();tag["bodyId"]=unchecked((long)Actor.BodyId); }
+		public override void LoadData(TagCompound tag) { if(tag.ContainsKey("bodyId"))Actor.BodyId=unchecked((ulong)tag.GetLong("bodyId")); var bytes=tag.GetByteArray("limbs"); if(bytes.Length==5) {using var stream=new MemoryStream(bytes);Actor.Limbs.CopyFrom(LimbState.Read(new BinaryReader(stream)));SpawnedLimbs=Actor.Limbs.Missing;} }
+
 		public void AdoptBody(Actors.ActorMotion motion, Actors.ActorKind kind)
 		{
-			motion.Apply(Actor, kind);
+			motion.Apply(Actor, kind); BodyLocked=true; SpawnedLimbs=Actor.Limbs.Missing;
 			Player.velocity = Actor.Vel;
 			Player.direction = Actor.FlipFactor;
 			Actors.ActorBounds.Fit(Player.position, Player.width, Player.height, Actor, out width, out height);
@@ -311,6 +316,7 @@ namespace TerraCommand.Common.Physics
 
 		public override void OnRespawn()
 		{
+			Actor.Limbs.CopyFrom(new LimbState()); SpawnedLimbs=0;BodyLocked=false;Actor.BodyId=BitConverter.ToUInt64(Guid.NewGuid().ToByteArray(),0);
 			Actor.Status = ActorStatus.Stable;
 			Actor.Prone = ProneState.NotProne;
 			Actor.Rot = Actor.AngVel = 0f;
@@ -331,6 +337,7 @@ namespace TerraCommand.Common.Physics
 
 		// ------------------------------------------------------------ multiplayer: other clients see the posture
 
+		ulong syncedLimbs,syncedBody;
 		byte syncedStatus, syncedProne, syncedCrouch;
 		sbyte syncedRot, syncedAim;
 		byte syncedKind, syncedMove;
@@ -339,6 +346,7 @@ namespace TerraCommand.Common.Physics
 		public override void CopyClientState(ModPlayer targetCopy)
 		{
 			var t = (BodyPhysicsPlayer)targetCopy;
+			t.syncedBody=Actor.BodyId;t.syncedLimbs=Actor.Limbs.Stamp;
 			t.syncedStatus = (byte)Actor.Status;
 			t.syncedProne = (byte)Actor.Prone;
 			t.syncedCrouch = (byte)(Actor.CrouchAmount * 10);
@@ -356,7 +364,7 @@ namespace TerraCommand.Common.Physics
 		public override void SendClientChanges(ModPlayer clientPlayer)
 		{
 			var c = (BodyPhysicsPlayer)clientPlayer;
-			if (c.syncedStatus != (byte)Actor.Status || c.syncedProne != (byte)Actor.Prone || c.syncedCrouch != (byte)(Actor.CrouchAmount * 10)
+			if (c.syncedBody!=Actor.BodyId || c.syncedLimbs!=Actor.Limbs.Stamp || c.syncedStatus != (byte)Actor.Status || c.syncedProne != (byte)Actor.Prone || c.syncedCrouch != (byte)(Actor.CrouchAmount * 10)
 				|| Math.Abs(c.syncedRot - QuantRot(Actor.Rot)) > 2 || c.syncedFlip != Actor.Flipped
 				|| Math.Abs(c.syncedAim - QuantRot(Actor.AimAngle)) > 2 || c.syncedKind != (byte)Player.GetModPlayer<Actors.RigPlayer>().Kind
 				|| c.syncedMove != (byte)Actor.Move || c.syncedContacts != Actor.Contacts.Initialized || c.syncedGrounded != Actor.Grounded
@@ -379,7 +387,7 @@ namespace TerraCommand.Common.Physics
 			p.Write(QuantRot(Actor.AimAngle));
 			p.Write((byte)Player.GetModPlayer<Actors.RigPlayer>().Kind);
 			Actor.WriteGait(p);
-			ContactSnapshot.Capture(Actor.Contacts).Write(p);
+			ContactSnapshot.Capture(Actor.Contacts).Write(p); Actor.Limbs.Write(p);p.Write(Actor.BodyId);
 			p.Send(toWho, fromWho);
 		}
 
@@ -396,18 +404,22 @@ namespace TerraCommand.Common.Physics
 			var kind = (Actors.ActorKind)r.ReadByte();
 			GaitState gait = GaitState.Read(r);
 			ContactSnapshot contacts = ContactSnapshot.Read(r);
+			var limbs=LimbState.Read(r);ulong bodyId=r.ReadUInt64();
 			if (Main.netMode == NetmodeID.Server)
 				who = from;
 			Player p = Main.player[who];
 			if (who == Main.myPlayer || !p.active)
 				return;
 			var bp = p.GetModPlayer<BodyPhysicsPlayer>();
+			if(Main.netMode==NetmodeID.Server && bp.BodyLocked && bp.Actor.BodyId!=bodyId)return;
+			bp.Actor.BodyId=bodyId;
 			bp.Actor.Status = status;
 			bp.Actor.Prone = prone;
 			bp.Actor.CrouchAmount = crouch;
 			bp.Actor.Rot = rot;
 			bp.Actor.Flipped = flip;
 			bp.Actor.AimAngle = aim;
+			bp.Actor.Limbs.CopyFrom(limbs);
 			bp.Actor.Apply(ActorStats.Get(kind), 0);
 			gait.Apply(bp.Actor);
 			contacts.Apply(bp.Actor.Contacts);

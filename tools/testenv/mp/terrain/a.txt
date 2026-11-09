@@ -1,0 +1,175 @@
+goto spawn
+clearinv
+wait 90
+mark
+expect pixel -60 -14 open
+expect pixel -60 -3 solid
+sync ready
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+wait 30
+expect pixel 80 -24 open
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+projectile Bullet 40 -3 12 0 30
+wait 3
+expect pixel 112 -24 open
+wait 30
+expect projectiles Bullet == 0
+expect damaged >= 2
+sync fired
+sync observed

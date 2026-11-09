@@ -1,0 +1,20 @@
+goto spawn
+wait 30
+expect attached LeftHatch true
+expect attached RightHatch true
+expect shipmass == 3422
+expect wrecks == 0
+sync intact
+wait 30
+expect attached LeftHatch false
+expect attached RightHatch true
+expect shipmass == 3222
+expect wrecks == 1
+sync observed
+shootlimb 2 8
+wait 60
+expect limb enemy 2 false
+expect limbwrecks == 1
+sync injured
+sync checked
+expect alive

@@ -13,7 +13,7 @@ namespace TerraCommand.Content.Items.Devices
 		public override FirearmSpec Spec { get; } = new() {
 			Mass = 4, RateOfFire = 300, FullAuto = false, Magazine = 10, ReloadTicks = 60,
 			ShakeDeg = 2, SharpShakeDeg = 1, SharpLength = 125, NoSupportFactor = 1.5f,
-			FireVelocity = CC.Speed(79), Recoil = 1.5f, OneHanded = true,
+			RoundProfile=2, FireVelocity = CC.Speed(79), Recoil = 1.5f, OneHanded = true,
 		};
 		protected override int Damage => 14;
 		protected override int ValueCopper => Item.buyPrice(silver: 10);

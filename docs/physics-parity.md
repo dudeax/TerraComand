@@ -1,5 +1,7 @@
 # Actor physics parity work (v0.8.0 alpha)
 
+For the current 0.9.0 working build, see [character and craft physics](craft-physics.md). The findings below describe the 0.8.0 release.
+
 The reference is the local CC Community source at commit `cca55f154ba49a17436cf91d91e1302fe45395db`. The canonical soldier is Coalition's `Soldier Light`. This pass targets character simulation and posing, not weapons or campaign content.
 
 ## Corrected against the reference

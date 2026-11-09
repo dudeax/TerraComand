@@ -133,6 +133,8 @@ namespace TerraCommand.Common.Actors
 		public float LastImpulse;           // N*s of the last terrain impact (for tests)
 
 		public readonly Gait[] Hands = { new(), new() };
+		public ulong BodyId=BitConverter.ToUInt64(Guid.NewGuid().ToByteArray(),0);
+		public readonly LimbState Limbs=new();
 		public bool FrontArmFree = true;
 		public readonly Gait[] Legs = { new(), new() };   // [0] front (FG), [1] back (BG)
 
@@ -152,7 +154,7 @@ namespace TerraCommand.Common.Actors
 		{
 			if (Kind != s.Kind) Contacts.Reset();
 			Kind = s.Kind;
-			Mass = s.Mass + carriedMass;
+			Mass = Math.Max(1,s.Mass + carriedMass-Limbs.LostMass(s.Kind));
 			SpeedScale = s.Speed;
 			CanRun = s.CanRun;
 			CanCrouch = s.CanCrouch;
@@ -170,6 +172,8 @@ namespace TerraCommand.Common.Actors
 		public void Control(in ActorInput inputIn)
 		{
 			ActorInput input = inputIn;
+			if(Kind!=ActorKind.Crab && Kind!=ActorKind.Turret && Limbs.Legs==0) input.Prone=true;
+			if(!Limbs.Arms && Kind!=ActorKind.Crab) input.HoldingDevice=false;
 			FrontArmFree = !input.HoldingDevice;
 			bool active = Status == ActorStatus.Stable;
 

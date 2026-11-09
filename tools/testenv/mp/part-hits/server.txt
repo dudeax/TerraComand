@@ -1,0 +1,3 @@
+nospawn
+flatten 80 30
+craftfixture Rocket 5 enemy

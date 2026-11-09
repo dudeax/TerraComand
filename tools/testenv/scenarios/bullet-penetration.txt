@@ -1,0 +1,22 @@
+nospawn
+clearnpcs
+clearinv
+# A fast bullet must hit a four-pixel remnant even though it ends beyond the tile.
+goto spawn
+flatten 100 24
+wait 60
+settile 4 -2 Dirt
+carverect 68 -32 80 -16
+mark
+expect pixel 57 -24 solid
+projectile Bullet 32 -3 64 0 30
+wait 3
+expect pixel 57 -24 open
+
+# The same round must emerge slower and less damaging, then keep travelling.
+expect bulletx > 68
+expect bulletspeed > 1
+expect bulletspeed < 64
+expect bulletdamage < 30
+wait 6
+expect bulletx > 100

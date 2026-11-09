@@ -1,0 +1,5 @@
+nospawn
+flatten 80 30
+craftfixture Dropship 5
+detachonsync intact LeftHatch
+spawnenemybrain -150 0

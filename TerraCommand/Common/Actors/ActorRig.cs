@@ -94,6 +94,7 @@ namespace TerraCommand.Common.Actors
 		public Vector2 FrontFoot, BackFoot, FrontHand, BackHand;
 		public bool FrontHandCrawls, BackHandCrawls;
 		public bool SimulatedFeet;
+		public byte MissingLimbs;
 		public bool ContactPose;
 		public Vector2 ContactHip, ContactFoot0, ContactFoot1, ContactHand0, ContactHand1;
 		public float ContactRotation;
@@ -108,7 +109,7 @@ namespace TerraCommand.Common.Actors
 	}
 
 	/// <summary>A sprite to draw (world position).</summary>
-	public readonly record struct RigPiece(Texture2D Tex, Vector2 Pos, Rectangle? Src, Color Color, float Rot, Vector2 Origin, float Scale, SpriteEffects Fx);
+	public readonly record struct RigPiece(Texture2D Tex, Vector2 Pos, Rectangle? Src, Color Color, float Rot, Vector2 Origin, float Scale, SpriteEffects Fx, int Limb=-1, int Frame=0);
 
 	/// <summary>
 	/// Poses a Cortex Command style actor from separate parts: two-bone legs whose feet follow the CC limb paths and plant on the
@@ -151,7 +152,7 @@ namespace TerraCommand.Common.Actors
 		public static Vector2 Grip(in RigPose p)
 		{
 			ActorArt art = ActorArt.Get(p.Kind);
-			if (p.ContactPose) return Hip(p, art) + (p.ContactHand0 - p.ContactHip).RotatedBy(p.Rot - p.ContactRotation);
+			if (p.ContactPose) return Hip(p, art) + (((p.MissingLimbs&4)!=0?p.ContactHand1:p.ContactHand0) - p.ContactHip).RotatedBy(p.Rot - p.ContactRotation);
 			Vector2 shoulder = Hip(p, art) + new Vector2(art.Shoulder.X * p.Dir, art.Shoulder.Y).RotatedBy(p.Rot);
 			return shoulder + AimWorld(p).ToRotationVector2() * 8f + new Vector2(0f, 1.5f);
 		}
@@ -177,7 +178,7 @@ namespace TerraCommand.Common.Actors
 			Color light = p.Light, back = p.Light.MultiplyRGB(new Color(165, 165, 165));
 			bool lying = p.Prone || p.Unstable;
 			float legFrame = lying ? rot : p.GroundSlope;   // upright legs keep world orientation; only the torso leans
-			bool holding = IsHoldable(p.Held) && !p.Unstable;
+			bool holding = IsHoldable(p.Held) && !p.Unstable && (p.MissingLimbs&12)!=12;
 			Vector2 W(Vector2 local) => hip + local.RotatedBy(rot);
 
 			// ---------------- legs
@@ -209,6 +210,7 @@ namespace TerraCommand.Common.Actors
 
 			void Leg(int leg, Color c)
 			{
+				if((p.MissingLimbs&(1<<leg))!=0) return;
 				Vector2 joint = hip + new Vector2((leg == 0 ? 1 : -1) * dir, 0f).RotatedBy(legFrame);
 				Vector2 local = FootLocal(leg);
 				Vector2 sole = p.ContactPose ? ContactPoint(leg == 0 ? p.ContactFoot0 : p.ContactFoot1) : hip + local.RotatedBy(legFrame);
@@ -221,7 +223,7 @@ namespace TerraCommand.Common.Actors
 				Vector2 ankle = sole - new Vector2(0f, art.AnkleToSole).RotatedBy(legFrame);
 				Vector2 knee = Ik(joint, ankle, art.ThighLen, art.ShinLen, (new Vector2(dir, 0f)).RotatedBy(legFrame));
 				ankle = knee + (ankle - knee).SafeNormalize(Vector2.UnitY) * art.ShinLen; // where the leg actually reaches
-				NativeLimb(outList, leg == 0 ? art.FrontLeg : art.BackLeg, joint, ankle, art.LegOrigin, art.ThighLen + art.ShinLen, dir, c);
+				NativeLimb(outList, leg == 0 ? art.FrontLeg : art.BackLeg, joint, ankle, art.LegOrigin, art.ThighLen + art.ShinLen, dir, c,leg);
 				Texture2D foot = art.Foot.Value;
 				Vector2 o = dir > 0 ? art.FootAnkle : new Vector2(foot.Width - art.FootAnkle.X, art.FootAnkle.Y);
 				outList.Add(new RigPiece(foot, ankle, null, c, legFrame, o, 1f, fx));
@@ -230,10 +232,11 @@ namespace TerraCommand.Common.Actors
 			// ---------------- arms
 			Vector2 frontShoulder = W(new Vector2(art.Shoulder.X * dir, art.Shoulder.Y));
 			Vector2 aimDir = AimWorld(p).ToRotationVector2();
-			Vector2 grip = p.ContactPose ? ContactPoint(p.ContactHand0) - aimDir * p.Kick : frontShoulder + aimDir * (8f - p.Kick) + new Vector2(0f, 1.5f);
+			Vector2 grip = p.ContactPose ? ContactPoint((p.MissingLimbs&4)!=0?p.ContactHand1:p.ContactHand0) - aimDir * p.Kick : frontShoulder + aimDir * (8f - p.Kick) + new Vector2(0f, 1.5f);
 
 			void Arm(int arm, Color c)
 			{
+				if((p.MissingLimbs&(1<<(arm+2)))!=0) return;
 				Vector2 shoulder = arm == 0 ? frontShoulder : W(new Vector2(-art.Shoulder.X * dir, art.Shoulder.Y));
 				Vector2 hand;
 				bool crawlingHand = p.Prone && !p.Unstable && (arm == 0 ? p.FrontHandCrawls : p.BackHandCrawls);
@@ -251,7 +254,7 @@ namespace TerraCommand.Common.Actors
 				}
 				Vector2 elbow = Ik(shoulder, hand, art.UpperArmLen, art.ForearmLen, new Vector2(0f, 1f).RotatedBy(holding ? 0f : rot) - new Vector2(dir * 0.3f, 0f));
 				hand = elbow + (hand - elbow).SafeNormalize(Vector2.UnitY) * art.ForearmLen;
-				NativeLimb(outList, arm == 0 ? art.FrontArm : art.BackArm, shoulder, hand, art.ArmOrigin, art.UpperArmLen + art.ForearmLen, dir, c);
+				NativeLimb(outList, arm == 0 ? art.FrontArm : art.BackArm, shoulder, hand, art.ArmOrigin, art.UpperArmLen + art.ForearmLen, dir, c,arm+2);
 				Texture2D palm = art.Hand.Value;
 				outList.Add(new RigPiece(palm, hand, null, c, holding ? AimWorld(p) : rot, palm.Size() / 2f, 1f, fx));
 			}
@@ -311,14 +314,14 @@ namespace TerraCommand.Common.Actors
 
 		}
 
-		static void NativeLimb(List<RigPiece> pieces, Asset<Texture2D>[] frames, Vector2 joint, Vector2 tip, Vector2 origin, float maximum, int direction, Color light) {
+		static void NativeLimb(List<RigPiece> pieces, Asset<Texture2D>[] frames, Vector2 joint, Vector2 tip, Vector2 origin, float maximum, int direction, Color light,int limb=-1) {
 			float extension = Vector2.Distance(joint, tip);
 			int frame = Math.Clamp((int)MathF.Floor((extension / maximum - 0.5f) * 2 * frames.Length), 0, frames.Length - 1);
 			Texture2D texture = frames[frame].Value;
 			float rotation = (tip - joint).ToRotation();
 			SpriteEffects flip = SpriteEffects.None;
 			if (direction < 0) { flip = SpriteEffects.FlipHorizontally; origin.X = texture.Width - origin.X; rotation += MathHelper.Pi; }
-			pieces.Add(new RigPiece(texture, joint, null, light, rotation, origin, 1, flip));
+			pieces.Add(new RigPiece(texture, joint, null, light, rotation, origin, 1, flip,limb,frame));
 		}
 
 		/// <summary>Only weapons and tools are carried in the hands; everything else stays in the inventory.</summary>
@@ -340,6 +343,7 @@ namespace TerraCommand.Common.Actors
 			bool moving = Math.Abs(p.VelX) > 0.05f && p.Grounded;
 			void Leg(int index, float hipX, float phase, Color c)
 			{
+				if((p.MissingLimbs&(1<<index))!=0) return;
 				Vector2 hip = W(new Vector2(hipX, 3f));
 				Vector2 foot;
 				if (p.ContactPose) foot = index switch { 0 => p.ContactFoot0, 1 => p.ContactFoot1, 2 => p.ContactHand0, _ => p.ContactHand1 };
@@ -359,7 +363,7 @@ namespace TerraCommand.Common.Actors
 				}
 				Vector2 knee = Ik(hip, foot, art.ThighLen, art.ShinLen, new Vector2(0f, -1f).RotatedBy(rot));
 				foot = knee + (foot - knee).SafeNormalize(Vector2.UnitY) * art.ShinLen;
-				NativeLimb(outList, index % 2 == 0 ? art.FrontLeg : art.BackLeg, hip, foot, art.LegOrigin, art.ThighLen + art.ShinLen, dir, c);
+				NativeLimb(outList, index % 2 == 0 ? art.FrontLeg : art.BackLeg, hip, foot, art.LegOrigin, art.ThighLen + art.ShinLen, dir, c,index);
 			}
 			Leg(0, -6f * dir, 0.25f, back);
 			Leg(1, 6f * dir, 0.75f, back);
@@ -489,7 +493,7 @@ namespace TerraCommand.Common.Actors
 				BackFoot = a.Legs[1].Foot(LimbPaths.Stand) * a.StrideScale,
 				SimulatedFeet = a.Legs[0].Path != null || a.Legs[1].Path != null,
 				GroundSlope = a.GroundSlope,
-				ContactPose = a.Contacts.Initialized,
+				MissingLimbs=a.Limbs.Missing, ContactPose = a.Contacts.Initialized,
 				ContactHip = a.Contacts.Anchor + ContactGeometry.HipOffset(a), ContactRotation = a.Rot,
 				ContactFoot0 = a.Contacts.Limbs[0].Position, ContactFoot1 = a.Contacts.Limbs[1].Position,
 				ContactHand0 = a.Contacts.Limbs[2].Position, ContactHand1 = a.Contacts.Limbs[3].Position,

@@ -26,7 +26,7 @@ namespace TerraCommand.Common.UI
 		const int Cols = 10, Rows = 4, Slot = 44;
 
 		public static CargoShip NearestLandedShip(Player p) => ShipSystem.Ships()
-			.Where(s => s.DoorOpen && s.Team == p.team && Vector2.Distance(s.NPC.Center, p.Center) < ShipSystem.HoldReach)
+			.Where(s => s.DoorOpen && s.Team == p.team && Vector2.Distance(s.NPC.Center, p.Center) < ShipSystem.Reach(s))
 			.OrderBy(s => Vector2.DistanceSquared(s.NPC.Center, p.Center)).FirstOrDefault();
 
 		public static void Open(CargoShip ship)
@@ -55,7 +55,7 @@ namespace TerraCommand.Common.UI
 			Player p = Main.LocalPlayer;
 			// the hold closes when the pack does, when the ship leaves, or when the body walks away
 			if (!Main.playerInventory || !n.active || n.ModNPC is not CargoShip s || !s.DoorOpen || p.dead
-				|| Vector2.Distance(p.Center, n.Center) > ShipSystem.HoldReach + 32f)
+				|| Vector2.Distance(p.Center, n.Center) > ShipSystem.Reach(s) + 32f)
 				Close();
 		}
 
@@ -79,7 +79,7 @@ namespace TerraCommand.Common.UI
 			int x0 = 73, y0 = Math.Max(Main.instance.invBottom, 258) + 34;   // where chests open, below the pack
 			var panel = new Rectangle(x0 - 8, y0 - 30, Cols * Slot + 16, Rows * Slot + 40);
 			Utils.DrawInvBG(sb, panel, new Color(40, 50, 90, 220));
-			Utils.DrawBorderString(sb, $"Ship hold ({cargo.Sum(i => i.stack)} items) - goes to orbit on launch", new Vector2(x0, y0 - 26), Color.LightBlue, 0.8f);
+			Utils.DrawBorderString(sb, $"Ship hold ({cargo.Sum(i => i.stack)} items, {ShipSystem.CargoMass((CargoShip)Main.npc[OpenShip].ModNPC):0} kg)", new Vector2(x0, y0 - 26), Color.LightBlue, 0.8f);
 			if (Main.npc[OpenShip].ModNPC is CargoShip ship && ship.CanPilot) {
 				var pilotBtn = new Rectangle(x0 + Cols * Slot - 110, y0 - 30, 110, 24);
 				bool hover = pilotBtn.Contains(Main.MouseScreen.ToPoint());

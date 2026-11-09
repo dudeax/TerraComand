@@ -1088,27 +1088,62 @@
       "operation": "palette transparency"
     },
     {
+      "output": "TerraCommand/Content/NPCs/DropshipHatchLeft.png",
+      "sources": [
+        "Base.rte/Craft/Dropships/HatchALeft.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/NPCs/DropshipHatchRight.png",
+      "sources": [
+        "Base.rte/Craft/Dropships/HatchARight.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/NPCs/DropshipBody.png",
+      "sources": [
+        "Base.rte/Craft/Dropships/HullA000.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/NPCs/DropshipEngineLeft.png",
+      "sources": [
+        "Base.rte/Craft/Dropships/EngineALeft.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/NPCs/DropshipEngineRight.png",
+      "sources": [
+        "Base.rte/Craft/Dropships/EngineARight.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
       "output": "TerraCommand/Content/NPCs/Dropship.png",
       "sources": [
         "Base.rte/Craft/Dropships/HullA000.png",
         "Base.rte/Craft/Dropships/EngineALeft.png",
         "Base.rte/Craft/Dropships/EngineARight.png"
       ],
-      "operation": "hull/engine composite; nearest-neighbour fit to mod craft dimensions"
+      "operation": "native-resolution hull/engine composite"
     },
     {
       "output": "TerraCommand/Content/NPCs/CargoShip.png",
       "sources": [
         "Base.rte/Craft/Rockets/MK2/RocketMK2000.png"
       ],
-      "operation": "palette transparency; nearest-neighbour fit"
+      "operation": "palette transparency"
     },
     {
       "output": "TerraCommand/Content/NPCs/DropCrate.png",
       "sources": [
         "Base.rte/Craft/StorageCrate/CrateBodyA000.png"
       ],
-      "operation": "palette transparency; nearest-neighbour fit"
+      "operation": "palette transparency"
     },
     {
       "output": "TerraCommand/Content/Items/Devices/Sawthrower.png",
@@ -1130,6 +1165,41 @@
         "Base.rte/Effects/Wounds/Spark01000.png"
       ],
       "operation": "palette transparency; nearest-neighbour fit"
+    },
+    {
+      "output": "TerraCommand/Content/NPCs/RocketLeg0.png",
+      "sources": [
+        "Base.rte/Craft/Shared/RocketLegA000.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/NPCs/RocketLeg1.png",
+      "sources": [
+        "Base.rte/Craft/Shared/RocketLegA001.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/NPCs/RocketLeg2.png",
+      "sources": [
+        "Base.rte/Craft/Shared/RocketLegA002.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/NPCs/RocketLeg3.png",
+      "sources": [
+        "Base.rte/Craft/Shared/RocketLegA003.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/NPCs/RocketLeg4.png",
+      "sources": [
+        "Base.rte/Craft/Shared/RocketLegA004.png"
+      ],
+      "operation": "palette transparency"
     },
     {
       "output": "TerraCommand/Content/NPCs/CloneUnit.png",

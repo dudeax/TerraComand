@@ -13,6 +13,8 @@ using Terraria.ModLoader;
 using TerraCommand.Common.Destruction;
 using TerraCommand.Common.Orbital;
 using TerraCommand.Common.Units;
+using TerraCommand.Common.Actors;
+using TerraCommand.Common.Physics;
 
 namespace TerraCommand.Content.NPCs
 {
@@ -23,7 +25,7 @@ namespace TerraCommand.Content.NPCs
 	/// goes back up. Dropship: wide and slow, comes in at an angle, can be piloted. Drop crate: falls unpowered, bursts open on
 	/// impact and is left behind - a one-way delivery.
 	/// </summary>
-	public enum ShipStyle : byte { Rocket, Dropship, Crate }
+
 
 	/// <summary>
 	/// A cargo rocket between the ground and orbit, as in Cortex Command: ordered from the orbital menu, it flies down to its
@@ -39,7 +41,6 @@ namespace TerraCommand.Content.NPCs
 		public int Team { get => (int)NPC.ai[2]; set => NPC.ai[2] = value; }
 		public float LandY { get => NPC.ai[3]; set => NPC.ai[3] = value; }
 
-		public const float MaxSpeed = 12f, Brake = 0.16f, Climb = 0.22f;
 		public bool Thrusting { get; private set; }
 		public ShipStyle Style;
 		/// <summary>Where it's landing (dropships steer to it).</summary>
@@ -49,15 +50,21 @@ namespace TerraCommand.Content.NPCs
 		/// <summary>The pilot's controls: 1 left, 2 right, 4 thrust, 8 down.</summary>
 		public byte PilotInput;
 		public bool Grounded { get; private set; }
+		public ShipPhysics Physics { get; private set; } = new(ShipStyle.Rocket);
+		public float OrbitY;
 
 		/// <summary>The cargo bay (things thrown or walking into it are loaded).</summary>
-		public Rectangle Bay => Style switch {
-			ShipStyle.Dropship => new((int)NPC.position.X + 12, (int)NPC.position.Y + 6, NPC.width - 24, NPC.height),
-			ShipStyle.Crate => NPC.Hitbox,
-			_ => new((int)NPC.position.X - 4, (int)NPC.position.Y + 34, NPC.width + 8, NPC.height - 34),
-		};
-		public bool DoorOpen => Style != ShipStyle.Crate
-			&& (State == ShipState.Unloading || State == ShipState.Waiting || State == ShipState.Piloted && Grounded);
+		public Rectangle Bay {
+			get {
+				Physics.Motion.Position = NPC.Bottom;
+				Vector2 centre = Physics.World(Style == ShipStyle.Dropship ? new Vector2(0,20) : new Vector2(0,10));
+				int width = Style == ShipStyle.Dropship ? 48 : 20;
+				return new Rectangle((int)centre.X-width/2,(int)centre.Y-25,width,50);
+			}
+		}
+		public bool CommandedDoorOpen => Style != ShipStyle.Crate
+			&& (State == ShipState.Unloading || State == ShipState.Waiting || State == ShipState.Piloted && (Grounded || Style == ShipStyle.Dropship && Math.Abs(LandY - NPC.Bottom.Y - 8) < 8 && Math.Abs(NPC.velocity.Y) < 0.7f));
+		public bool DoorOpen => CommandedDoorOpen || Style==ShipStyle.Dropship && (!Physics.Attachments.Has(CraftPart.LeftHatch) || !Physics.Attachments.Has(CraftPart.RightHatch));
 		public bool CanPilot => Style == ShipStyle.Dropship || Style == ShipStyle.Rocket;
 
 		/// <summary>Takes on a craft type's size (feet kept where they are) and toughness.</summary>
@@ -65,7 +72,8 @@ namespace TerraCommand.Content.NPCs
 		{
 			Style = style;
 			Vector2 bottom = NPC.Bottom;
-			(NPC.width, NPC.height) = style switch { ShipStyle.Dropship => (60, 32), ShipStyle.Crate => (24, 24), _ => (28, 68) };
+			Physics = new ShipPhysics(style);
+			(NPC.width, NPC.height) = (Physics.Width, Physics.Height);
 			NPC.Bottom = bottom;
 			if (Main.netMode != NetmodeID.MultiplayerClient && NPC.life == NPC.lifeMax) {
 				NPC.lifeMax = style switch { ShipStyle.Dropship => 1200, ShipStyle.Crate => 300, _ => 800 };
@@ -80,17 +88,19 @@ namespace TerraCommand.Content.NPCs
 			w.Write((short)Pilot);
 			w.Write(PilotInput);
 			w.Write(Grounded);
+			w.Write(OrbitY); Physics.Write(w);
 		}
 
 		public override void ReceiveExtraAI(System.IO.BinaryReader r)
 		{
 			var style = (ShipStyle)r.ReadByte();
-			if (style != Style || NPC.width == 28 && style != ShipStyle.Rocket)
+			if (style != Style)
 				SetStyle(style);
 			TargetX = r.ReadSingle();
 			Pilot = r.ReadInt16();
 			PilotInput = r.ReadByte();
 			Grounded = r.ReadBoolean();
+			OrbitY = r.ReadSingle(); Physics.Read(r); NPC.rotation = Physics.Motion.Rotation;
 		}
 
 		public override void SetStaticDefaults()
@@ -102,8 +112,9 @@ namespace TerraCommand.Content.NPCs
 
 		public override void SetDefaults()
 		{
-			NPC.width = 28;
-			NPC.height = 68;
+			Physics = new ShipPhysics(ShipStyle.Rocket);
+			NPC.width = Physics.Width;
+			NPC.height = Physics.Height;
 			NPC.lifeMax = 800;
 			NPC.defense = 20;
 			NPC.damage = 0;
@@ -121,151 +132,103 @@ namespace TerraCommand.Content.NPCs
 		public override bool CheckActive() => false;   // never despawns on its own
 		public override bool? CanBeHitByItem(Player player, Item item) => false;
 		/// <summary>Your ships are shot down by hostile fire; the AI faction's by yours.</summary>
-		public override bool? CanBeHitByProjectile(Projectile projectile) =>
-			Team == CloneUnit.EnemyTeam ? (projectile.friendly ? null : false) : projectile.hostile ? null : false;
+		public override bool? CanBeHitByProjectile(Projectile projectile) {
+			if(Team==CloneUnit.EnemyTeam ? !projectile.friendly : !projectile.hostile) return false;
+			Physics.Motion.Position=NPC.Bottom;
+			Rectangle overlap=Rectangle.Intersect(projectile.Hitbox,NPC.Hitbox);
+			if(overlap.Width<=0 || overlap.Height<=0) return null; // custom beam/line collision remains on its existing damage path
+			for(int x=overlap.Left;x<overlap.Right;x++) for(int y=overlap.Top;y<overlap.Bottom;y++) {
+				Vector2 point=new(x+.5f,y+.5f);
+				if(Physics.Contains(point) || Physics.PartAt(point).HasValue) return null;
+			}
+			return false;
+		}
 		public override bool CanChat() => false;
 
 		// ------------------------------------------------------------ flight
 
 		public override void AI()
 		{
-			NPC.timeLeft = 600;
-			Thrusting = false;
-			NPC.friendly = Team != CloneUnit.EnemyTeam;
-			switch (State) {
-				case ShipState.Descending:
-					Descend();
-					break;
-				case ShipState.Unloading:
-					NPC.velocity = Vector2.Zero;
-					if (++Timer == 40 && Main.netMode != NetmodeID.MultiplayerClient)
-						ShipSystem.Unload(this);
-					if (Timer >= 60) {
-						State = ShipState.Waiting;
-						Timer = 0;
-						NPC.netUpdate = true;
-					}
-					break;
-				case ShipState.Waiting:
-					NPC.velocity = Vector2.Zero;
-					Timer++;
-					if (Style == ShipStyle.Crate) {
-						// an opened crate is just a wreck: it's left behind a while, then gone
-						if (Timer > 600 && Main.netMode != NetmodeID.MultiplayerClient) {
-							NPC.active = false;
-							if (Main.netMode == NetmodeID.Server)
-								NetMessage.SendData(MessageID.SyncNPC, number: NPC.whoAmI);
-						}
-						break;
-					}
-					if (Main.netMode != NetmodeID.MultiplayerClient && Timer > 30)
-						ShipSystem.LoadFromBay(this);
-					if (Team == CloneUnit.EnemyTeam && Timer > 120 && Main.netMode != NetmodeID.MultiplayerClient)
-						Launch();   // the enemy's dropships go straight back up for more
-					break;
-				case ShipState.Piloted:
-					Fly();
-					break;
-				case ShipState.Ascending:
-					Thrusting = true;
-					NPC.velocity.Y = Math.Max(NPC.velocity.Y - (Style == ShipStyle.Dropship ? Climb * 0.7f : Climb), -MaxSpeed * 1.5f);
-					NPC.velocity.X = 0f;
-					if (NPC.position.Y < 16 * 40 && Main.netMode != NetmodeID.MultiplayerClient)
-						ShipSystem.ReachedOrbit(this);
-					break;
-			}
-			if (Thrusting)
-				Exhaust();
-		}
-
-		void Descend()
-		{
-			// Find where it will land: the first ground under its footprint (re-checked as it comes down: terrain changes).
-			if (Main.netMode != NetmodeID.MultiplayerClient && (LandY <= 0f || Timer++ % 15 == 0)) {
-				float ground = GroundBelow(NPC.Bottom);
-				if (Math.Abs(ground - LandY) > 1f) {
-					LandY = ground;
-					NPC.netUpdate = true;
-				}
-			}
-			float dist = LandY - NPC.Bottom.Y;
-			if (Style == ShipStyle.Crate) {
-				// unpowered: it just falls
-				NPC.velocity.Y = Math.Min(NPC.velocity.Y + 0.3f, 16f);
-				NPC.velocity.X = 0f;
-			}
-			else {
-				// fall fast, then brake so it touches down gently (a dropship comes in slower, steering to the landing zone)
-				float top = Style == ShipStyle.Dropship ? 7f : MaxSpeed;
-				float dx = TargetX - NPC.Center.X;
-				bool overLz = Style != ShipStyle.Dropship || Math.Abs(dx) < 12f;
-				float want = Math.Min(top, MathF.Sqrt(2f * Brake * Math.Max(0f, dist - (overLz ? 0f : 64f))) + (overLz ? 0.6f : 0f));
-				if (NPC.velocity.Y < want)
-					NPC.velocity.Y = Math.Min(want, NPC.velocity.Y + 0.4f);
-				else {
-					NPC.velocity.Y = Math.Max(want, NPC.velocity.Y - Brake * 1.5f);
-					Thrusting = true;
-				}
-				NPC.velocity.X = Style == ShipStyle.Dropship ? Math.Clamp(dx * 0.03f, -4f, 4f) : 0f;
-				if (Style == ShipStyle.Dropship && Math.Abs(NPC.velocity.X) > 0.5f)
-					Thrusting = true;
-				if (!overLz)
-					return;
-			}
-			if (dist <= NPC.velocity.Y + 0.5f) {
-				if (Style == ShipStyle.Crate) {
-					// it hits hard and bursts open
-					SoundEngine.PlaySound(SoundID.Item14 with { Volume = 0.6f }, NPC.Center);
-					Common.Physics.Explosions.Blast(NPC.Bottom, 40f, Common.Physics.Tuning.BlastImpulse * 0.3f);
-				}
-				NPC.Bottom = new Vector2(NPC.Bottom.X, LandY);
-				NPC.velocity = Vector2.Zero;
-				State = ShipState.Unloading;
-				Timer = 0;
-				NPC.netUpdate = true;
-				SoundEngine.PlaySound(SoundID.Item53 with { Pitch = -0.5f }, NPC.Center);
-				for (int i = 0; i < 25 && !Main.dedServ; i++)
-					Dust.NewDust(NPC.BottomLeft - new Vector2(16, 6), NPC.width + 32, 8, DustID.Smoke, Main.rand.NextFloat(-4, 4), -1f, 120, default, 1.6f);
-			}
-		}
-
-		/// <summary>Flown by a player: thrust (jump) against gravity, steer left and right, land on anything flat.</summary>
-		void Fly()
-		{
-			Player p = Pilot >= 0 && Pilot < Main.maxPlayers ? Main.player[Pilot] : null;
-			if (Main.netMode != NetmodeID.MultiplayerClient && (p == null || !p.active || p.dead)) {
-				Unpilot();
+			NPC.timeLeft = 600; NPC.friendly = Team != CloneUnit.EnemyTeam;
+			Physics.Motion.Position = NPC.Bottom; Physics.Motion.Velocity = NPC.velocity;
+			if (Main.netMode == NetmodeID.MultiplayerClient) {
+				Physics.Motion.Rotation += Physics.Motion.AngularVelocity * CC.Dt;
+				NPC.rotation = Physics.Motion.Rotation;
+				Thrusting = Physics.Thrusting;
+				if (Thrusting) Exhaust();
 				return;
 			}
-			bool left = (PilotInput & 1) != 0, right = (PilotInput & 2) != 0, up = (PilotInput & 4) != 0, down = (PilotInput & 8) != 0;
-			float accel = Style == ShipStyle.Dropship ? 0.18f : 0.08f, top = Style == ShipStyle.Dropship ? 6f : 3f;
-			if (left != right)
-				NPC.velocity.X = Math.Clamp(NPC.velocity.X + (right ? accel : -accel), -top, top);
-			else
-				NPC.velocity.X *= Grounded ? 0.8f : 0.97f;
-			NPC.velocity.Y += 0.15f + (down ? 0.1f : 0f);
-			if (up) {
-				NPC.velocity.Y -= Style == ShipStyle.Dropship ? 0.32f : 0.38f;
-				Thrusting = true;
+			if (OrbitY <= 0) OrbitY = Math.Min(NPC.position.Y, GroundBelow(NPC.Bottom) - 900);
+			if (State == ShipState.Piloted && (Pilot < 0 || !Main.player[Pilot].active || Main.player[Pilot].dead)) Unpilot();
+			if (Timer++ % 15 == 0 || LandY <= 0) LandY = GroundBelow(NPC.Bottom);
+			CraftInput input = ControlFlight();
+			Physics.BayOpen = CommandedDoorOpen;
+			Physics.Step(input, ShipSystem.CargoMass(this), TerrariaActorTerrain.Instance);
+			SpawnDetachedParts();
+			Grounded = Physics.Motion.Grounded;
+			NPC.rotation = Physics.Motion.Rotation;
+			NPC.velocity = Physics.Motion.Velocity;
+			Vector2 solved = Physics.Motion.Position;
+			// Terraria adds velocity after AI. The solver has already integrated this tick.
+			NPC.Bottom = solved - NPC.velocity;
+			Thrusting = Physics.Thrusting;
+			if (Physics.ImpactDamage > 0)
+				NPC.SimpleStrikeNPC(Math.Max(1, (int)(Physics.ImpactDamage * NPC.lifeMax)), 0, noPlayerInteraction: true);
+			if (!NPC.active) return;
+			bool arrived = Style == ShipStyle.Dropship
+				? Math.Abs(LandY - solved.Y - 8) < 7 && Math.Abs(TargetX - solved.X) < 16 && NPC.velocity.Length() < 0.7f
+				: Grounded && NPC.velocity.Length() < 1.5f;
+			if (State == ShipState.Descending && arrived) {
+				State = ShipState.Unloading; Timer = 0; NPC.netUpdate = true;
+				SoundEngine.PlaySound(SoundID.Item53 with { Pitch = -0.5f }, NPC.Center);
 			}
-			NPC.velocity.Y = Math.Clamp(NPC.velocity.Y, -8f, 10f);
-			if (NPC.position.Y < 16 * 45 && NPC.velocity.Y < 0f)
-				NPC.velocity.Y = 0f;   // the pilot can't take it to orbit: launch it for that
-			float fall = NPC.velocity.Y;
-			NPC.velocity = Collision.TileCollision(NPC.position, NPC.velocity, NPC.width, NPC.height);
-			bool grounded = fall > 0f && NPC.velocity.Y == 0f;
-			if (grounded && fall > 7f && Main.netMode != NetmodeID.MultiplayerClient)
-				NPC.SimpleStrikeNPC((int)((fall - 7f) * 60f), 0, noPlayerInteraction: true);   // a hard landing hurts it
-			if (grounded != Grounded) {
-				Grounded = grounded;
-				NPC.netUpdate = true;
+			else if (State == ShipState.Unloading) {
+				if (Timer == 40) ShipSystem.Unload(this);
+				if (Timer >= 60) { State = ShipState.Waiting; Timer = 0; NPC.netUpdate = true; }
 			}
-			if (Main.netMode != NetmodeID.MultiplayerClient) {
-				if (Grounded && ++Timer % 30 == 0)
-					ShipSystem.LoadFromBay(this);
-				if (Main.GameUpdateCount % 6 == 0)
-					NPC.netUpdate = true;
+			else if (State == ShipState.Waiting) {
+				if (Style == ShipStyle.Crate) {
+					if (Timer > 600) {
+						NPC.active = false;
+						if (Main.netMode == NetmodeID.Server) NetMessage.SendData(MessageID.SyncNPC,number:NPC.whoAmI);
+					}
+				}
+				else {
+					if (Timer > 30) ShipSystem.LoadFromBay(this);
+					if (Team == CloneUnit.EnemyTeam && Timer > 120) Launch();
+				}
 			}
+			else if (State == ShipState.Piloted && (Grounded || Style == ShipStyle.Dropship && Math.Abs(LandY - NPC.Bottom.Y - 8) < 8 && Math.Abs(NPC.velocity.Y) < 0.7f) && Timer % 30 == 0) ShipSystem.LoadFromBay(this);
+			else if (State == ShipState.Ascending && solved.Y - NPC.height < OrbitY) ShipSystem.ReachedOrbit(this);
+			if (Main.GameUpdateCount % 6 == 0) NPC.netUpdate = true;
+			if (Thrusting) Exhaust();
+		}
+
+		CraftInput ControlFlight()
+		{
+			if (State == ShipState.Piloted) {
+				float steer = ((PilotInput & 2) != 0 ? 1 : 0) - ((PilotInput & 1) != 0 ? 1 : 0);
+				bool up = (PilotInput & 4) != 0, down = (PilotInput & 8) != 0;
+				return new(steer, (up ? 1 : 0) - (down ? 1 : 0), up, down);
+			}
+			if(Style==ShipStyle.Rocket && (State==ShipState.Waiting || State==ShipState.Unloading)) return default;
+			float wantedX = Math.Clamp((TargetX - NPC.Bottom.X) * 0.025f, -3, 3);
+			float steerAuto = Math.Clamp((wantedX - NPC.velocity.X) * 0.7f, -1, 1);
+			if (Style == ShipStyle.Rocket) steerAuto=Physics.AutomaticRocketSteer(wantedX);
+			if (State == ShipState.Ascending) return new(steerAuto,1,Style!=ShipStyle.Rocket || Math.Abs(NPC.rotation)<1,false);
+			float gap = LandY - NPC.Bottom.Y - (Style == ShipStyle.Dropship ? 8 : 0);
+			if (Style == ShipStyle.Dropship) {
+				// Brake the approach before the fragile hatch joints touch down.
+
+				// Source velocity controller accepts upward target speed in metres/sec.
+				return new(steerAuto, Physics.AutomaticDropshipVertical(gap), true, false);
+			}
+			float mass = Physics.EmptyMass + ShipSystem.CargoMass(this);
+			float brake = Math.Max(0.01f, Physics.Profile.MainForce / mass / 180 - CC.Gravity);
+			bool fire = NPC.velocity.Y > MathF.Sqrt(2 * brake * Math.Max(0, gap - 12));
+			if (gap < 24 && NPC.velocity.Y < 2.5f) fire = false;
+			// Rocket side jets are attitude controls as well as lateral thrusters.
+			return new(steerAuto, 0, fire && Math.Abs(NPC.rotation)<1, false);
 		}
 
 		/// <summary>Authority: a player takes the controls.</summary>
@@ -276,7 +239,7 @@ namespace TerraCommand.Content.NPCs
 			Pilot = p.whoAmI;
 			PilotInput = 0;
 			State = ShipState.Piloted;
-			Grounded = NPC.velocity.Y == 0f;
+			Grounded = Physics.Motion.Grounded;
 			Timer = 0;
 			NPC.netUpdate = true;
 			Common.Testing.AutoTest.Trace($"ship #{NPC.whoAmI} piloted by {p.name}");
@@ -293,7 +256,6 @@ namespace TerraCommand.Content.NPCs
 			TargetX = NPC.Center.X;
 			if (Grounded) {
 				State = ShipState.Waiting;
-				NPC.velocity = Vector2.Zero;
 			}
 			else {
 				State = ShipState.Descending;
@@ -309,11 +271,17 @@ namespace TerraCommand.Content.NPCs
 		{
 			int x0 = (int)NPC.position.X, w = NPC.width;
 			for (float y = from.Y; y < Main.maxTilesY * 16 - 200; y += 4f)
-				if (Collision.SolidCollision(new Vector2(x0, y), w, 4))
+				if (FootprintSolid(x0, w, y))
 					for (float fine = y - 4f; fine <= y + 4f; fine += 1f)
-						if (Collision.SolidCollision(new Vector2(x0, fine), w, 1))
+						if (FootprintSolid(x0, w, fine))
 							return fine;
 			return Main.maxTilesY * 16 - 200;
+		}
+
+		static bool FootprintSolid(int x, int width, float y) {
+			for (int dx = 0; dx < width; dx += 2)
+				if (TerrariaActorTerrain.Instance.Sample(new Vector2(x + dx,y), out var surface) && !surface.OneWay) return true;
+			return false;
 		}
 
 		void Exhaust()
@@ -321,9 +289,11 @@ namespace TerraCommand.Content.NPCs
 			if (Main.dedServ || Style == ShipStyle.Crate)
 				return;
 			Vector2[] nozzles = Style == ShipStyle.Dropship
-				? new[] { NPC.BottomLeft + new Vector2(0, -4), NPC.BottomRight + new Vector2(-8, -4) }
-				: new[] { NPC.Bottom - new Vector2(6, 4) };
-			foreach (Vector2 nozzle in nozzles) {
+				? new[] { Physics.World(new Vector2(-49,25)), Physics.World(new Vector2(49,25)) }
+				: new[] { Physics.World(new Vector2(0,33)) };
+			for(int nozzleIndex=0;nozzleIndex<nozzles.Length;nozzleIndex++) {
+				if(Style==ShipStyle.Dropship && !Physics.Attachments.Has(nozzleIndex==0?CraftPart.LeftEngine:CraftPart.RightEngine)) continue;
+				Vector2 nozzle=nozzles[nozzleIndex];
 				for (int i = 0; i < 3; i++) {
 					var d = Dust.NewDustDirect(nozzle, Style == ShipStyle.Dropship ? 8 : 12, 6, DustID.Torch, Main.rand.NextFloat(-1f, 1f), 5f, 100, default, 2f);
 					d.noGravity = true;
@@ -352,6 +322,32 @@ namespace TerraCommand.Content.NPCs
 
 		// ------------------------------------------------------------ destruction
 
+		public bool DetachPart(CraftPart part) {
+			if(Main.netMode==NetmodeID.MultiplayerClient) return false;
+			Physics.Motion.Position=NPC.Bottom;
+			bool removed=Physics.Detach(part); SpawnDetachedParts(); NPC.velocity=Physics.Motion.Velocity; NPC.netUpdate|=removed; return removed;
+		}
+		void SpawnDetachedParts() {
+			if(Main.netMode==NetmodeID.MultiplayerClient) return;
+			while(Physics.Detached.TryDequeue(out var part)) {
+                Common.Testing.AutoTest.Trace($"released {part.Kind} at {Physics.Motion.Position} vel {NPC.velocity} angle {NPC.rotation} open {Physics.HatchOpen}");
+				int index=NPC.NewNPC(NPC.GetSource_FromAI(),(int)part.Position.X,(int)part.Position.Y,ModContent.NPCType<CraftWreck>());
+				if(index<Main.maxNPCs && Main.npc[index].ModNPC is CraftWreck wreck) wreck.Initialize(part);
+				NPC.netUpdate=true;
+			}
+		}
+		public void AttachmentImpulse(Vector2 point,Vector2 impulse) {
+			if(Physics.PartAt(point) is CraftPart part && impulse.Length()*60/CC.PPM>CraftAttachments.Strength(part)) DetachPart(part);
+		}
+		public override void OnHitByProjectile(Projectile projectile,NPC.HitInfo hit,int damageDone) {
+			Physics.Motion.Position=NPC.Bottom;
+			Rectangle overlap=Rectangle.Intersect(projectile.Hitbox,NPC.Hitbox);
+			for(int x=overlap.Left;x<overlap.Right;x++) for(int y=overlap.Top;y<overlap.Bottom;y++) {
+				Vector2 point=new(x,y);
+				if(Physics.PartAt(point).HasValue) { CraftPartHits.Hit(this,projectile,point); return; }
+			}
+		}
+
 		public override void HitEffect(NPC.HitInfo hit)
 		{
 			if (Main.dedServ)
@@ -364,6 +360,10 @@ namespace TerraCommand.Content.NPCs
 		{
 			// it blows up, cargo and all
 			ShipSystem.Destroyed(this);
+			if(Main.netMode!=NetmodeID.MultiplayerClient) {
+				Physics.Motion.Position=NPC.Bottom; Physics.Motion.Velocity=NPC.velocity;
+				CraftWreckSpawner.Disassemble(Physics);
+			}
 			PixelTerrain.RequestCarve(NPC.Center, 40f, TerrainRules.ExplosivePower, CarveFlags.Explosion);
 			Common.Physics.Explosions.MarkBlasted(NPC.Center, 96f);
 			Common.Physics.Explosions.Blast(NPC.Center, 96f, Common.Physics.Tuning.BlastImpulse, 120);
@@ -386,20 +386,27 @@ namespace TerraCommand.Content.NPCs
 			Texture2D tex = Style switch {
 				ShipStyle.Dropship => DropshipTex.Value, ShipStyle.Crate => CrateTex.Value, _ => TextureAssets.Npc[Type].Value,
 			};
-			Vector2 at = (NPC.position - screenPos).Floor();
-			if (Style == ShipStyle.Crate && State != ShipState.Descending) {
-				// burst open: the panels lie splayed on the ground
-				var src = new Rectangle(0, 4, 24, 20);
-				sb.Draw(tex, at + new Vector2(-10, 8), src, drawColor, -0.6f, Vector2.Zero, new Vector2(0.5f, 1f), SpriteEffects.None, 0f);
-				sb.Draw(tex, at + new Vector2(22, 4), src, drawColor, 0.6f, Vector2.Zero, new Vector2(0.5f, 1f), SpriteEffects.None, 0f);
-				sb.Draw(tex, at + new Vector2(0, 20), new Rectangle(0, 20, 24, 4), drawColor);
-				return false;
+			Physics.Motion.Position = NPC.Bottom;
+			if (Style == ShipStyle.Dropship) {
+				var body = ModContent.Request<Texture2D>("TerraCommand/Content/NPCs/DropshipBody",AssetRequestMode.ImmediateLoad).Value;
+				foreach(var part in new[]{CraftPart.LeftHatch,CraftPart.RightHatch}) if(Physics.Attachments.Has(part)) {
+					var door=ModContent.Request<Texture2D>("TerraCommand/Content/NPCs/"+(part==CraftPart.LeftHatch?"DropshipHatchLeft":"DropshipHatchRight"),AssetRequestMode.ImmediateLoad).Value;
+					sb.Draw(door,Physics.World(Physics.PartJoint(part))-screenPos,null,drawColor,Physics.PartAngle(part),ShipPhysics.PartOrigin(part),1,SpriteEffects.None,0);
+				}
+				sb.Draw(body,Physics.DrawPosition-screenPos,null,drawColor,NPC.rotation,new Vector2(55,32),1,SpriteEffects.None,0);
+				for(int side=-1;side<=1;side+=2) {
+					if(!Physics.Attachments.Has(side<0?CraftPart.LeftEngine:CraftPart.RightEngine)) continue;
+					var engine=ModContent.Request<Texture2D>("TerraCommand/Content/NPCs/DropshipEngine"+(side<0 ? "Left" : "Right"),AssetRequestMode.ImmediateLoad).Value;
+					sb.Draw(engine,Physics.World(new Vector2(side*49,-3))-screenPos,null,drawColor,Physics.EngineAngle,new Vector2(side<0 ? 29 : 6,21),1,SpriteEffects.None,0);
+				}
 			}
-			sb.Draw(tex, at, drawColor);
-			if (DoorOpen) {
-				// the cargo door slides open: a dark bay
-				var door = Style == ShipStyle.Dropship ? new Rectangle((int)at.X + 18, (int)at.Y + 10, 14, 12) : new Rectangle((int)at.X + 8, (int)at.Y + 38, 12, 18);
-				sb.Draw(TextureAssets.MagicPixel.Value, door, new Color(18, 18, 24).MultiplyRGB(drawColor) * 1f);
+			else sb.Draw(tex, Physics.DrawPosition - screenPos, null, drawColor, NPC.rotation, Physics.TextureOrigin, 1f, SpriteEffects.None, 0f);
+			if (Style == ShipStyle.Rocket) {
+				int frame = Math.Clamp((int)MathF.Round(Physics.Gear * 4), 0, 4);
+				var leg = ModContent.Request<Texture2D>($"TerraCommand/Content/NPCs/RocketLeg{frame}", AssetRequestMode.ImmediateLoad).Value;
+				for (int side = -1; side <= 1; side += 2)
+					if(Physics.Attachments.Has(side<0?CraftPart.LeftGear:CraftPart.RightGear)) sb.Draw(leg, Physics.World(new Vector2(side * 12,29)) - screenPos, null, drawColor, NPC.rotation,
+						new Vector2(side < 0 ? leg.Width - 4 : 4,10), 1f, side < 0 ? SpriteEffects.FlipHorizontally : SpriteEffects.None, 0);
 			}
 			// cargo count above a landed ship (local team only)
 			if (DoorOpen && Team == Main.LocalPlayer.team) {

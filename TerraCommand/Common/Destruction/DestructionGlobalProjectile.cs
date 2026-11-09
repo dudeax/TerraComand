@@ -69,12 +69,35 @@ namespace TerraCommand.Common.Destruction
 			if (oldVelocity.LengthSquared() < 4f)
 				return true;
 
-			Vector2 dir = Vector2.Normalize(oldVelocity);
-			Vector2 impact = projectile.Center + dir * (Math.Max(projectile.width, projectile.height) * 0.5f + 2f);
+			if (!FindTerrainImpact(projectile, oldVelocity, out Vector2 impact))
+				return true;
 			float radius = Math.Clamp(2f + projectile.damage / 25f, 2f, 7f);
 			int power = Math.Clamp(projectile.damage, 10, 100);
 			PixelTerrain.RequestCarve(impact, radius, power, CarveFlags.None);
 			return true;
 		}
+		/// <summary>Find the material the projectile's footprint hit, including the rim of an existing hole.</summary>
+		static bool FindTerrainImpact(Projectile projectile, Vector2 velocity, out Vector2 impact) {
+			Vector2 direction = Vector2.Normalize(velocity);
+			Vector2 side = new(-direction.Y, direction.X);
+			float halfWidth = projectile.width * 0.5f, halfHeight = projectile.height * 0.5f;
+			float cross = Math.Abs(direction.Y) * halfWidth + Math.Abs(direction.X) * halfHeight;
+			float forward = Math.Abs(direction.X) * halfWidth + Math.Abs(direction.Y) * halfHeight;
+			float distance = velocity.Length() + forward + 2;
+			for (float travel = 0; travel <= distance; travel += 0.5f) {
+				Vector2 center = projectile.Center + direction * travel;
+				// Prefer the centre line, then either side of the projectile footprint.
+				if (PixelTerrain.IsPixelSolid(center.X, center.Y)) { impact = center; return true; }
+				for (float offset = 0.5f; offset <= cross; offset += 0.5f) {
+					Vector2 point = center + side * offset;
+					if (PixelTerrain.IsPixelSolid(point.X, point.Y)) { impact = point; return true; }
+					point = center - side * offset;
+					if (PixelTerrain.IsPixelSolid(point.X, point.Y)) { impact = point; return true; }
+				}
+			}
+			impact = default;
+			return false;
+		}
+
 	}
 }

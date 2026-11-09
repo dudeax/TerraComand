@@ -179,6 +179,8 @@ Tiles.LaunchPad.MapEntry: Launch Pad
 NPCs: {
 	CloneUnit.DisplayName: Clone
 	CargoShip.DisplayName: Cargo Ship
+	CraftWreck.DisplayName: Craft Wreck
+	ActorLimbWreck.DisplayName: Actor Limb Wreck
 }
 
 Projectiles: {
@@ -223,7 +225,12 @@ Configs: {
 
 		ProjectilesChipTerrain: {
 			Label: Projectiles chip terrain
-			Tooltip: Bullets, arrows and other projectiles chip away terrain where they hit
+			Tooltip: Bullets spend momentum penetrating and weakening terrain; arrows and other projectiles chip where they hit
+		}
+
+		PhysicalTerrainPenetration: {
+			Label: Physical terrain penetration
+			Tooltip: Heavy impacts displace terrain when contact momentum exceeds material strength
 		}
 
 		CrumbleThreshold: {

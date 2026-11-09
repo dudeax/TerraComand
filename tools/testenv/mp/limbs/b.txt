@@ -1,0 +1,19 @@
+goto spawn
+wait 60
+sync ready
+sync detached
+expect limb other 0 false
+expect limb other 2 false
+expect limb other 3 false
+expect limbwrecks == 3
+sync observed
+sync injured
+expect limb enemy 2 false
+expect limbwrecks == 4
+sync checked
+sync swapped
+expect limb other 0 false
+expect limb other 2 false
+expect limb other 3 false
+sync done
+expect alive

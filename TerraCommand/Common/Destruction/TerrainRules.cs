@@ -16,6 +16,14 @@ namespace TerraCommand.Common.Destruction
 			TileID.Cloud, TileID.RainCloud, TileID.SnowCloud, TileID.CorruptJungleGrass, TileID.CrimsonJungleGrass,
 		};
 
+		/// <summary>Grass is a surface coating; growing or stripping it does not replace its soil.</summary>
+		public static ushort Substrate(int type) => type switch {
+			TileID.JungleGrass or TileID.CorruptJungleGrass or TileID.CrimsonJungleGrass or TileID.MushroomGrass => TileID.Mud,
+			TileID.AshGrass => TileID.Ash,
+			_ when TileID.Sets.Grass[type] => TileID.Dirt,
+			_ => (ushort)type,
+		};
+
 		/// <summary>True if this tile participates in pixel destruction (plain solid blocks only).</summary>
 		public static bool IsCarvable(int i, int j)
 		{
@@ -78,6 +86,17 @@ namespace TerraCommand.Common.Destruction
 			if (Main.tileBrick[type])
 				return 0.6f;
 			return 0.8f;   // a blast still bowls out a round crater in stone, just a smaller one
+		}
+
+		public static Physics.PhysicalMaterial Material(int type) {
+			type = Substrate(type);
+			if (type == TileID.IceBlock || type == TileID.BreakableIce) return Physics.PhysicalMaterial.Ice;
+			if (Main.tileSand[type] || type == TileID.Silt || type == TileID.Slush) return Physics.PhysicalMaterial.Sand;
+			if (type == TileID.WoodBlock || type == TileID.LivingWood) return Physics.PhysicalMaterial.Wood;
+			if (Soft.Contains(type)) return Physics.PhysicalMaterial.Earth;
+			if (TileID.Sets.Ore[type]) return Physics.PhysicalMaterial.Metal;
+			if (Main.tileBrick[type]) return Physics.PhysicalMaterial.Concrete;
+			return Physics.PhysicalMaterial.Stone;
 		}
 
 		/// <summary>Explosive power used when comparing against tile hardness.</summary>

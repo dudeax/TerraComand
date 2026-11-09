@@ -85,6 +85,7 @@ namespace TerraCommand.Common.Combat
 			Vector2 hp = DamageRules.HitPoint(npc.Hitbox, projectile);
 			pendingHitPoint = hp;
 			pendingHead = DamageRules.HasHead(npc) && DamageRules.InHeadZone(npc.Hitbox, hp);
+			if(npc.ModNPC is Content.NPCs.CloneUnit unit && unit.Actor.Limbs.At(unit.Actor,npc.Bottom,hp).HasValue)pendingHead=false;
 			if (DamageRules.IsExplosive(projectile)) {
 				BlastedTimer = 15;            // vanilla deals blast damage before the projectile's Kill hooks
 				modifiers.Knockback *= 0f;    // explosions push through blast physics instead (Explosions.Blast)
@@ -97,6 +98,11 @@ namespace TerraCommand.Common.Combat
 			}
 			else
 				LastHeadshot = false;
+		}
+
+		public override void OnHitByProjectile(NPC npc,Projectile projectile,NPC.HitInfo hit,int damageDone) {
+			if(npc.life>0 && npc.ModNPC is Content.NPCs.CloneUnit unit && unit.Actor.Limbs.At(unit.Actor,npc.Bottom,DamageRules.HitPoint(npc.Hitbox,projectile)) is int limb)
+				Physics.CraftPartHits.ActorHit(unit,projectile,limb);
 		}
 
 		/// <summary>Whether the most recent projectile hit (on this machine) was a headshot. For tests.</summary>
@@ -163,6 +169,8 @@ namespace TerraCommand.Common.Combat
 			Vector2 hp = DamageRules.HitPoint(Player.Hitbox, proj);
 			pendingHitPoint = hp;
 			pendingHead = DamageRules.InHeadZone(Player.Hitbox, hp);
+			var anatomy=Player.GetModPlayer<Physics.BodyPhysicsPlayer>().Actor;
+			if(anatomy.Limbs.At(anatomy,Player.Bottom,hp).HasValue)pendingHead=false;
 			if (DamageRules.IsExplosive(proj))
 				BlastedTimer = 15;
 			else {
@@ -184,6 +192,10 @@ namespace TerraCommand.Common.Combat
 			if (info.Damage > 0) {
 				DamageRules.AddWound(Wounds, Player.Hitbox, pendingHitPoint, pendingHead, Player.direction);
 				GibSystem.Spray(pendingHitPoint ?? Player.Center, new Vector2(info.HitDirection, -0.3f), 5);
+			}
+			if(Player.whoAmI==Main.myPlayer && !Player.dead && pendingHitPoint is Vector2 point) {
+				var actor=Player.GetModPlayer<Physics.BodyPhysicsPlayer>().Actor;
+				if(actor.Limbs.At(actor,Player.Bottom,point) is int limb && actor.Limbs.Wound(limb)) Physics.LimbSystem.Detach(Player,limb);
 			}
 			headshotTicks = pendingHead ? 10 : 0;
 			pendingHitPoint = null;

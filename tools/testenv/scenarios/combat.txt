@@ -71,6 +71,7 @@ expect headshot no
 expect wounds Zombie >= 1
 screenshot wounds
 aimnpc Zombie head
+wait 150                         # settle sharp aim before checking the hit zone
 shoot 1 30
 wait 10
 expect headshot yes

@@ -1,0 +1,57 @@
+nospawn
+clearnpcs
+goto spawn
+flatten 140 40
+clearinv
+wait 30
+limbdetach player 0
+wait 2
+expect limb player 0 false
+expect limbwrecks == 1
+limbdetach player 0
+wait 1
+expect limbwrecks == 1
+deploy CloneBody 100
+wait 15
+switch
+expect limb player 0 true
+expect limb unit 0 false
+switch
+expect limb player 0 false
+expect limb unit 0 true
+limbdetach player 2
+limbdetach player 3
+wait 5
+expect limb player 2 false
+expect limb player 3 false
+expect limbwrecks == 3
+give CoalitionAssaultRifle
+hold CoalitionAssaultRifle
+wait 5
+use 30
+wait 5
+expect rounds == 35
+clearnpcs
+goto rel 35 0
+wait 10
+stock GoldCoin 5
+callcraft dropship 5
+wait 760
+expect shipstate waiting
+expect attached LeftHatch true
+expect attached RightHatch true
+screenshot native-hatches
+detach LeftHatch
+wait 1
+expect attached LeftHatch false
+expect attached RightHatch true
+expect shipmass == 3222
+expect wrecks == 1
+detach RightHatch
+wait 1
+expect attached RightHatch false
+expect shipmass == 3022
+expect wrecks == 2
+expect attached LeftEngine true
+expect attached RightEngine true
+screenshot limbs-and-hatches

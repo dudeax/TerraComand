@@ -7,9 +7,20 @@ using TerraCommand.Common.Destruction;
 namespace TerraCommand.Common.Actors
 {
 	/// <summary>Read the same remaining 2px terrain cells as destruction, with slopes and one-way platforms.</summary>
-	public sealed class TerrariaActorTerrain : IActorTerrain
+	public sealed class TerrariaActorTerrain : IPenetrableTerrain
 	{
 		public static readonly TerrariaActorTerrain Instance = new();
+		public bool Penetrate(Vector2 point,float momentum,out float loss) {
+			loss=0;
+			if (Main.netMode == NetmodeID.MultiplayerClient || !TerraCommandConfig.Instance.PhysicalTerrainPenetration) return false;
+			int i=(int)MathF.Floor(point.X/16),j=(int)MathF.Floor(point.Y/16);
+			if (!TerrainRules.IsCarvable(i,j) || !WorldGen.CanKillTile(i,j)) return false;
+			int type=Main.tile[i,j].TileType;
+			if (!TerrainRules.ExplosionCanAffect(type) || TerrainRules.MinPick(type)>TerrainRules.ExplosivePower) return false;
+			if (!Physics.MaterialSolver.Penetration(momentum,BallisticFractures.Resistance(point),1,out loss)) return false;
+			return PixelTerrain.PenetrateCell(point);
+		}
+
 		public bool Sample(Vector2 point, out ContactSurface surface)
 		{
 			surface = new ContactSurface(0.7f, 0.05f);
@@ -31,8 +42,8 @@ namespace TerraCommand.Common.Actors
 				int bit = Math.Clamp((int)y / 2, 0, 7) * 8 + Math.Clamp((int)x / 2, 0, 7);
 				if ((damage.Mask & (1UL << bit)) != 0) return false;
 			}
-			float friction = type == TileID.IceBlock || type == TileID.BreakableIce ? 0.08f : TerrainRules.Softness(type) >= 1 ? 0.85f : 0.65f;
-			surface = new ContactSurface(friction, 0.05f);
+			var material = TerrainRules.Material(type);
+			surface = new ContactSurface(material.Friction, material.Restitution);
 			return true;
 		}
 	}

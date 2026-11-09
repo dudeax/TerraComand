@@ -98,7 +98,7 @@ namespace TerraCommand.Common.Units
 		{
 			Selected.Clear();
 			foreach (CloneUnit u in UnitSystem.TeamUnits(Player.team))
-				if (box.Intersects(u.NPC.Hitbox))
+				if (box.Width>0 && box.Height>0 && box.Intersects(u.NPC.Hitbox))
 					Selected.Add(u.NPC.whoAmI);
 			Main.NewText(Selected.Count > 0 ? $"{Selected.Count} units selected." : "Selection cleared: orders go to all units.", Color.LightGreen);
 			Testing.AutoTest.Trace($"selected {Selected.Count} units");

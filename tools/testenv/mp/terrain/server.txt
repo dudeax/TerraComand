@@ -1,0 +1,7 @@
+# Terrain damage must survive grass conversion in the join snapshot.
+nospawn
+flatten 100 24
+settile -4 -1 Dirt
+carverect -64 -16 -48 -6
+retile -4 -1 Grass
+fill 4 -6 16 -1 Dirt

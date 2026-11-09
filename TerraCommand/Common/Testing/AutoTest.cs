@@ -33,6 +33,7 @@ namespace TerraCommand.Common.Testing
 		static int scenarioIndex = -1, totalFails;
 		static StreamWriter summary;
 		static bool scenarioDone = true, allDone, quitRequested;
+		static (string Label, Physics.CraftPart Part)? pendingDetach;
 		static bool serverMode;           // running a setup script on the dedicated server
 		static string joinAddress, playerName = "TCTest", syncDir, clientId;
 		static int peers;
@@ -89,7 +90,8 @@ namespace TerraCommand.Common.Testing
 				}
 				int count = Actors.ContactGeometry.Build(actor, P.Bottom, actor.Rot, actor.Contacts.Atoms);
 				for (int i = 0; i < count; i++) Probe(actor.Contacts.Atoms[i]);
-				foreach (var limb in actor.Contacts.Limbs) Probe(limb.Position);
+				for(int limb=0;limb<actor.Contacts.Limbs.Length;limb++)
+					foreach(Vector2 offset in Actors.ActorContacts.LimbOffsets(actor,limb)) Probe(actor.Contacts.Limbs[limb].Position + new Vector2(offset.X * actor.FlipFactor,offset.Y));
 				if (contactBody.Grounded) {
 					gapMin = Math.Min(gapMin, gap); gapMax = Math.Max(gapMax, gap);
 					if (gap > 1) floatTicks++;
@@ -330,6 +332,14 @@ namespace TerraCommand.Common.Testing
 		/// <summary>Runs once per game tick while in a world.</summary>
 		public override void PostUpdateEverything()
 		{
+			// Dedicated-server fixtures can trigger a real detachment after both clients have observed the intact assembly.
+			if(Enabled && serverMode && pendingDetach is { } pending && !Main.gameMenu) {
+				string barriers=Path.Combine(Path.GetDirectoryName(outRoot),"sync");
+				if(Directory.Exists(barriers) && Directory.GetFiles(barriers,pending.Label+".*").Length>=2) {
+					pendingDetach=null;
+					ShipSystem.Ships().FirstOrDefault()?.DetachPart(pending.Part);
+				}
+			}
 			if (!Enabled || scenarioDone || Main.gameMenu)
 				return;
 			try {
@@ -489,7 +499,7 @@ namespace TerraCommand.Common.Testing
 					break;
 				}
 				case "spawnenemybrain": // spawnenemybrain <dx px> <dy px> : an enemy faction brain body
-					UnitSystem.SpawnFresh(P.Bottom + new Vector2(F(a[1]), F(a[2])), CloneUnit.EnemyTeam, Actors.ActorKind.Brain);
+					UnitSystem.SpawnFresh((serverMode?new Vector2(t.X*16+8,t.Y*16):P.Bottom) + new Vector2(F(a[1]), F(a[2])), CloneUnit.EnemyTeam, Actors.ActorKind.Brain);
 					break;
 				case "faction": // faction setup <dx tiles> | attack [here] | budget <copper>
 					switch (a[1]) {
@@ -550,6 +560,13 @@ namespace TerraCommand.Common.Testing
 					WorldGen.SquareTileFrame(x, y);
 					break;
 				}
+				case "retile": { // material conversion (grass growth), preserving existing damage
+					int x = t.X + I(a[1]), y = t.Y + I(a[2]);
+					Main.tile[x, y].TileType = (ushort)TileID.Search.GetId(a[3]);
+					WorldGen.SquareTileFrame(x, y);
+					break;
+				}
+
 				case "fill": { // fill dx0 dy0 dx1 dy1 TileName
 					ushort type = (ushort)TileID.Search.GetId(a[5]);
 					for (int x = t.X + I(a[1]); x <= t.X + I(a[3]); x++)
@@ -586,7 +603,16 @@ namespace TerraCommand.Common.Testing
 				case "aimnpc": { // aimnpc <NPCName> head|body : aim at the nearest such NPC
 					NPC n = NearestNpc(a[1]);
 					Vector2 at = a[2] == "head" ? new Vector2(n.Center.X, n.position.Y + n.height * 0.1f) : n.Center + new Vector2(0, n.height * 0.15f);
-					AimOffset = at - P.Center;
+					// Scripted headshots compensate for the newly simulated bullet drop.
+                    Item gun=P.inventory[Actors.ActorInventory.Held];
+                    if(a[2]=="head" && P.PickAmmo(gun,out int round,out float speed,out _,out _,out _,dontConsume:true)
+                        && ContentSamples.ProjectilesByType.TryGetValue(round,out var sample) && Physics.KineticBullet.Eligible(sample)) {
+                        float gameSpeed=gun.ModItem is Combat.CCFirearm cc?cc.Spec.FireVelocity:speed*(sample.extraUpdates+1);
+                        Vector2 muzzle=Actors.RigRenderer.GunAt(P.GetModPlayer<Actors.RigPlayer>().Pose());
+                        float flight=Math.Max(0,Vector2.Distance(at,muzzle)-20)/Math.Max(1,gameSpeed);
+                        at.Y-=Actors.CC.Gravity*(flight*flight+flight/(sample.extraUpdates+1))*.5f;
+                    }
+                    AimOffset = at - P.Center;
 					break;
 				}
 				case "give": { // give <item> [n] : straight into the pack (equipment isn't picked up by walking over it)
@@ -748,6 +774,68 @@ namespace TerraCommand.Common.Testing
 					}
 					break;
 				}
+				case "shootlimb": {
+                    var unit=UnitSystem.AllUnits().First(u=>u.Team==CloneUnit.EnemyTeam);
+                    int limb=I(a[1]);Vector2? contact=null;
+                    for(int y=unit.NPC.Hitbox.Top;y<unit.NPC.Hitbox.Bottom && contact==null;y++)
+                        for(int x=unit.NPC.Hitbox.Left;x<unit.NPC.Hitbox.Right;x++)
+                            if(unit.Actor.Limbs.At(unit.Actor,unit.NPC.Bottom,new Vector2(x,y))==limb) {contact=new(x,y);break;}
+                    if(contact==null)throw new InvalidOperationException("No hittable limb contact");
+                    for(int i=0;i<I(a[2]);i++) {
+                        int id=Projectile.NewProjectile(P.GetSource_FromThis(),contact.Value,new Vector2(0,.01f),ProjectileID.Bullet,1,0,P.whoAmI);
+                        Main.projectile[id].usesLocalNPCImmunity=true;Main.projectile[id].localNPCHitCooldown=-1;
+                    }
+                    break;
+                }
+                case "shootpart": {
+					var ship=ShipSystem.Ships().OrderBy(x=>Vector2.DistanceSquared(x.NPC.Center,P.Center)).First();
+					var part=Enum.Parse<Physics.CraftPart>(a[1],true);
+					ship.Physics.Motion.Position=ship.NPC.Bottom;
+					Vector2 point=ship.Physics.World(ship.Physics.PartJoint(part))-new Vector2(0,3);
+					for(int i=0;i<I(a[2]);i++) {
+						int id=Projectile.NewProjectile(P.GetSource_FromThis(),point,new Vector2(0,-.05f),ProjectileID.Bullet,1,0,P.whoAmI);
+						Main.projectile[id].usesLocalNPCImmunity=true; Main.projectile[id].localNPCHitCooldown=-1;
+					}
+					break;
+				}
+				case "craftfixture": {
+					var style=Enum.Parse<ShipStyle>(a[1],true);
+					Vector2 feet=new Vector2((t.X+I(a[2]))*16+8,t.Y*16-1);
+					int index=ShipSystem.SpawnShip(serverMode?1:P.team,new List<Item>(),feet,style);
+					if(index<Main.maxNPCs) {
+						Main.npc[index].Bottom=feet;
+						if(a.Length>3 && a[3]=="enemy") {
+							var ship=(CargoShip)Main.npc[index].ModNPC;
+							ship.Team=CloneUnit.EnemyTeam; ship.State=ShipState.Waiting; ship.NPC.ai[1]=-18000;
+						}
+					}
+					break;
+				}
+				case "blastwreck": {
+					var wreck=Main.npc.Where(n=>n.active && n.ModNPC is CraftWreck).OrderBy(n=>Vector2.DistanceSquared(n.Center,P.Center)).First();
+					Physics.Explosions.Blast(wreck.Center+new Vector2(-20,10),80,Physics.Tuning.BlastImpulse); break;
+				}
+				case "spawnwreck": {
+					Vector2 center=serverMode?new Vector2(t.X*16+8,t.Y*16):P.Bottom;
+					center+=new Vector2(F(a[2]),F(a[3]));
+					int index=NPC.NewNPC(Entity.GetSource_NaturalSpawn(),(int)center.X,(int)center.Y,ModContent.NPCType<CraftWreck>());
+					if(index<Main.maxNPCs && Main.npc[index].ModNPC is CraftWreck wreck) wreck.Initialize(new(Enum.Parse<Physics.CraftPart>(a[1],true),center,new Vector2(F(a[4]),F(a[5])),0,0));
+					break;
+				}
+				case "detachonsync": {
+					if(!serverMode) throw new InvalidOperationException("detachonsync is a dedicated-server fixture");
+					pendingDetach=(a[1],Enum.Parse<Physics.CraftPart>(a[2],true)); break;
+				}
+				case "limbdetach": {
+                    int limb=I(a[2]);
+                    if(a[1]=="player") Physics.LimbSystem.Detach(P,limb);
+                    else Physics.LimbSystem.Detach(UnitSystem.TeamUnits(P.team).First(),limb);
+                    break;
+                }
+                case "detach": {
+					var ship=ShipSystem.Ships().OrderBy(x=>Vector2.DistanceSquared(x.NPC.Center,P.Center)).First();
+					ship.DetachPart(Enum.Parse<Physics.CraftPart>(a[1],true)); break;
+				}
 				case "shiphit": { // shiphit <damage> : enemy fire hits the nearest ship
 					NPC s = Main.npc.Where(n => n.active && n.ModNPC is Content.NPCs.CargoShip).OrderBy(n => Vector2.Distance(n.Center, P.Center)).First();
 					s.SimpleStrikeNPC(I(a[1]), 0);
@@ -782,7 +870,12 @@ namespace TerraCommand.Common.Testing
 					u.NPC.StrikeInstantKill();
 					break;
 				}
-				case "motion": { // motion <fuel> <vx> <vy> <status>: establish a physical handoff regression
+				case "resetbody": { // isolate contact/gait fixtures from preceding falls
+                    var actor=P.GetModPlayer<Physics.BodyPhysicsPlayer>().Actor;
+                    new Actors.ActorMotion {Fuel=actor.Fuel,BodyId=actor.BodyId,Limbs=actor.Limbs}.Apply(actor,actor.Kind);
+                    P.velocity=Vector2.Zero;P.fullRotation=0;break;
+                }
+                case "motion": { // motion <fuel> <vx> <vy> <status>: establish a physical handoff regression
 					var actor = P.GetModPlayer<Physics.BodyPhysicsPlayer>().Actor;
 					actor.Fuel = F(a[1]);
 					actor.Status = Enum.Parse<Actors.ActorStatus>(a[4], ignoreCase: true);
@@ -829,6 +922,30 @@ namespace TerraCommand.Common.Testing
 				if (n.type == type && (best == null || Vector2.Distance(n.Center, P.Center) < Vector2.Distance(best.Center, P.Center)))
 					best = n;
 			return best ?? throw new ArgumentException("no NPC " + name);
+		}
+
+		static void CheckBodyDeposits(Actors.CCActor actor, Vector2 feet, string label) {
+			var points = new Vector2[1024];
+			int count = Actors.ContactGeometry.Build(actor, feet, actor.Rot, points);
+			for (int n = 0; n < count; n++) {
+				Vector2 point = points[n];
+				int i = (int)(point.X / 16), j = (int)(point.Y / 16);
+				if (!WorldGen.InWorld(i, j, 2) || Main.tile[i, j].HasTile || Main.tile[i, j].LiquidAmount != 0) continue;
+				void ClearTestTile() { Main.tile[i, j].ClearTile(); PixelTerrain.Clear(i, j); WorldGen.SquareTileFrame(i, j); }
+				bool placedInside = PixelTerrain.Deposit(point.X, point.Y, TileID.Dirt);
+				if (placedInside) ClearTestTile();
+				Expect(!placedInside, label + " blocks a new loose tile inside its physical body");
+				for (int bit = 0; bit < 64; bit++) {
+					Vector2 seed = new(i * 16 + bit % 8 * 2 + 1, j * 16 + bit / 8 * 2 + 1);
+					if (!PixelTerrain.Deposit(seed.X, seed.Y, TileID.Dirt)) continue;
+					bool refilledInside;
+					try { refilledInside = PixelTerrain.Deposit(point.X, point.Y, TileID.Dirt); }
+					finally { ClearTestTile(); }
+					Expect(!refilledInside, label + " blocks debris refilling a carved cell inside its physical body");
+					return;
+				}
+			}
+			throw new InvalidOperationException("No empty body tile available for the deposit fixture");
 		}
 
 		static void RunExpect(string[] a)
@@ -878,6 +995,15 @@ namespace TerraCommand.Common.Testing
 					Expect(Cmp(n, a[3], F(a[4])), $"{desc} (have {n})");
 					break;
 				}
+				case "shipmass": case "shipvx": case "shipvy": case "shipangle": case "shipspin": {
+					CargoShip ship = ShipSystem.Ships().OrderBy(x => Vector2.DistanceSquared(x.NPC.Center,P.Center)).FirstOrDefault();
+					float value = ship == null ? float.NaN : a[1] switch {
+						"shipmass" => ship.Physics.Motion.Mass, "shipvx" => ship.NPC.velocity.X,
+						"shipvy" => ship.NPC.velocity.Y, "shipangle" => ship.NPC.rotation, _ => ship.Physics.Motion.AngularVelocity,
+					};
+					Expect(ship != null && Cmp(value,a[2],F(a[3])), $"{desc} (value {value:0.000}; state {ship?.State}; feet {ship?.NPC.Bottom}; velocity {ship?.NPC.velocity}; ground {ship?.Grounded})");
+					break;
+				}
 				case "shipx": { // expect shipx <op> <tiles> : the nearest ship's horizontal offset from the player
 					CargoShip ship = ShipSystem.Ships().OrderBy(x => Vector2.Distance(x.NPC.Center, P.Center)).FirstOrDefault();
 					float dx = ship == null ? 0f : (ship.NPC.Center.X - P.Center.X) / 16f;
@@ -892,6 +1018,22 @@ namespace TerraCommand.Common.Testing
 				}
 				case "oresent": Expect(Cmp(CloneUnit.OreSentUp, a[2], F(a[3])), $"{desc} (ore sent up {CloneUnit.OreSentUp})"); break;
 				case "damaged": Expect(Cmp(PixelTerrain.DamagedTileCount, a[2], F(a[3])), $"{desc} (have {PixelTerrain.DamagedTileCount})"); break;
+				case "bodydeposit": {
+					if (a[2] == "player") CheckBodyDeposits(P.GetModPlayer<Physics.BodyPhysicsPlayer>().Actor, P.Bottom, "player");
+					else {
+						var unit = UnitSystem.AllUnits().OrderBy(u => Vector2.DistanceSquared(u.NPC.Bottom, P.Bottom)).First();
+						CheckBodyDeposits(unit.Actor, unit.NPC.Bottom, "idle body");
+					}
+					break;
+				}
+
+				case "pixel": { // world-pixel offset from the fixed mark, independent of later body motion
+					Vector2 point = markPos + new Vector2(F(a[2]), F(a[3]));
+					bool solid = PixelTerrain.IsPixelSolid(point.X, point.Y);
+					Expect(solid == (a[4] == "solid"), $"{desc} ({point}: {(solid ? "solid" : "open")})");
+					break;
+				}
+
 				case "tile": {
 					int x = t.X + I(a[2]), y = t.Y + I(a[3]);
 					bool has = Main.tile[x, y].HasTile;
@@ -937,6 +1079,23 @@ namespace TerraCommand.Common.Testing
 				case "unitweapon": { int n = UnitSystem.TeamUnits(P.team).Count(u => u.Loadout.Held.type == ItemType(a[2])); Expect(Cmp(n, a[3], F(a[4])), $"{desc} (armed units {n})"); break; }
 				case "fuelnow": { float f = P.GetModPlayer<Physics.BodyPhysicsPlayer>().Fuel; Expect(Cmp(f, a[2], F(a[3])), $"{desc} (fuel {f:0})"); break; }
 				case "status": { var st = P.GetModPlayer<Physics.BodyPhysicsPlayer>().Actor.Status; Expect(st.ToString().ToLower() == a[2], $"{desc} (status {st}, rot {P.fullRotation:0.00})"); break; }
+				case "penetrations": Expect(Cmp(PixelTerrain.Penetrations,a[2],F(a[3])),desc); break;
+				case "wreckvx": case "wreckspin": {
+					var wreck=Main.npc.Where(n=>n.active && n.ModNPC is CraftWreck).OrderBy(n=>Vector2.DistanceSquared(n.Center,P.Center)).First();
+					float value=a[1]=="wreckvx"?wreck.velocity.X:((CraftWreck)wreck.ModNPC).Physics.Motion.AngularVelocity;
+					Expect(Cmp(value,a[2],F(a[3])),$"{desc} (have {value})"); break;
+				}
+				case "limb": {
+                    var actor=a[2]=="player"?P.GetModPlayer<Physics.BodyPhysicsPlayer>().Actor:a[2]=="other"?Main.player.First(p=>p.active && p.whoAmI!=P.whoAmI).GetModPlayer<Physics.BodyPhysicsPlayer>().Actor:a[2]=="enemy"?UnitSystem.AllUnits().First(u=>u.Team==CloneUnit.EnemyTeam).Actor:UnitSystem.TeamUnits(P.team).First().Actor;
+                    Expect(actor.Limbs.Has(I(a[3]))==bool.Parse(a[4]),desc);break;
+                }
+                case "limbwrecks": { int count=Main.npc.Count(n=>n.active && n.ModNPC is ActorLimbWreck);Expect(Cmp(count,a[2],F(a[3])),$"{desc} (have {count})");break;}
+                case "wrecks": Expect(Cmp(Main.npc.Count(n=>n.active && n.ModNPC is CraftWreck),a[2],F(a[3])),desc); break;
+				case "attached": {
+					var ship=ShipSystem.Ships().OrderBy(x=>Vector2.DistanceSquared(x.NPC.Center,P.Center)).First();
+					bool present=ship.Physics.Attachments.Has(Enum.Parse<Physics.CraftPart>(a[2],true));
+					Expect(present==bool.Parse(a[3]),desc); break;
+				}
 				case "landedships": { int n = ShipSystem.Ships().Count(x => x.DoorOpen); Expect(Cmp(n, a[2], F(a[3])), $"{desc} (have {n})"); break; }
 				case "ships": { int n = ShipSystem.Ships().Count(); Expect(Cmp(n, a[2], F(a[3])), $"{desc} (have {n})"); break; }
 				case "shipstate": {
@@ -1034,7 +1193,12 @@ namespace TerraCommand.Common.Testing
 					Expect(Cmp(n, a[2], F(a[3])), $"{desc} (have {n})");
 					break;
 				}
-				case "projectiles": {
+				case "bulletx": case "bulletspeed": case "bulletdamage": {
+                    var bullet=Main.projectile.Where(p=>p.active && p.type==ProjectileID.Bullet && p.owner==Main.myPlayer).OrderByDescending(p=>p.identity).FirstOrDefault();
+                    float value=bullet==null?float.NaN:a[1]=="bulletx"?bullet.Center.X-markPos.X:a[1]=="bulletspeed"?bullet.velocity.Length():bullet.damage;
+                    Expect(Cmp(value,a[2],F(a[3])),$"{desc} (have {value})");break;
+                }
+                case "projectiles": {
 					int type = int.TryParse(a[2], out int id) ? id : ModContent.TryFind("TerraCommand/" + a[2], out ModProjectile mp) ? mp.Type : ProjectileID.Search.GetId(a[2]);
 					int n = Main.projectile.Count(pr => pr.active && pr.type == type);
 					Expect(Cmp(n, a[3], F(a[4])), $"{desc} (have {n})");

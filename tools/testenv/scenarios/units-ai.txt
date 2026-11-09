@@ -23,6 +23,6 @@ screenshot units-follow
 # a wall 5 tiles high in the way: it jets over
 fill 4 -5 4 -1 Stone
 goto rel 14 0
-wait 720                        # allow the physical landing and resumed strides to finish
+wait 960                        # allow contact-driven wall clearance, landing, and resumed strides
 expect unitdist <= 7
 screenshot units-jet

@@ -142,7 +142,8 @@ namespace TerraCommand.Common.Combat
 		public float CurrentShake(Item it)
 		{
 			CCActor a = Actor;
-			bool supported = a.Status == ActorStatus.Stable && (a.Grounded || a.Prone != ProneState.NotProne) && !a.Jetting;
+			bool supported = a.Status == ActorStatus.Stable && (a.Grounded || a.Prone != ProneState.NotProne) && !a.Jetting
+                && a.Limbs.SupportsWeapon(a.Kind,(it.ModItem as CCFirearm)?.Spec.OneHanded==true);
 			float sharp = Reloading ? 0f : a.SharpAim;
 			float shake, sharpShake, noSupport;
 			if (Devices.IsFirearm(it)) {
@@ -216,7 +217,7 @@ namespace TerraCommand.Common.Combat
 		{
 			if (Player.whoAmI != Main.myPlayer)
 				return;
-			if (ActorControlState.Blocked) {
+			if (ActorControlState.Blocked || Actor.Kind!=ActorKind.Crab && Actor.Kind!=ActorKind.Turret && !Actor.Limbs.Arms) {
 				Player.controlUseItem = false;
 				throwHeld = triggerHeld = false;
 				ThrowCharge = 0;
@@ -302,15 +303,17 @@ namespace TerraCommand.Common.Combat
 
 		public override bool PreItemCheck()
 		{
+            if(Actor.Kind!=ActorKind.Crab && Actor.Kind!=ActorKind.Turret && !Actor.Limbs.Arms) return false;
 			Item it = Held;
 			if (Player.whoAmI == Main.myPlayer && Devices.IsDigger(it) && Player.controlUseItem) {
 				Vector2 from = RigRenderer.Grip(Player.GetModPlayer<RigPlayer>().Pose());
-				Vector2 dir = AimDir();
+				Vector2 aim = Main.MouseWorld - from;
+				Vector2 dir = aim.LengthSquared() > 1 ? Vector2.Normalize(aim) : AimDir();
 				const float range = 56f;
 				Destruction.PixelMining.DigPoint = null;
 				for (float d = 0; d <= range; d += 1f) {
 					Vector2 p = from + dir * d;
-					if (Collision.SolidCollision(p.Floor(), 1, 1)) {   // exactly the pixel containing p: its tile is the one dug
+					if (TerrariaActorTerrain.Instance.Sample(p, out var surface) && !surface.OneWay) {
 						Player.tileTargetX = (int)(p.X / 16f);
 						Player.tileTargetY = (int)(p.Y / 16f);
 						Destruction.PixelMining.DigPoint = p;
@@ -378,6 +381,8 @@ namespace TerraCommand.Common.Combat
 
 		public override bool CanUseItem(Item item, Player player)
 		{
+			var body=player.GetModPlayer<BodyPhysicsPlayer>().Actor;
+			if(body.Kind!=ActorKind.Crab && body.Kind!=ActorKind.Turret && !body.Limbs.Arms) return false;
 			if (Devices.IsThrowable(item) && player.whoAmI == Main.myPlayer)
 				return false; // thrown by hand with a wind-up (AimPlayer), not swung
 			if (Devices.IsFirearm(item) && player.whoAmI == Main.myPlayer) {

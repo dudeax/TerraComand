@@ -16,6 +16,7 @@ namespace TerraCommand.Common.Combat
 	/// </summary>
 	public sealed class FirearmSpec
 	{
+		public byte RoundProfile=255;
 		public float Mass = 0f;              // explicit CC device mass; zero uses the generic estimate
 		public int RateOfFire = 600;          // rounds per minute
 		public bool FullAuto = true;
@@ -80,7 +81,7 @@ namespace TerraCommand.Common.Combat
 					v = v.RotatedBy(MathHelper.ToRadians(Main.rand.NextFloat(-s.ParticleSpreadDeg, s.ParticleSpreadDeg) / 2f));
 				if (s.VelocityVariation > 0f)
 					v *= 1f + Main.rand.NextFloat(-s.VelocityVariation, s.VelocityVariation);
-				int pi = Projectile.NewProjectile(source, muzzle, v, type, damage, knockback, owner);
+				int pi = Physics.KineticBullet.SpawnRound(source, muzzle, v, type, damage, knockback, owner,s);
 				if (hostile)
 					EnemyFire.Mark(Main.projectile[pi]);
 			}

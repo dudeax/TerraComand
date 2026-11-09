@@ -45,6 +45,15 @@ namespace TerraCommand.Common.Orbital
 		public static IReadOnlyList<Item> CargoView(int npc) =>
 			(Main.netMode == NetmodeID.MultiplayerClient ? cargoClient : cargo).TryGetValue(npc, out var c) ? c : Array.Empty<Item>();
 
+		public static float CargoMass(CargoShip ship) {
+			float mass = CargoView(ship.NPC.whoAmI).Sum(Actors.ActorInventory.ItemMass);
+			if (ship.Pilot >= 0 && ship.Pilot < Main.maxPlayers) {
+				var p = Main.player[ship.Pilot];
+				mass += p.GetModPlayer<Physics.BodyPhysicsPlayer>().Actor.Mass;
+			}
+			return mass;
+		}
+
 		// ------------------------------------------------------------ the hold, opened by a body standing by the ship
 
 		/// <summary>Take cargo item <paramref name="index"/> into the player's pack (authority does it; the item goes to the player).</summary>
@@ -81,9 +90,10 @@ namespace TerraCommand.Common.Orbital
 
 		static bool CanUseHold(Player p, int npc) =>
 			npc >= 0 && npc < Main.maxNPCs && Main.npc[npc].active && Main.npc[npc].ModNPC is CargoShip s && s.DoorOpen
-			&& s.Team == p.team && Vector2.Distance(p.Center, s.NPC.Center) < HoldReach;
+			&& s.Team == p.team && Vector2.Distance(p.Center, s.NPC.Center) < Reach(s);
 
 		public const float HoldReach = 16 * 6;
+		public static float Reach(CargoShip ship) => Math.Max(HoldReach,ship.NPC.width / 2f + 48);
 
 		static Item DoTake(Player p, int npc, int index)
 		{
@@ -186,7 +196,7 @@ namespace TerraCommand.Common.Orbital
 		{
 			// it comes in from high above the landing zone
 			float x = Math.Clamp(lz.X, 16 * 60, Main.maxTilesX * 16 - 16 * 60);
-			float y = Math.Max(16 * 45f, lz.Y - 1500f);
+			float y = Math.Max(16 * 45f, lz.Y - 900f);
 			float targetX = x;
 			if (style == ShipStyle.Dropship)   // a dropship comes in at an angle, from whichever side has more room
 				x = Math.Clamp(x + (x < Main.maxTilesX * 8 ? -1 : 1) * 700f, 16 * 50, Main.maxTilesX * 16 - 16 * 50);
@@ -196,6 +206,7 @@ namespace TerraCommand.Common.Orbital
 			var ship = (CargoShip)Main.npc[idx].ModNPC;
 			ship.SetStyle(style);
 			ship.TargetX = targetX;
+			ship.OrbitY = Main.npc[idx].position.Y;
 			ship.Team = team;
 			ship.State = ShipState.Descending;
 			cargo[idx] = items;
@@ -293,7 +304,7 @@ namespace TerraCommand.Common.Orbital
 				changed = true;
 			}
 			foreach (CloneUnit u in UnitSystem.TeamUnits(ship.Team).ToList()) {
-				if (u.Loadout.Kind == Actors.ActorKind.Brain || !bay.Intersects(u.NPC.Hitbox))
+				if (u.Loadout.Kind == Actors.ActorKind.Brain || !bay.Contains(u.NPC.Center.ToPoint()))
 					continue;
 				// the body goes up (as a body, to be ordered again), with everything it carried
 				items.Add(new Item(Content.Items.BodyItem.ItemFor(u.Loadout.Kind)));
@@ -366,7 +377,7 @@ namespace TerraCommand.Common.Orbital
 		static void DoPilot(Player p, CargoShip ship, bool board)
 		{
 			if (board) {
-				if (Vector2.Distance(p.Center, ship.NPC.Center) < HoldReach * 1.5f)
+				if (Vector2.Distance(p.Center, ship.NPC.Center) < Reach(ship) * 1.5f)
 					ship.Board(p);
 			}
 			else if (ship.Pilot == p.whoAmI)
@@ -612,7 +623,8 @@ namespace TerraCommand.Common.Orbital
 			CargoShip ship = Ship;
 			if (ship != null) {
 				// ride inside
-				Player.Bottom = new Vector2(ship.NPC.Center.X, ship.NPC.Bottom.Y - 2f);
+				ship.Physics.Motion.Position = ship.NPC.Bottom;
+				Player.Bottom = ship.Physics.World(new Vector2(0,20));
 				Player.velocity = Vector2.Zero;
 				Player.fallStart = (int)(Player.position.Y / 16f);
 				Player.immune = true;
@@ -623,8 +635,11 @@ namespace TerraCommand.Common.Orbital
 			else if (wasIn != null) {
 				// out: step down beside the ship
 				if (Player.whoAmI == Main.myPlayer) {
-					Player.Bottom = new Vector2(wasIn.NPC.Center.X + (wasIn.NPC.width / 2f + 12f) * Player.direction, wasIn.NPC.Bottom.Y - 2f);
-					Player.velocity = Vector2.Zero;
+					wasIn.Physics.Motion.Position = wasIn.NPC.Bottom;
+					Player.Bottom = wasIn.Physics.World(new Vector2((wasIn.NPC.width / 2f + 12f) * Player.direction,20));
+					Player.velocity = wasIn.Physics.Motion.PointVelocity(Player.Bottom);
+					var body = Player.GetModPlayer<Physics.BodyPhysicsPlayer>();
+					body.Actor.Vel = Player.velocity; body.SkipImpactCheck();
 					Player.fallStart = (int)(Player.position.Y / 16f);
 				}
 				Player.immuneNoBlink = false;

@@ -1,0 +1,32 @@
+goto spawn
+wait 60
+sync ready
+limbdetach player 0
+limbdetach player 2
+limbdetach player 3
+wait 60
+expect limb player 0 false
+expect limb player 2 false
+expect limb player 3 false
+expect limbwrecks == 3
+sync detached
+sync observed
+shootlimb 2 8
+wait 60
+expect limb enemy 2 false
+expect limbwrecks == 4
+sync injured
+sync checked
+deploy CloneBody 100
+wait 45
+switch
+wait 45
+expect limb player 0 true
+expect limb unit 0 false
+switch
+wait 45
+expect limb player 0 false
+expect limb player 2 false
+sync swapped
+sync done
+expect alive

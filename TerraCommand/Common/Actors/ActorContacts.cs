@@ -6,10 +6,14 @@ namespace TerraCommand.Common.Actors
 {
 	public readonly record struct ContactSurface(float Friction, float Restitution, bool OneWay = false, float Top = 0);
 	public interface IActorTerrain { bool Sample(Vector2 point, out ContactSurface surface); }
-	internal sealed class ShiftedActorTerrain : IActorTerrain
+	public interface IPenetrableTerrain : IActorTerrain { bool Penetrate(Vector2 point, float momentum, out float loss); }
+	internal sealed class ShiftedActorTerrain : IPenetrableTerrain
 	{
 		public IActorTerrain Source;
 		public Vector2 Origin;
+		public bool Penetrate(Vector2 point,float momentum,out float loss) {
+			loss=0; return Source is IPenetrableTerrain penetrable && penetrable.Penetrate(point+Origin,momentum,out loss);
+		}
 		public bool Sample(Vector2 point, out ContactSurface surface) {
 			bool solid = Source.Sample(point + Origin, out surface);
 			if (surface.OneWay) surface = surface with { Top = surface.Top - Origin.Y };
@@ -23,7 +27,7 @@ namespace TerraCommand.Common.Actors
 		public bool Supported;
 		internal LimbPath Path;
 		internal int PathCycle;
-		internal int StalledTicks;
+		internal int StalledTicks, SegmentTicks, LastSegment = -1;
 	}
 	public sealed class ActorContactState
 	{
@@ -32,8 +36,10 @@ namespace TerraCommand.Common.Actors
 		public int ContactCount;
 		public readonly ContactLimb[] Limbs = { new(), new(), new(), new() };
 		internal readonly ShiftedActorTerrain TerrainFrame = new();
+		internal readonly RigidBodyMotion Body = new();
+		internal readonly ActorBodyShape BodyShape = new();
 		internal readonly Vector2[] Atoms = new Vector2[1024];
-		public void Reset() { Initialized = false; Stuck = false; foreach (ContactLimb limb in Limbs) { limb.Supported = false; limb.Velocity = Vector2.Zero; limb.Path = null; limb.StalledTicks = 0; } }
+		public void Reset() { Initialized = false; Stuck = false; foreach (ContactLimb limb in Limbs) { limb.Supported = false; limb.Velocity = Vector2.Zero; limb.Path = null; limb.StalledTicks = limb.SegmentTicks = 0; limb.LastSegment = -1; } }
 		public void BindPaths(CCActor actor) {
 			if (!Initialized) return;
 			for (int i = 0; i < Limbs.Length; i++) {
@@ -83,13 +89,13 @@ namespace TerraCommand.Common.Actors
 			velocity += impulse / mass;
 			omega += Cross(radius, impulse) / inertia;
 		}
-		static Vector2 CentreOffset(CCActor a, float rot) => a.Kind == ActorKind.Crab || a.Kind == ActorKind.Turret
+		internal static Vector2 CentreOffset(CCActor a, float rot) => a.Kind == ActorKind.Crab || a.Kind == ActorKind.Turret
 			? new Vector2(0, -12) : ContactGeometry.HipOffset(a, rot) + ContactGeometry.Rotate(new Vector2(0, -8), rot);
-		static bool Solid(IActorTerrain terrain, Vector2 point, Vector2 previous, bool drop, out ContactSurface material) {
+		internal static bool Solid(IActorTerrain terrain, Vector2 point, Vector2 previous, bool drop, out ContactSurface material) {
 			if (!terrain.Sample(point, out material)) return false;
 			return !material.OneWay || !drop && point.Y >= previous.Y && previous.Y <= material.Top + Skin;
 		}
-		static Vector2 Normal(IActorTerrain terrain, Vector2 point, Vector2 previous, bool drop) {
+		internal static Vector2 Normal(IActorTerrain terrain, Vector2 point, Vector2 previous, bool drop) {
 			bool S(Vector2 p) => Solid(terrain, p, previous, drop, out _);
 			Vector2 gradient = new((S(point - Vector2.UnitX) ? 1 : 0) - (S(point + Vector2.UnitX) ? 1 : 0),
 				(S(point - Vector2.UnitY) ? 1 : 0) - (S(point + Vector2.UnitY) ? 1 : 0));
@@ -103,6 +109,51 @@ namespace TerraCommand.Common.Actors
 			for (int i = 1; i <= steps; i++) {
 				Vector2 next = from + delta * (i / (float)steps);
 				if (Solid(terrain, next, result, drop, out material)) { normal = Normal(terrain, next, result, drop); return result; }
+				result = next;
+			}
+			return result;
+		}
+
+		// Source AtomGroups.ini, relative to each group's JointOffset, with feet referenced at the sole.
+		static readonly Vector2[] HumanFoot = { new(-1,-3), new(-1,-2), new(-1,-1), new(0,0), new(1,0), new(2,0), new(3,-1) };
+		static readonly Vector2[] HumanHand = { new(-5,1), new(-5,0), new(-5,-1), new(-4,-1), new(-3,-1), new(-2,-1), new(-1,-1), new(0,-1) };
+		static readonly Vector2[] CrabFoot = { new(-1,-1), new(-1,0), new(0,0), new(1,0), new(2,0) };
+		static Vector2[] LimbAtoms(CCActor actor, int limb) => actor.Kind == ActorKind.Crab ? CrabFoot : limb < 2 ? HumanFoot : HumanHand;
+		public static bool LimbIntersects(CCActor actor, int limb, Vector2 tip, Rectangle cell) {
+			foreach (Vector2 offset in LimbAtoms(actor,limb)) {
+				Vector2 point = tip + new Vector2(offset.X * actor.FlipFactor,offset.Y);
+				if (cell.Contains((int)point.X,(int)point.Y)) return true;
+			}
+			return false;
+		}
+
+		public static ReadOnlySpan<Vector2> LimbOffsets(CCActor actor,int limb) => LimbAtoms(actor,limb);
+		static bool LimbBlocked(CCActor actor, int limb, IActorTerrain terrain, Vector2 point, Vector2 previous, bool drop) {
+			foreach (Vector2 offset in LimbAtoms(actor,limb)) {
+				Vector2 atom = new(offset.X * actor.FlipFactor, offset.Y);
+				if (Solid(terrain,point + atom,previous + atom,drop,out _)) return true;
+			}
+			return false;
+		}
+		public static Vector2 SweepLimb(CCActor actor, int limb, IActorTerrain terrain, Vector2 from, Vector2 delta, bool drop,
+			out Vector2 normal, out ContactSurface material) {
+			normal = Vector2.Zero; material = default;
+			int steps = Math.Max(1,(int)MathF.Ceiling(delta.Length() / StepLength));
+			Vector2 result = from;
+			for (int i = 1; i <= steps; i++) {
+				Vector2 next = from + delta * (i / (float)steps), sum = Vector2.Zero;
+				int hits = 0; float friction = 0, restitution = 0;
+				foreach (Vector2 offset in LimbAtoms(actor,limb)) {
+					Vector2 atom = new(offset.X * actor.FlipFactor,offset.Y);
+					if (!Solid(terrain,next + atom,result + atom,drop,out var surface)) continue;
+					sum += Normal(terrain,next + atom,result + atom,drop);
+					friction += surface.Friction * 0.9f; restitution += surface.Restitution * 0.2f; hits++;
+				}
+				if (hits > 0) {
+					normal = ContactGeometry.Normalized(sum, -Vector2.UnitY);
+					material = new ContactSurface(friction / hits,restitution / hits);
+					return result;
+				}
 				result = next;
 			}
 			return result;
@@ -164,88 +215,18 @@ namespace TerraCommand.Common.Actors
 			if (actor.Kind != ActorKind.Turret)
 				PushLimbs(actor, feet, centre, inertia, ref omega, input, terrain);
 
-			// Resolve terrain inserted into the actor, with bounded recovery and no unbounded teleport.
-			if (Blocked(actor, feet, angle, terrain, input.Prone)) {
-				bool freed = false;
-				Vector2 original = feet;
-				for (int distance = 1; distance <= 24 && !freed; distance++) {
-					foreach (Vector2 direction in RecoveryDirections) {
-						Vector2 candidate = original + direction * distance;
-						if (Blocked(actor, candidate, angle, terrain, input.Prone)) continue;
-						feet = candidate; centre = feet + CentreOffset(actor, angle); freed = true; break;
-					}
-				}
-				if (!freed) { state.Stuck = true; actor.Vel = Vector2.Zero; omega = 0; }
-			}
+			var motion = state.Body;
+			state.BodyShape.Actor = actor;
+			motion.Position = feet; motion.Velocity = actor.Vel;
+			motion.Rotation = angle; motion.AngularVelocity = omega / CC.Dt;
+			motion.Mass = actor.Mass; motion.Inertia = inertia;
+			motion.Friction=.4f; motion.Restitution=actor.Kind==ActorKind.Heavy || actor.Kind==ActorKind.Crab ? .5f : .75f;
+			RigidBodyTravel.Step(motion, state.BodyShape, terrain, input.Prone);
+			feet = motion.Position; actor.Vel = motion.Velocity;
+			actor.Rot = motion.Rotation; actor.AngVel = motion.AngularVelocity;
+			state.TravelImpulse = motion.TravelImpulse; state.ContactCount = motion.ContactCount;
+			state.Grounded = motion.Grounded; state.Stuck = motion.Stuck;
 
-			float remaining = state.Stuck ? 0 : 1;
-			int iterations = 0;
-			while (remaining > 0.00001f && iterations++ < 512) {
-				float travel = actor.Vel.Length() + Math.Abs(omega) * 40;
-				float dt = Math.Min(remaining, StepLength / Math.Max(StepLength, travel));
-				Vector2 nextCentre = centre + actor.Vel * dt;
-				float nextAngle = angle + omega * dt;
-				Vector2 nextFeet = nextCentre - CentreOffset(actor, nextAngle);
-				int count = ContactGeometry.Build(actor, nextFeet, nextAngle, state.Atoms);
-				bool hit = false;
-				// AtomGroup::Travel distributes a simultaneous manifold with ImpulseFactor = 1/hitCount.
-				int hitCount = 0;
-				for (int i = 0; i < count; i++) {
-					Vector2 radius = state.Atoms[i] - nextCentre;
-					Vector2 pv = actor.Vel + Perpendicular(radius) * omega;
-					if (Solid(terrain, state.Atoms[i], state.Atoms[i] - pv * dt, input.Prone, out _)) hitCount++;
-				}
-				Vector2 totalImpulse = Vector2.Zero;
-				float totalTorque = 0;
-				for (int i = 0; i < count && hitCount > 0; i++) {
-					Vector2 point = state.Atoms[i], radius = point - nextCentre;
-					Vector2 pointVelocity = actor.Vel + Perpendicular(radius) * omega;
-					Vector2 previous = point - pointVelocity * dt;
-					if (!Solid(terrain, point, previous, input.Prone, out ContactSurface surface)) continue;
-					hit = true;
-					Vector2 normal = Normal(terrain, point, previous, input.Prone);
-					float vn = Vector2.Dot(pointVelocity, normal);
-					if (vn >= -0.00001f) continue;
-					float restitution = vn < -0.75f ? surface.Restitution : 0;
-					float jn = -(1 + restitution) * vn * EffectiveMass(actor.Mass, inertia, radius, normal) / hitCount;
-					Vector2 tangent = Perpendicular(normal);
-					float jt = -Vector2.Dot(pointVelocity, tangent) * EffectiveMass(actor.Mass, inertia, radius, tangent) / hitCount;
-					jt = Math.Clamp(jt, -jn * surface.Friction * 0.45f, jn * surface.Friction * 0.45f);
-					Vector2 impulse = normal * jn + tangent * jt;
-					totalImpulse += impulse; totalTorque += Cross(radius, impulse);
-					state.ContactCount++;
-					if (normal.Y < -0.4f) state.Grounded = true;
-				}
-				actor.Vel += totalImpulse / actor.Mass; omega += totalTorque / inertia;
-				state.TravelImpulse += totalImpulse;
-
-				if (!hit) { centre = nextCentre; feet = nextFeet; angle = nextAngle; }
-				else {
-					// Re-test the corrected motion; translation and rotation are swept together.
-					nextCentre = centre + actor.Vel * dt;
-					nextAngle = angle + omega * dt;
-					nextFeet = nextCentre - CentreOffset(actor, nextAngle);
-					if (!Blocked(actor, nextFeet, nextAngle, terrain, input.Prone)) { centre = nextCentre; feet = nextFeet; angle = nextAngle; }
-					else {
-						// Advance to the free side of the contact, then solve the remaining time.
-						// Consuming the entire tick here pins a crawling body whenever a small
-						// inward angular velocity survives the averaged manifold impulse.
-						float low = 0, high = 1;
-						for (int j = 0; j < 12; j++) {
-							float fraction = (low + high) * 0.5f;
-							Vector2 testCentre = centre + actor.Vel * (dt * fraction);
-							float testAngle = angle + omega * (dt * fraction);
-							if (Blocked(actor, testCentre - CentreOffset(actor, testAngle), testAngle, terrain, input.Prone)) high = fraction;
-							else low = fraction;
-						}
-						centre += actor.Vel * (dt * low); angle += omega * (dt * low);
-						feet = centre - CentreOffset(actor, angle);
-						dt *= Math.Max(low, 0.01f);
-					}
-				}
-				remaining -= dt;
-			}
-			actor.Rot = angle; actor.AngVel = omega / CC.Dt;
 			foreach (ContactLimb limb in state.Limbs) if (limb.Supported && limb.Normal.Y < -0.4f) state.Grounded = true;
 			if (state.Grounded && Math.Abs(actor.Vel.Y) < 0.08f) actor.Vel.Y = 0;
 			actor.AfterMove(actor.Vel, state.Grounded);
@@ -253,13 +234,8 @@ namespace TerraCommand.Common.Actors
 			return feet;
 		}
 
-		static readonly Vector2[] RecoveryDirections = { -Vector2.UnitY, -Vector2.UnitX, Vector2.UnitX, Vector2.UnitY,
+		internal static readonly Vector2[] RecoveryDirections = { -Vector2.UnitY, -Vector2.UnitX, Vector2.UnitX, Vector2.UnitY,
 			new(-0.7071f,-0.7071f), new(0.7071f,-0.7071f) };
-		static bool Blocked(CCActor a, Vector2 feet, float angle, IActorTerrain terrain, bool drop) {
-			int n = ContactGeometry.Build(a, feet, angle, a.Contacts.Atoms);
-			for (int i = 0; i < n; i++) if (Solid(terrain, a.Contacts.Atoms[i], a.Contacts.Atoms[i], drop, out _)) return true;
-			return false;
-		}
 		static Vector2 Rest(CCActor a, int limb) {
 			if (a.Kind == ActorKind.Crab) {
 				float x = limb switch { 0 => -6, 1 => 6, 2 => -4, _ => 8 };
@@ -278,7 +254,7 @@ namespace TerraCommand.Common.Actors
 				Vector2 rest = Rest(a, i);
 				Vector2 desired = a.Kind == ActorKind.Crab ? joint + rest : i < 2 ? hip + rest : joint + rest;
 				ContactLimb limb = a.Contacts.Limbs[i];
-				limb.Position = SweepPoint(terrain, joint, desired - joint, drop, out _, out _);
+				limb.Position = SweepLimb(a, i, terrain, joint, desired - joint, drop, out _, out _);
 				limb.Velocity = Vector2.Zero;
 			}
 			a.Contacts.Initialized = true;
@@ -290,21 +266,26 @@ namespace TerraCommand.Common.Actors
 			Vector2 jointVelocity = a.Vel;
 			for (int i = 0; i < 4; i++) {
 				ContactLimb limb = a.Contacts.Limbs[i]; limb.Supported = false;
+				if(!a.Limbs.Has(i)) { limb.Path=null; continue; }
 				Gait gait = i < 2 ? a.Legs[i] : a.Hands[i - 2];
 				bool returnStroke = active && gait.Path != null && !gait.Ended && gait.Path.EndSegments > 0 && gait.Path.Segs.Length - gait.Segment <= gait.Path.EndSegments;
 				// Terrain can be placed/settled around a tip between frames. Never keep a static grip inside it.
-				if (!returnStroke && Solid(terrain, limb.Position, limb.Position, input.Prone, out _)) {
+				if (!returnStroke && LimbBlocked(a, i, terrain, limb.Position, limb.Position, input.Prone)) {
 					Vector2 embedded = limb.Position; bool free = false;
 					for (int distance = 1; distance <= 18 && !free; distance++)
 						foreach (Vector2 escape in RecoveryDirections) {
 							Vector2 candidate = embedded + escape * distance;
-							if (Solid(terrain, candidate, embedded, input.Prone, out _)) continue;
+							if (LimbBlocked(a, i, terrain, candidate, embedded, input.Prone)) continue;
 							limb.Position = candidate; limb.Velocity = Vector2.Zero; free = true; break;
 						}
 				}
+				if (limb.Path != gait.Path || limb.PathCycle != gait.Cycle || limb.LastSegment != gait.Segment) limb.SegmentTicks = 0;
+				limb.LastSegment = gait.Segment;
 				Vector2 joint = ContactGeometry.Joint(a, hip, a.Rot, i);
 				bool motor = active && !a.Jetting && (gait.Path == null || !gait.Ended) && (a.Kind == ActorKind.Crab || i < 2 || a.Prone == ProneState.LayingProne && gait.Path != null);
+				if(a.Kind!=ActorKind.Crab && i>=2 && input.HoldingDevice && i==(a.Limbs.Has(2)?2:3)) motor=false;
 				float force = a.Kind == ActorKind.Crab ? 3000 : i < 2 ? a.Move == MoveState.Run ? CC.RunPush : a.Move == MoveState.Crawl ? CC.CrawlPush : a.Move == MoveState.Stand ? 4200 : a.Move == MoveState.Crouch ? 4000 : CC.WalkPush : 3400;
+				if (motor && gait.Path != null) force *= 1 + limb.SegmentTicks++ * CC.Dt / 0.5f;
 				float reach = a.Kind == ActorKind.Crab ? 12 : i < 2 ? 16 : a.Kind == ActorKind.Brain ? 12 : 14;
 				Vector2 target;
 				float advance = 0;
@@ -327,15 +308,15 @@ namespace TerraCommand.Common.Actors
 						int startSegments = gait.Dist < 0.01f ? gait.Path.StartSegments : 0;
 						for (int segment = 0; segment < startSegments; segment++) {
 							Vector2 end = LocalToWorld(gait.Path.SegmentTarget(segment));
-							if (Solid(terrain, start, start, input.Prone, out _)) break;
-							Vector2 free = SweepPoint(terrain, start, end - start, input.Prone, out Vector2 hitNormal, out _);
+							if (LimbBlocked(a, i, terrain, start, start, input.Prone)) break;
+							Vector2 free = SweepLimb(a, i, terrain, start, end - start, input.Prone, out Vector2 hitNormal, out _);
 							gait.Segment = segment;
 							gait.Dist = distance;
 							if (hitNormal != Vector2.Zero) { start = free; break; }
 							start = end; distance += gait.Path.Segs[segment].Length();
 							gait.Segment = segment + 1; gait.Dist = distance;
 						}
-						if (!Solid(terrain, start, start, input.Prone, out _)) limb.Position = start;
+						if (!LimbBlocked(a, i, terrain, start, start, input.Prone)) limb.Position = start;
 
 						limb.Path = gait.Path;
 						limb.PathCycle = gait.Cycle;
@@ -354,10 +335,13 @@ namespace TerraCommand.Common.Actors
 				if (desired.Length() > maxTravel) desired = Vector2.Normalize(desired) * maxTravel;
 				Vector2 desiredVelocity = desired + (motor || a.Jetting || active && !a.Lying ? jointVelocity : Vector2.Zero);
 				returnStroke = motor && gait.Path != null && gait.Path.EndSegments > 0 && gait.Path.Segs.Length - gait.Segment <= gait.Path.EndSegments;
-				Vector2 moved = SweepPoint(terrain, limb.Position, desiredVelocity, input.Prone, out Vector2 normal, out ContactSurface surface);
+				Vector2 moved = SweepLimb(a, i, terrain, limb.Position, desiredVelocity, input.Prone, out Vector2 normal, out ContactSurface surface);
 				if (returnStroke) { moved = limb.Position + desiredVelocity; normal = Vector2.Zero; }
 				// A planted sole can push tangentially without moving into a solid side wall.
-				if (!returnStroke && desiredVelocity.Y >= 0 && normal == Vector2.Zero && Solid(terrain, moved + new Vector2(0, 1), moved, input.Prone, out surface)) normal = -Vector2.UnitY;
+				if (!returnStroke && desiredVelocity.Y >= 0 && normal == Vector2.Zero) {
+					SweepLimb(a,i,terrain,moved,new Vector2(0,1),input.Prone,out Vector2 support,out var supportSurface);
+					if (support.Y < -0.4f) { normal = support; surface = supportSurface; }
+				}
 				bool withinReach = Vector2.DistanceSquared(joint, moved) <= (reach + 1) * (reach + 1);
 				if (normal != Vector2.Zero && withinReach) {
 					limb.Supported = true; limb.Normal = normal;

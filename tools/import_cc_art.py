@@ -104,17 +104,21 @@ weapons={
 }
 for name,src in weapons.items():port(src,f'Items/Devices/{name}.png')
 port('Base.rte/Devices/Tools/Constructor/ConstructorA000.png','Items/OrbitalConstructor.png')
-# Craft use the existing mod dimensions; retain original source proportions when fitting.
+# Craft retain native dimensions and pivots for physical lever arms.
 shiproot='Base.rte/Craft/Dropships/'
+for part,src in [('DropshipHatchLeft','HatchALeft.png'),('DropshipHatchRight','HatchARight.png'),('DropshipBody','HullA000.png'),('DropshipEngineLeft','EngineALeft.png'),('DropshipEngineRight','EngineARight.png')]:
+    port(shiproot+src,f'NPCs/{part}.png')
 craft=Image.new('RGBA',(176,76))
 for name,at in [('HullA000.png',(33,8)),('EngineALeft.png',(10,16)),('EngineARight.png',(131,16))]:
     craft.alpha_composite(load(shiproot+name),at)
-save(fit(craft,(60,32)),'NPCs/Dropship.png',[shiproot+n for n in ['HullA000.png','EngineALeft.png','EngineARight.png']],'hull/engine composite; nearest-neighbour fit to mod craft dimensions')
-port('Base.rte/Craft/Rockets/MK2/RocketMK2000.png','NPCs/CargoShip.png',(28,68))
-port('Base.rte/Craft/StorageCrate/CrateBodyA000.png','NPCs/DropCrate.png',(24,24))
+save(craft,'NPCs/Dropship.png',[shiproot+n for n in ['HullA000.png','EngineALeft.png','EngineARight.png']],'native-resolution hull/engine composite')
+port('Base.rte/Craft/Rockets/MK2/RocketMK2000.png','NPCs/CargoShip.png')
+port('Base.rte/Craft/StorageCrate/CrateBodyA000.png','NPCs/DropCrate.png')
 port('Ronin.rte/Devices/Weapons/RocketPropelledChainsaw/RPCLauncher.png','Items/Devices/Sawthrower.png')
 port('Ronin.rte/Devices/Weapons/RocketPropelledChainsaw/RPC.png','Projectiles/SawBlade.png',(14,14))
 port('Base.rte/Effects/Wounds/Spark01000.png','Projectiles/DigParticle.png',(2,2))
+for frame in range(5):
+    port('Base.rte/Craft/Shared/RocketLegA'+f'{frame:03}.png',f'NPCs/RocketLeg{frame}.png')
 # Fallback NPC uses a composed native standing actor instead of the old stick figure.
 portrait=Image.new('RGBA',(20,42));portrait.alpha_composite(load(light+'TorsoA.png'),(4,13));portrait.alpha_composite(load(light+'HeadA.png'),(4,2))
 save(portrait,'NPCs/CloneUnit.png',[light+'TorsoA.png',light+'HeadA.png'],'fallback torso/head composite; normal actors use articulated renderer')

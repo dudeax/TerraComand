@@ -9,6 +9,9 @@ using Terraria.ID;
 using Terraria.ModLoader;
 using Terraria.ModLoader.IO;
 using TerraCommand.Common.Net;
+using TerraCommand.Common.Actors;
+using TerraCommand.Common.Physics;
+using TerraCommand.Content.NPCs;
 using Vector2 = Microsoft.Xna.Framework.Vector2;
 
 namespace TerraCommand.Common.Destruction
@@ -45,7 +48,18 @@ namespace TerraCommand.Common.Destruction
 
 		public static int DamagedTileCount => damage.Count;
 
-		public static bool TryGet(int i, int j, out Damage d) => damage.TryGetValue(new Point16(i, j), out d);
+		public static bool TryGet(int i, int j, out Damage d) {
+			var key = new Point16(i, j);
+			if (!damage.TryGetValue(key, out d)) return false;
+			Tile tile = Main.tile[i, j];
+			if (tile.HasTile && d.Type != tile.TileType && TerrainRules.Substrate(d.Type) == TerrainRules.Substrate(tile.TileType)) {
+				// Grass spreads/strips by changing TileType. Preserve the missing soil
+				// instead of turning the damage mask into a whole-block collider.
+				d.Type = tile.TileType;
+				damage[key] = d;
+			}
+			return true;
+		}
 
 		/// <summary>Is the terrain pixel at world position (x, y) solid? Per art pixel (2x2): tiles plus their carved masks.</summary>
 		public static bool IsPixelSolid(float x, float y)
@@ -59,11 +73,11 @@ namespace TerraCommand.Common.Destruction
 			int col = Math.Clamp((int)((x - i * 16) / SubSize), 0, Sub - 1), row = Math.Clamp((int)((y - j * 16) / SubSize), 0, Sub - 1);
 			if (t.IsHalfBlock && row < Sub / 2)
 				return false;
-			return !damage.TryGetValue(new Point16(i, j), out Damage d) || d.Type != t.TileType || (d.Mask & (1UL << (row * Sub + col))) == 0;
+			return !TryGet(i, j, out Damage d) || d.Type != t.TileType || (d.Mask & (1UL << (row * Sub + col))) == 0;
 		}
 		public static void Clear(int i, int j) => damage.Remove(new Point16(i, j));
 
-		public override void ClearWorld() => damage.Clear();
+		public override void ClearWorld() { damage.Clear(); Penetrations=0; }
 
 		// ---------------------------------------------------------------- carving
 
@@ -132,7 +146,7 @@ namespace TerraCommand.Common.Destruction
 					float r = radius * TerrainRules.Softness(type);
 					float r2 = r * r;
 					var key = new Point16(i, j);
-					damage.TryGetValue(key, out Damage d);
+					TryGet(i, j, out Damage d);
 					if (d.Type != type)
 						d = new Damage { Type = (ushort)type };
 
@@ -201,6 +215,28 @@ namespace TerraCommand.Common.Destruction
 		/// Removes every art pixel whose centre lies inside a world-pixel rectangle (authority only, not synced:
 		/// precise shapes for tests and scripted terrain).
 		/// </summary>
+		public static int Penetrations;
+		public static bool PenetrateCell(Vector2 point) {
+			int i=(int)Math.Floor(point.X/16),j=(int)Math.Floor(point.Y/16);
+			if (Main.netMode == NetmodeID.MultiplayerClient || !TerrainRules.IsCarvable(i,j)) return false;
+			Tile tile=Main.tile[i,j]; var key=new Point16(i,j);
+			GetDamage(key,tile.TileType,out Damage d);
+			int x=Math.Clamp((int)(point.X-i*16)/2,0,7),y=Math.Clamp((int)(point.Y-j*16)/2,0,7);
+			ulong bit=1UL<<(y*8+x);
+			if ((d.Mask&bit)!=0) return false;
+			d.Mask|=bit; Penetrations++; BallisticFractures.Clear(point);
+			Debris.FromPixels(i,j,bit,tile,point,1.8f,settles:true);
+			ulong occupiedCells=0;
+			for(int row=0;row<8;row++) for(int col=0;col<8;col++) {
+				float px=col*2+1,py=row*2+1;
+				bool solid=(!tile.IsHalfBlock || py>=8) && ((int)tile.Slope switch {1=>py>=px,2=>py>=16-px,3=>py<=16-px,4=>py<=px,_=>true});
+				if(solid) occupiedCells|=1UL<<(row*8+col);
+			}
+			if ((occupiedCells&~d.Mask)==0) { damage.Remove(key); Crumble(i,j,drop:false); }
+			else { damage[key]=d; SendMask(i,j,d,deposit:false); }
+			return true;
+		}
+
 		public static void CarveRect(Rectangle r)
 		{
 			if (Main.netMode == NetmodeID.MultiplayerClient)
@@ -337,9 +373,11 @@ namespace TerraCommand.Common.Destruction
 			var key = new Point16(i, j);
 			Tile t = Main.tile[i, j];
 			if (t.HasTile) {
-				if (!damage.TryGetValue(key, out Damage d) || d.Type != t.TileType || (d.Mask & bit) == 0)
+				if (!TryGet(i, j, out Damage d) || d.Type != t.TileType || (d.Mask & bit) == 0)
 					return false;   // whole tile, or that pixel's already there
-				d.Mask &= ~bit;
+				if (OccupiedByBody(new Vector2(col * SubSize + i * 16, row * SubSize + j * 16)))
+					return false;   // refilling a hole must respect bodies, just like placing a new loose tile
+				d.Mask &= ~bit; BallisticFractures.Clear(new Vector2(i*16+col*2+1,j*16+row*2+1));
 				if (d.Mask == 0)
 					damage.Remove(key);
 				else
@@ -365,12 +403,43 @@ namespace TerraCommand.Common.Destruction
 		static bool OccupiedByBody(Vector2 cell)
 		{
 			var r = new Rectangle((int)cell.X, (int)cell.Y, SubSize, SubSize);
-			foreach (Player p in Main.ActivePlayers)
-				if (!p.dead && p.Hitbox.Intersects(r))
-					return true;
-			foreach (NPC n in Main.ActiveNPCs)
-				if (!n.noTileCollide && n.Hitbox.Intersects(r))
-					return true;
+			foreach (Player p in Main.ActivePlayers) {
+				if (p.dead) continue;
+				var actor = p.GetModPlayer<BodyPhysicsPlayer>().Actor;
+				if (actor.Contacts.Initialized ? ActorOccupies(actor, p.Bottom, r) : p.Hitbox.Intersects(r)) return true;
+			}
+			foreach (NPC n in Main.ActiveNPCs) {
+				if (n.ModNPC is CloneUnit unit && unit.Actor.Contacts.Initialized) {
+					if (ActorOccupies(unit.Actor, n.Bottom, r)) return true;
+				}
+				else if(n.ModNPC is ActorLimbWreck limb) {
+					if(Vector2.DistanceSquared(n.Center,cell)>limb.Physics.SweepRadius*limb.Physics.SweepRadius*2)continue;
+					limb.Physics.Motion.Position=n.Center;
+					for(int x=0;x<=SubSize;x++)for(int y=0;y<=SubSize;y++)if(limb.Physics.Contains(cell+new Vector2(x,y)))return true;
+				}
+				else if(n.ModNPC is CraftWreck wreck) {
+					if(Vector2.DistanceSquared(n.Center,cell)>wreck.Physics.SweepRadius*wreck.Physics.SweepRadius*2) continue;
+					wreck.Physics.Motion.Position=n.Center;
+					for(int x=0;x<=SubSize;x++) for(int y=0;y<=SubSize;y++)
+						if(wreck.Physics.Contains(cell+new Vector2(x,y))) return true;
+				}
+				else if (n.ModNPC is CargoShip ship) {
+					ship.Physics.Motion.Position = n.Bottom;
+					for (int x = 0; x <= SubSize; x++) for (int y = 0; y <= SubSize; y++)
+						if (ship.Physics.Contains(cell + new Vector2(x,y))) return true;
+				}
+				else if (!n.noTileCollide && n.Hitbox.Intersects(r)) return true;
+			}
+			return false;
+		}
+
+		static bool ActorOccupies(CCActor actor, Vector2 feet, Rectangle cell) {
+			if (Vector2.DistanceSquared(feet, cell.Center.ToVector2()) > 80 * 80) return false;
+			bool Inside(Vector2 p) => p.X >= cell.Left && p.X < cell.Right && p.Y >= cell.Top && p.Y < cell.Bottom;
+			int count = ContactGeometry.Build(actor, feet, actor.Rot, actor.Contacts.Atoms);
+			for (int i = 0; i < count; i++) if (Inside(actor.Contacts.Atoms[i])) return true;
+			for (int i = 0; i < actor.Contacts.Limbs.Length; i++)
+				if (ActorContacts.LimbIntersects(actor,i,feet + actor.Contacts.Limbs[i].Position - actor.Contacts.Anchor,cell)) return true;
 			return false;
 		}
 
@@ -383,7 +452,7 @@ namespace TerraCommand.Common.Destruction
 				foreach (Point16 k in newTiles)
 					NetMessage.SendTileSquare(-1, k.X, k.Y, 1);
 				foreach (Point16 k in dirty) {
-					damage.TryGetValue(k, out Damage d);
+					TryGet(k.X, k.Y, out Damage d);
 					if (!damage.ContainsKey(k))
 						d = new Damage { Type = Main.tile[k.X, k.Y].TileType, Mask = 0 };
 					SendMask(k.X, k.Y, d, deposit: true);
@@ -395,7 +464,7 @@ namespace TerraCommand.Common.Destruction
 
 		static void GetDamage(Point16 key, int type, out Damage d)
 		{
-			damage.TryGetValue(key, out d);
+			TryGet(key.X, key.Y, out d);
 			if (d.Type != type)
 				d = new Damage { Type = (ushort)type };
 		}
@@ -417,7 +486,7 @@ namespace TerraCommand.Common.Destruction
 			}
 			if (WorldGen.InWorld(i, j) && Main.tile[i, j].HasTile && !Main.dedServ) {
 				WorldGen.KillTile_MakeTileDust(i, j, Main.tile[i, j]);
-				damage.TryGetValue(new Point16(i, j), out Damage old);
+				TryGet(i, j, out Damage old);
 				ulong newly = d.Mask & ~(old.Type == d.Type ? old.Mask : 0UL);
 				Debris.FromPixels(i, j, newly, Main.tile[i, j], new Vector2(i * 16 + 8, j * 16 + 8), 1.8f, settles: false);
 			}

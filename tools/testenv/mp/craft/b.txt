@@ -1,0 +1,18 @@
+goto spawn
+clearinv
+wait 90
+sync start
+sync boarded
+expect shipstate piloted
+expect shipmass >= 3555
+sync flying
+wait 20
+expect shipvx > 0.5
+expect shipmass >= 3555
+expect shipangle > -0.3
+expect shipangle < 0.3
+sync observed
+sync done
+expect shipstate waiting
+expect shipmass >= 3422
+expect alive

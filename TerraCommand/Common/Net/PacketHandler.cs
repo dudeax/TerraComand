@@ -43,6 +43,8 @@ namespace TerraCommand.Common.Net
 		// Brain
 		BrainClaim,        // C->S: a player entered the world (becomes the brain if the team has none)
 		BrainState,        // S->C: a team's brain state (and whether this player is it)
+		PlayerLimbDetached, ActorPartHit, BulletState,
+		CraftPartHit,      // C->S: owner projectile hit, validated before committing a component wound
 	}
 
 	public static class PacketHandler
@@ -58,6 +60,14 @@ namespace TerraCommand.Common.Net
 		{
 			var type = (PacketType)r.ReadByte();
 			switch (type) {
+				case PacketType.BulletState:
+					Physics.KineticBullet.Receive(r); break;
+				case PacketType.PlayerLimbDetached:
+					Physics.LimbSystem.Receive(r,from); break;
+				case PacketType.ActorPartHit:
+					Physics.CraftPartHits.ReceiveActor(r,from); break;
+				case PacketType.CraftPartHit:
+					Physics.CraftPartHits.Receive(r,from); break;
 				case PacketType.CarveRequest:
 				case PacketType.CarveApply:
 					PixelTerrain.ReceiveCarve(r, type, from);

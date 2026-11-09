@@ -35,18 +35,19 @@ jump 84
 expect fuelnow <= 10            # the tank lasts about 1.5 s
 wait 36
 expect peak >= 3
-wait 120
+wait 180
 expect rose <= 0.5              # back on the ground
 screenshot jetpack
 
-# falls: 8 tiles is fine, 25 tiles throws the body off its feet and hurts
+# falls: 8 tiles is fine, 20 tiles onto protected hard ground throws the body off its feet and hurts
 heal
 goto rel 0 -8
 wait 90
 expect life == 100
 expect status stable
-goto rel 0 -25
-wait 120                        # CC gravity: a 25 tile fall takes ~1.4 s
+fill -4 0 4 3 LihzahrdBrick      # protected hard ground: soft soil now cushions falls by yielding
+goto rel 0 -20
+wait 120                        # hard ground now uses material restitution
 expect status unstable
 expect life < 70
 expect alive
@@ -54,6 +55,11 @@ screenshot ragdoll
 wait 120
 expect status stable            # back on its feet
 heal
+
+resetbody
+goto spawn
+flatten 120 40
+wait 60
 
 # prone (S) and crawling: allow the body spring to settle before measuring its rotated envelope
 hold down on

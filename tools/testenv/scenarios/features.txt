@@ -24,6 +24,10 @@ projectile Bullet -80 -60 0 12
 wait 20
 screenshot 02-craters
 
+goto spawn
+flatten 40 14                    # isolate cargo/economy checks from the excavated landing zone
+wait 30
+
 # ---- a cargo ship: called down empty, loaded by throwing things into it, sent back up to the stockpile
 stock StoneBlock 40
 stock GoldCoin 5                    # calling ships costs money

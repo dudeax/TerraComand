@@ -274,6 +274,10 @@ namespace TerraCommand.Common.Actors
 		{
 			if (it.IsAir || it.IsACoin)
 				return 0f;
+			if (it.ModItem is Content.Items.BodyItem body) {
+				float weapon = body.BuiltInWeapon == ItemID.None ? 0 : ItemMass(Terraria.ID.ContentSamples.ItemsByType[body.BuiltInWeapon]);
+				return (ActorStats.Get(body.Kind).Mass + weapon) * it.stack;
+			}
 			if (it.ModItem is Combat.CCFirearm firearm && firearm.Spec.Mass > 0f)
 				return firearm.Spec.Mass * it.stack;
 			if (it.ammo != AmmoID.None)

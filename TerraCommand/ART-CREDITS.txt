@@ -5,10 +5,10 @@ Reference commit: cca55f154ba49a17436cf91d91e1302fe45395db
 Upstream: https://github.com/cortex-command-community/Cortex-Command-Community-Project
 
 Distributed under the upstream repository GNU AGPL-3.0 license; see LICENSE.
-Source files, adaptations and the complete 163-asset provenance manifest:
-https://github.com/dudeax/TerraComand/tree/v0.8.0/docs
+Source files, adaptations and the complete 171-asset provenance manifest:
+https://github.com/dudeax/TerraComand/tree/main/docs
 
 The import converts palette magenta to transparency. Some sprites are fitted
-to the existing mod proportions; craft and helmet layers are composited.
+to the existing mod proportions; helmet layers are composited; craft retain native dimensions and pivots.
 Tools/import instructions and corresponding mod source:
-https://github.com/dudeax/TerraComand/tree/v0.8.0
+https://github.com/dudeax/TerraComand/tree/main

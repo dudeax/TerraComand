@@ -1,0 +1,15 @@
+nospawn
+clearnpcs
+clearunits
+goto spawn
+flatten 100 30
+clearinv
+wait 60
+spawnenemybrain 150 0
+wait 30
+expect limb enemy 2 true
+shootlimb 2 8
+wait 10
+expect limb enemy 2 false
+expect limbwrecks == 1
+expect alive
