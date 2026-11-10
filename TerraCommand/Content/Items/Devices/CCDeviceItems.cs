@@ -276,6 +276,8 @@ namespace TerraCommand.Content.Items.Devices
 		{
 			player.Heal(60);
 			player.GetModPlayer<DamagePlayer>().Wounds.Clear();
+			var actor=player.GetModPlayer<global::TerraCommand.Common.Physics.BodyPhysicsPlayer>().Actor;
+            actor.Wounds.Clear(); actor.Limbs.TreatWounds();
 			return true;
 		}
 

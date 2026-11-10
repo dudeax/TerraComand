@@ -28,6 +28,13 @@ sealed class BulletSlab : IBulletMatter {
     public bool Sample(Vector2 p,out float resistance) { resistance=Protected?float.PositiveInfinity:Work;return p.X>=2 && p.X<4 && Work>0; }
     public void Spend(Vector2 p,float work) { Work=Math.Max(0,Work-work);Spends++; }
 }
+sealed class MaterialPoint : IRigidBodyShape, IRigidBodyMaterials {
+    public ContactSurface Surface = new(.6f,.6f);
+    public Vector2 CentreOffset(float rotation) => Vector2.Zero;
+    public int Build(Vector2 anchor,float rotation,Vector2[] atoms) { atoms[0]=anchor;return 1; }
+    public float SweepRadius => 1;
+    public ContactSurface MaterialForAtom(int index) => Surface;
+}
 static class Program
 {
     static int checks;
@@ -46,8 +53,8 @@ static class Program
         var falling = new CCActor { Grounded = false };
         float distance = 0;
         for (int i = 0; i < 60; i++) { falling.Physics(default); distance += falling.Vel.Y; }
-        Near(falling.Vel.Y, 20f / 3f, "one-second freefall velocity");
-        Near(distance, 20f * 20f / 3600f * (60 * 61 / 2f), "one-second freefall displacement", 0.001f);
+        Near(falling.Vel.Y, CC.Speed(20), "one-second freefall velocity");
+        Near(distance, CC.Accel(20) * (60 * 61 / 2f), "one-second freefall displacement", 0.001f);
 
         // Source: CoalitionLight.ini overrides Heavy jetpack to 12000 PPM. Three emissions share the rate.
         // Mean speeds: Heavy blast 18, inherited second blast 17.5, inherited smoke 15; all masses 1.25kg.
@@ -60,11 +67,11 @@ static class Program
         var press = new ActorInput { Jump = true, JumpStart = true, Aim = new Vector2(100, 0) };
         jet.Control(press);
         Near(jet.Fuel, 80, "burst consumes nine particles plus one thrust tick");
-        Near(jet.Vel.Length(), burstImpulse / 133f / 3f + force * 1.3f * 2 / 133f / 180f,
+        Near(jet.Vel.Length(), (burstImpulse / 133f / 3f + force * 1.3f * 2 / 133f / 180f) * CC.WorldScale,
             "burst scales continuous emissions as well as extra particles");
         Vector2 before = jet.Vel;
         jet.Control(press);
-        Near((jet.Vel - before).Length(), force * (0.7f + 0.6f * 80f / 90f) / 133f / 180f,
+        Near((jet.Vel - before).Length(), force * (0.7f + 0.6f * 80f / 90f) / 133f / 180f * CC.WorldScale,
             "repeated trigger cannot bypass 160ms burst spacing");
         Near(jet.Fuel, 74.5f, "rejected burst uses half burst fuel plus continuous fuel");
         Check(jet.BurstCooldown == 9, "rejected burst does not restart cooldown");
@@ -143,9 +150,9 @@ static class Program
         Near(resumed.Legs[0].Progress, freeCrawler.Legs[0].Progress, "body handoff keeps foot phase", 1f / 255f + 0.00001f);
         Near(resumed.Hands[1].Progress, freeCrawler.Hands[1].Progress, "body handoff keeps crawl-arm phase", 1f / 255f + 0.00001f);
         var lying = new CCActor { Prone = ProneState.LayingProne, Rot = MathF.PI / 2 };
-        Check(lying.WantedWidth() == 42 && lying.WantedHeight() == 20, "prone collision spans the body length");
+        Check(lying.WantedWidth() == CC.StandHeight && lying.WantedHeight() == CC.LyingHeight, "prone collision spans the body length");
         lying.Rot = 0;
-        Check(lying.WantedWidth() == 14 && lying.WantedHeight() == 42, "upright collision dimensions");
+        Check(lying.WantedWidth() == CC.BodyWidth && lying.WantedHeight() == CC.StandHeight, "upright collision dimensions");
         // Terrain-driven contacts exercise the production solver without Terraria's hitbox collision.
         Near(ActorContacts.EffectiveMass(10, 100, new Vector2(0, 2), Vector2.UnitX), 1f / 0.14f, "off-centre contact effective mass");
         Vector2 impulseVelocity = Vector2.Zero; float impulseOmega = 0;
@@ -254,14 +261,14 @@ static class Program
         Console.WriteLine($"CONTACT recover: status={recovering.Status} v={recovering.Vel} angle={recovering.Rot} omega={recovering.AngVel}");
         Check(recovering.Status == ActorStatus.Stable, "a modest shove recovers on a flat surface");
         var fallBody = new CCActor { ContactPhysics = true };
-        Vector2 fallFeet = new(0, -400);
+        Vector2 fallFeet = new(0, -400 * CC.WorldScale);
         float fallDamage = 0;
         for (int i = 0; i < 150; i++) {
             fallBody.Control(default); fallBody.Physics(default);
             fallFeet = ActorContacts.Step(fallBody, fallFeet, default, new TestTerrain());
             fallDamage += fallBody.ImpactDamage(fallBody.Contacts.TravelImpulse.Length() / fallBody.Mass);
         }
-        Check(fallDamage > 0 && fallDamage < 1, "an unladen upright body takes survivable contact damage in the integrated 400-pixel fall fixture");
+        Check(fallDamage > 0 && fallDamage < 1, "an unladen upright body takes survivable contact damage in the integrated 20-metre fall fixture");
         // Native craft profiles and trajectories, independent of Terraria's entity collision.
         Near(CraftProfile.Get(ShipStyle.Rocket).EmptyMass,948,"rocket resolved mass");
         Near(CraftProfile.Get(ShipStyle.Rocket).MainForce,40500,"rocket resolved continuous force");
@@ -274,13 +281,13 @@ static class Program
         var sky = new TestTerrain { Floor = 100000 };
         var crate = new ShipPhysics(ShipStyle.Crate);
         for (int i=0;i<60;i++) crate.Step(default,0,sky);
-        Near(crate.Motion.Velocity.Y,20f/3,"crate uses the actor gravity",0.001f);
-        Near(crate.Motion.Position.Y,20*20/3600f*(60*61/2f),"crate freefall distance",0.001f);
+        Near(crate.Motion.Velocity.Y,CC.Speed(20),"crate uses the actor gravity",0.001f);
+        Near(crate.Motion.Position.Y,CC.Accel(20)*(60*61/2f),"crate freefall distance",0.001f);
         var rocket = new ShipPhysics(ShipStyle.Rocket);
         var loadedRocket = new ShipPhysics(ShipStyle.Rocket);
         rocket.Step(new(0,0,true,false),0,sky);
         loadedRocket.Step(new(0,0,true,false),600,sky);
-        Near(rocket.Motion.Velocity.Y,CC.Gravity-(4320f/948/3+40500f*1.5f/948/180),"rocket activation burst and thrust");
+        Near(rocket.Motion.Velocity.Y,CC.Gravity-(4320f/948/3+40500f*1.5f/948/180)*CC.WorldScale,"rocket activation burst and thrust");
         Check(loadedRocket.Motion.Velocity.Y > rocket.Motion.Velocity.Y,"cargo reduces rocket acceleration");
         float vx=rocket.Motion.Velocity.X;
         rocket.Motion.Velocity.X=3;
@@ -310,7 +317,7 @@ static class Program
         Check(loadedDrop.Motion.AngularVelocity<0,"off-centre craft impulse produces angular momentum");
         var hullWall = new TestTerrain { Floor=100000,Wall=0,WallThickness=1 };
         var fastCraft=new ShipPhysics(ShipStyle.Dropship);
-        fastCraft.Motion.Position=new(-130,0); fastCraft.Motion.Velocity=new(100,0);
+        fastCraft.Motion.Position=new(-130*CC.WorldScale,0); fastCraft.Motion.Velocity=new(100*CC.WorldScale,0);
         fastCraft.Step(default,0,hullWall);
         var craftAtoms=new Vector2[4096];
         int craftCount=fastCraft.Build(fastCraft.Motion.Position,fastCraft.Motion.Rotation,craftAtoms);
@@ -337,7 +344,7 @@ static class Program
         Check(gloveHit!=Vector2.Zero,"glove atoms contact a wall before the wrist");
         Near(PhysicalMaterial.Earth.Integrity,70,"source earth integrity");
         Near(PhysicalMaterial.Stone.Integrity,140,"source stone integrity");
-        Check(!MaterialSolver.Penetration(279,70,4,out _),"2px earth cell resists subthreshold momentum");
+        Check(!MaterialSolver.Penetration(279,70,4,out _),"four-source-pixel earth sample resists subthreshold momentum");
         Check(MaterialSolver.Penetration(560,70,4,out float loss),"earth yields above integrity times cell area");
         Near(loss,0.5f,"penetration removes integrity divided by incoming momentum");
         Check(!MaterialSolver.Penetration(559,140,4,out _),"stone resists a blow that penetrates earth");
@@ -351,9 +358,9 @@ static class Program
         for(int i=0;i<8;i++) woundedParts.Wound(CraftPart.LeftGear);
         Check(woundedParts.Wound(CraftPart.LeftGear),"gear reaches the source nine-wound limit");
         var parts=new CraftAttachments();
-        parts.Accumulate(CraftPart.LeftEngine,new Vector2(1400,0));
+        parts.Accumulate(CraftPart.LeftEngine,new Vector2(1400*CC.WorldScale,0));
         Check(parts.Overloaded(CraftPart.LeftEngine),"engine joint fails above source 4000 Ns threshold");
-        parts.Begin(); parts.Accumulate(CraftPart.LeftEngine,new Vector2(1000,0));
+        parts.Begin(); parts.Accumulate(CraftPart.LeftEngine,new Vector2(1000*CC.WorldScale,0));
         Check(!parts.Overloaded(CraftPart.LeftEngine),"joint load resets each travel frame");
         var damagedDrop=new ShipPhysics(ShipStyle.Dropship);
         damagedDrop.Motion.Velocity=new(2,-1); damagedDrop.Motion.AngularVelocity=1;
@@ -393,24 +400,24 @@ static class Program
         Check(recoveringRocket.Motion.Velocity.Y>5,"AI steering cannot sustain lift by alternating side bursts");
         var softGround=new YieldTerrain();
         var fallingEngine=new CraftWreckPhysics(CraftPart.LeftEngine);
-        fallingEngine.Motion.Position=new(0,-40); fallingEngine.Motion.Velocity=new(0,20);
+        fallingEngine.Motion.Position=new(0,-40*CC.WorldScale); fallingEngine.Motion.Velocity=new(0,20*CC.WorldScale);
         fallingEngine.Step(softGround);
         Check(softGround.Removed>0,"a fast detached engine excavates yielding terrain");
-        Check(fallingEngine.Motion.Velocity.Y<20,"excavation consumes momentum rather than carving for free");
+        Check(fallingEngine.Motion.Velocity.Y<20*CC.WorldScale,"excavation consumes momentum rather than carving for free");
         var slowEngine=new CraftWreckPhysics(CraftPart.LeftEngine);
-        slowEngine.Motion.Position=new(0,-27); slowEngine.Motion.Velocity=new(0,.2f);
+        slowEngine.Motion.Position=new(0,-27*CC.WorldScale); slowEngine.Motion.Velocity=new(0,.2f*CC.WorldScale);
         var firmGround=new YieldTerrain(); slowEngine.Step(firmGround);
         Check(firmGround.Removed==0,"ordinary resting contact does not erode the ground");
         var approachingDrop=new ShipPhysics(ShipStyle.Dropship);
-        approachingDrop.Motion.Position=new(-700,-900);
+        approachingDrop.Motion.Position=new(-700*CC.WorldScale,-900*CC.WorldScale);
         var landingTerrain=new TestTerrain();
         for(int i=0;i<900;i++) {
             float wantedVx=Math.Clamp(-approachingDrop.Motion.Position.X*.025f,-3,3);
             float steer=Math.Clamp((wantedVx-approachingDrop.Motion.Velocity.X)*.7f,-1,1);
-            approachingDrop.Step(new(steer,approachingDrop.AutomaticDropshipVertical(-approachingDrop.Motion.Position.Y-8),true,false),0,landingTerrain);
+            approachingDrop.Step(new(steer,approachingDrop.AutomaticDropshipVertical(-approachingDrop.Motion.Position.Y-8*CC.WorldScale),true,false),0,landingTerrain);
         }
         Check(approachingDrop.Attachments.Has(CraftPart.LeftHatch) && approachingDrop.Attachments.Has(CraftPart.RightHatch),"delivery approach preserves fragile hatch joints");
-        Check(Math.Abs(approachingDrop.Motion.Position.Y+8)<7,"dropship settles within the unloading hover window");
+        Check(Math.Abs(approachingDrop.Motion.Position.Y+8*CC.WorldScale)<7*CC.WorldScale,"dropship settles within the unloading hover window");
         var supportLimbs=new LimbState();
         Check(supportLimbs.SupportsWeapon(ActorKind.Soldier,false),"intact arms support a two-handed weapon");
         supportLimbs.Remove(2);
@@ -427,7 +434,7 @@ static class Program
         var restoredBody=new CCActor(); ActorMotion.Load(anatomySave).Apply(restoredBody,ActorKind.Soldier);
         Check(!restoredBody.Limbs.Has(0) && restoredBody.Limbs.Wounds[2]==1,"body handoff and save retain anatomy and wounds");
         Check(restoredBody.BodyId==anatomy.BodyId,"body identity follows saved anatomy");
-        var legacyBody=ActorMotion.Load(anatomySave[..^13]);
+        var legacyBody=ActorMotion.Load(anatomySave[..^(13+6+1)]);
         Check(legacyBody.Limbs.Missing==0 && legacyBody.BodyId==0,"older body saves load intact without reading past payload");
         anatomy.Limbs.Remove(1); anatomy.Limbs.Remove(2); anatomy.Limbs.Remove(3);
         anatomy.Control(new ActorInput {Aim=Vector2.UnitX});
@@ -448,14 +455,108 @@ static class Program
             Near(launch.Length(),24,"ballistic aim preserves muzzle speed",.001f);
         }
         var slab=new BulletSlab();
-        var round=BulletTravel.Step(Vector2.Zero,new(100,0),RoundProfile.Get(0),1,slab);
+        var round=BulletTravel.Step(Vector2.Zero,new(100*CC.WorldScale,0),RoundProfile.Get(0),1,slab);
         Check(!round.Stopped && slab.Work==0,"fast bullet penetrates a thin barrier without tunnelling");
-        Near(round.Velocity.X,100-560/9.9f,"penetration spends momentum according to source sharpness",.001f);
+        Near(round.Velocity.X,(100-560/9.9f)*CC.WorldScale,"penetration spends momentum according to source sharpness",.001f);
         var weakSlab=new BulletSlab {Work=280};
-        for(int i=0;i<2;i++)Check(BulletTravel.Step(Vector2.Zero,new(12,0),RoundProfile.Get(0),1,weakSlab).Stopped,"weak bullet stops while weakening material");
-        Check(!BulletTravel.Step(Vector2.Zero,new(12,0),RoundProfile.Get(0),1,weakSlab).Stopped,"repeated impacts eventually break the cell");
+        for(int i=0;i<2;i++)Check(BulletTravel.Step(Vector2.Zero,new(12*CC.WorldScale,0),RoundProfile.Get(0),1,weakSlab).Stopped,"weak bullet stops while weakening material");
+        Check(!BulletTravel.Step(Vector2.Zero,new(12*CC.WorldScale,0),RoundProfile.Get(0),1,weakSlab).Stopped,"repeated impacts eventually break the cell");
         var protectedSlab=new BulletSlab {Protected=true};
         Check(BulletTravel.Step(Vector2.Zero,new(1000,0),RoundProfile.Get(0),1,protectedSlab).Stopped && protectedSlab.Spends==0,"protected terrain stops bullets without taking work");
+        var entryBleed = new ActorWounds();
+        entryBleed.Add(2);
+        int bleedingDamage = 0;
+        for (int i=0;i<239;i++) bleedingDamage += entryBleed.Tick();
+        Check(bleedingDamage==0, "fractional bleeding does not round every emission up to one health");
+        Near(entryBleed.Remainder,.1f,"entry wound resolves two inherited 30/min emission streams");
+        var bleedingSave = new CCActor();
+        bleedingSave.Wounds.CopyFrom(entryBleed);
+        var savedBleeding = ActorMotion.Capture(bleedingSave,Vector2.Zero).Save();
+        var bleedingCopy = new CCActor(); ActorMotion.Load(savedBleeding).Apply(bleedingCopy,ActorKind.Soldier);
+        Near(bleedingCopy.Wounds.Remainder,.1f,"fractional blood loss survives a body save and control handoff");
+        Check(bleedingCopy.Wounds.Count==1,"body handoff retains active wound emitters");
+        for(int i=0;i<3000;i++) CheckBleedStep();
+        void CheckBleedStep() {
+            if(bleedingSave.Wounds.Tick()!=bleedingCopy.Wounds.Tick()) throw new Exception("bleeding clock changed during handoff");
+        }
+        Check(!bleedingCopy.Wounds.Bleeding,"entry emitter stops only after exceeding its source count limit");
+        var sourceEntry = new ActorWounds(); sourceEntry.Add(2, WoundKind.Entry,true);
+        int totalEntry=sourceEntry.Tick();
+        Check(totalEntry==3,"source entry burst deals three damage once");
+        for(int i=0;i<3000;i++)totalEntry+=sourceEntry.Tick();
+        Near(totalEntry+sourceEntry.Remainder,4.8f,"entry burst counts six emissions and bleeds through 42 total emissions");
+        var sourceExit = new ActorWounds(); sourceExit.Add(4,WoundKind.Exit,true);
+        int totalExit=0;for(int i=0;i<3000;i++)totalExit+=sourceExit.Tick();
+        Near(totalExit+sourceExit.Remainder,4.6f,"exit burst rounds nine particles up across two streams and ends at 82 emissions");
+        var sourceStump = new ActorWounds(); sourceStump.Add(2); sourceStump.Detach(2,true);
+        Check(sourceStump.Count==1 && sourceStump.Tick()==30,"separation removes limb emitters and creates the source 30-damage parent wound");
+        int stumpDamage=30;for(int i=0;i<12000;i++)stumpDamage+=sourceStump.Tick();
+        Near(stumpDamage+sourceStump.Remainder,124.4f,"stump resolves inactive blood plus 60/120 per-minute streams through its emission limit",.001f);
+        sourceStump.Clear();
+        Check(sourceStump.Count==0 && !sourceStump.Bleeding && sourceStump.Tick()==0,"medical treatment stops bleeding and clears fractional damage");
+        var mechanicalWounds = new ActorWounds();mechanicalWounds.Add(1);mechanicalWounds.Detach(1,false);
+        Check(mechanicalWounds.Count==0,"mechanical separation does not create a flesh stump");
+        using(var bytes=new MemoryStream(savedBleeding)) {
+            var state=ActorMotion.Read(new BinaryReader(bytes));
+            Check(bytes.Position==bytes.Length && state.Wounds.Count==1,"network movement snapshot consumes exactly its versioned wound payload");
+        }
+        var oldMotion=ActorMotion.Load(savedBleeding[..^(6+11+1)]);
+        Check(oldMotion.Wounds.Count==0 && oldMotion.BodyId==bleedingSave.BodyId,"pre-wound body snapshots load without stealing adjacent fields");
+        var armJoint = LivingJoint.For(ActorKind.Soldier,2);
+        Check(!armJoint.Transfer(new Vector2(640,0)).Detached,"joint holds at exactly its source strength after stiffness");
+        var jointFailure=armJoint.Transfer(new Vector2(641,0));
+        Check(jointFailure.Detached && !jointFailure.Gibbed,"living arm joint fails before its gib threshold");
+        Near(jointFailure.Transmitted.X,320,"broken joint caps impulse transferred to the parent");
+        Check(armJoint.Transfer(new Vector2(961,0)).Gibbed,"arm source gib limit applies after joint stiffness");
+        var loadedJoint = new LimbState();
+        Check(!loadedJoint.Impulse(ActorKind.Soldier,2,new(400,0),10).Detached,"subthreshold first impulse retains arm");
+        Check(loadedJoint.Impulse(ActorKind.Soldier,2,new(400,0),10).Detached,"multiple impulses sum within a simulation tick");
+        Check(!loadedJoint.Impulse(ActorKind.Soldier,2,new(400,0),11).Detached,"joint load resets on the next simulation tick");
+        var balancedJoint = new LimbState();
+        balancedJoint.Impulse(ActorKind.Soldier,2,new(400,0),10);
+        Check(!balancedJoint.Impulse(ActorKind.Soldier,2,new(-400,0),10).Detached,"opposite joint impulses cancel as vectors rather than accumulating magnitudes");
+        Check(!LivingJoint.For(ActorKind.Heavy,2).Transfer(new(700,0)).Detached && armJoint.Transfer(new(700,0)).Detached,"heavy arms use their own source joint strength");
+        var heavyArm = new LimbState();
+        bool heavySevered=false;for(int i=0;i<9;i++)heavySevered|=heavyArm.Wound(2,ActorKind.Heavy);
+        Check(!heavySevered && heavyArm.Wound(2,ActorKind.Heavy),"heavy arm retains source ten-wound limit");
+        Check(!loadedJoint.Impulse(ActorKind.Soldier,2,new(float.NaN,0),11).Detached,"invalid impulse cannot poison living joint state");
+        var sourceStrongEntry=new ActorWounds();sourceStrongEntry.Add(5,WoundKind.StrongEntry,true);
+        int strongDamage=0;for(int i=0;i<4000;i++)strongDamage+=sourceStrongEntry.Tick();
+        Near(strongDamage+sourceStrongEntry.Remainder,4.3f,"heavy head uses strong-entry damage and its 50-emission limit");
+        var fleshSurface=ActorMaterials.For(ActorKind.Soldier,4);
+        Near(fleshSurface.Friction,.6f,"Kevlared Flesh source friction");
+        Near(fleshSurface.Restitution,.6f,"Kevlared Flesh source bounce");
+        Near(ActorMaterials.For(ActorKind.Soldier,6).Restitution,.75f,"jetpack retains Military Stuff material independently of the torso");
+        Near(ActorMaterials.For(ActorKind.Brain,4).Friction,.4f,"brain robot retains Civilian Stuff friction");
+        var taggedActor=new CCActor();var taggedPoints=new Vector2[4096];var regions=new byte[4096];
+        int taggedCount=ContactGeometry.Build(taggedActor,Vector2.Zero,0,taggedPoints,regions:regions);
+        bool torsoTagged=false,headTagged=false,packTagged=false;
+        for(int i=0;i<taggedCount;i++) { torsoTagged|=regions[i]==4;headTagged|=regions[i]==5;packTagged|=regions[i]==6; }
+        Check(torsoTagged && headTagged && packTagged,"compound actor atoms retain separate torso, head and jetpack material regions");
+        var materialPoint=new MaterialPoint();
+        var materialMotion=new RigidBodyMotion { Position=new(0,-1),Velocity=new(0,2),Mass=10,Inertia=10,Restitution=0,Friction=0 };
+        RigidBodyTravel.Step(materialMotion,materialPoint,new TestTerrain());
+        Near(materialMotion.Velocity.Y,-.06f,"per-atom source bounce multiplies terrain bounce instead of using the assembly default",.0001f);
+        Check(new LimbWreckPhysics(ActorKind.Heavy,2,0).Motion.Friction==.6f,"detached heavy flesh uses Armoured Flesh rather than metal friction");
+        var treatedLimbs = new LimbState();treatedLimbs.Remove(0);treatedLimbs.Wound(2);
+        treatedLimbs.TreatWounds();
+        Check(!treatedLimbs.Has(0) && treatedLimbs.Wounds[2]==0,"treatment clears limb wound stress without regrowing a missing limb");
+        Check(CC.WorldScale==2 && CC.PPM==40,"one native CC pixel spans one Terraria art pixel");
+        Near(CC.TerrainCellArea,1,"2px terrain cell is one source pixel at the native 2x scale");
+        Check(!MaterialSolver.Penetration(69.9f,70,CC.TerrainCellArea,out _) && MaterialSolver.Penetration(70,70,CC.TerrainCellArea,out _),"terrain cell resistance follows the new source pixel area");
+        var legacyScaledMotion = new ActorMotion {Scale=1,Velocity=new(3,4),ContactState=new ContactSnapshot(true,new(1000,2000),new(1002,2004),new(1000,2000),new(1000,2000),new(1000,2000),new(1,2),Vector2.Zero,Vector2.Zero,Vector2.Zero)};
+        var oldScaledBytes=legacyScaledMotion.Save()[..^1];
+        var migratedScale=new CCActor();ActorMotion.Load(oldScaledBytes).Apply(migratedScale,ActorKind.Soldier);
+        Check(migratedScale.Vel==new Vector2(6,8),"pre-scale saves retain physical velocity in metres per second");
+        Check(migratedScale.Contacts.Anchor==new Vector2(1000,2000) && migratedScale.Contacts.Limbs[0].Position==new Vector2(1004,2008),"save migration scales limb offsets around the unchanged world anchor");
+        Check(migratedScale.Contacts.Limbs[0].Velocity==new Vector2(2,4),"legacy saved contact velocity migrates with the body");
+        var sameScale=new CCActor();ActorMotion.Capture(migratedScale,migratedScale.Vel).Apply(sameScale,ActorKind.Soldier);
+        Check(sameScale.Vel==migratedScale.Vel && sameScale.Contacts.Limbs[0].Position==migratedScale.Contacts.Limbs[0].Position,"current-scale body swaps never apply the scale twice");
+        var metricFall=new CCActor {Status=ActorStatus.Unstable};metricFall.ImpactDamage(CC.Speed(30));
+        Near(metricFall.LastImpulse,3990,"physical impact momentum stays in N*s when world pixels double");
+        var nativeGear=new ShipPhysics(ShipStyle.Rocket);
+        Check(nativeGear.GearFrame==3,"native rocket leg frame follows ankle extension rather than the controller fraction");
+        Check(Math.Abs(nativeGear.GearAngle(1)-MathHelper.PiOver2)<.1f && Math.Abs(nativeGear.GearAngle(-1)-3*MathHelper.PiOver2)<.1f,"native rocket leg sprites rotate down toward their physical support points");
         Console.WriteLine($"{checks} reference physics checks passed");
     }
 }

@@ -7,6 +7,8 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="Program.cs" />
+    <Compile Include="../../TerraCommand/Common/Actors/LivingJoint.cs" />
+    <Compile Include="../../TerraCommand/Common/Actors/ActorWounds.cs" />
     <Compile Include="../../TerraCommand/Common/Physics/BulletTravel.cs" />
     <Compile Include="../../TerraCommand/Common/Actors/DetachedLimbMasks.Generated.cs" />
     <Compile Include="../../TerraCommand/Common/Physics/LimbWreckPhysics.cs" />

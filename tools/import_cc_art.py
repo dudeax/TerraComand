@@ -46,14 +46,13 @@ for kind,folder,torso,head,arm,leg,count in [
     ('Heavy',heavy,'TorsoB','HeadB','ArmFGB','LegFGB',5),
     ('Brain',brain,'Torso','MobileBrain000','ArmFG','LegFG',6),
 ]:
-    old_size=Image.open(OUT/f'Actors/{kind}/Torso.png').size
-    port(folder+torso+'.png',f'Actors/{kind}/Torso.png',old_size)
+    port(folder+torso+'.png',f'Actors/{kind}/Torso.png')
     if kind=='Soldier':
         face=load(folder+head+'.png'); helmet=load(folder+'HelmetA000.png')
         image=Image.new('RGBA',(14,12));image.alpha_composite(face,(1,0));image.alpha_composite(helmet,(0,0))
         save(image,f'Actors/{kind}/Head.png',[folder+head+'.png',folder+'HelmetA000.png'],'palette transparency; helmet composite')
     else:
-        port(folder+head+'.png',f'Actors/{kind}/Head.png',(14,14) if kind=='Brain' else (14,12))
+        port(folder+head+'.png',f'Actors/{kind}/Head.png')
     foot = brain+'FootFG000.png' if kind=='Brain' else light+'FootFGA000.png'
     port(foot,f'Actors/{kind}/Foot.png')
     port(brain+'HandFG.png' if kind=='Brain' else light+'HandFGA.png',f'Actors/{kind}/Hand.png')
@@ -71,16 +70,22 @@ for kind,folder,torso,head,arm,leg,count in [
     icon=folder+'Icon.png' if kind!='Brain' else brain+'MobileBrain000.png'
     if kind!='Brain':port(icon,f'Items/{dict(Soldier="CloneBody",Light="LightBody",Heavy="HeavyBody")[kind]}.png',(22,30))
 
-port('Base.rte/Actors/Shared/Jetpack.png','Actors/Jetpack.png',(10,18))
-port(drone+'MountMobile000.png','Actors/Crab/Body.png',(22,10))
+port('Base.rte/Actors/Shared/Jetpack.png','Actors/Jetpack.png')
+port(drone+'MountMobile000.png','Actors/Crab/Body.png')
 for frame in range(5):
     for side,prefix in [('Front','LegFGA'),('Back','LegBGA')]:
         port(drone+prefix+f'{frame:03}.png',f'Actors/Crab/Leg{side}{frame}.png')
 for name in ['Thigh','Shin']:
     port(drone+'LegFGA004.png',f'Actors/Crab/{name}.png',(4,8))
 port(drone+'Icon.png','Items/CrabDrone.png',(22,30))
-port('Base.rte/Actors/Turrets/SmallTurret/MountStaticA000.png','Actors/Turret/Base.png',(18,10))
-port('Base.rte/Actors/Turrets/SmallTurret/TurretSmallA.png','Actors/Turret/Head.png',(12,8))
+blast='Coalition.rte/Actors/Mecha/BlastRunner/'
+port(blast+'BlastRunnerBody000.png','Actors/BlastRunner/Body.png')
+for frame in range(3):
+    for side,prefix in [('Front','LegFGSmallA'),('Back','LegBGSmallA')]:
+        port(blast+prefix+f'{frame:03}.png',f'Actors/BlastRunner/Leg{side}{frame}.png')
+port(blast+'BlastRunnerBody000.png','Items/BlastRunner.png',(22,30))
+port('Base.rte/Actors/Turrets/SmallTurret/MountStaticA000.png','Actors/Turret/Base.png')
+port('Base.rte/Actors/Turrets/SmallTurret/TurretSmallA.png','Actors/Turret/Head.png')
 port('Base.rte/Actors/Turrets/SmallTurret/TurretSmallA.png','Items/TurretKit.png',(22,30))
 
 weapons={
@@ -102,6 +107,8 @@ weapons={
  'RiotShield':'Coalition.rte/Devices/Shields/CombatShield/CombatShield000.png',
  'Medikit':'Base.rte/Devices/Special/Medikit/MedikitA.png',
 }
+for name in ('AutoPistol','HeavyPistol','Shotgun','AutoShotgun'):
+    weapons[name]=f'Coalition.rte/Devices/Weapons/{name}/{name}000.png'
 for name,src in weapons.items():port(src,f'Items/Devices/{name}.png')
 port('Base.rte/Devices/Tools/Constructor/ConstructorA000.png','Items/OrbitalConstructor.png')
 # Craft retain native dimensions and pivots for physical lever arms.

@@ -7,6 +7,7 @@ using Terraria;
 using Terraria.Audio;
 using Terraria.ID;
 using Terraria.ModLoader;
+using TerraCommand.Common;
 using TerraCommand.Common.Actors;
 using TerraCommand.Common.Combat;
 using TerraCommand.Common.Destruction;
@@ -113,6 +114,9 @@ namespace TerraCommand.Content.NPCs
 
 		public override void AI()
 		{
+            // Terraria gives every friendly NPC one health per 181 ticks outside lifeRegen.
+            // Keep reserve bodies subject to the same natural-healing setting as controlled ones.
+            if(!TerraCommandConfig.Instance.NaturalLifeRegen) NPC.friendlyRegen=0;
 			Loadout.Life = NPC.life;
 			if (NPC.velocity.Y == 0f)
 				walkDist += Math.Abs(NPC.velocity.X);
@@ -122,7 +126,9 @@ namespace TerraCommand.Content.NPCs
 				return;
 			} // posture arrives from the server (ReceiveExtraAI); vanilla moves the body by the synced velocity
 
-			UpdateBodyStats();
+			global::TerraCommand.Common.Combat.ActorInjurySystem.Tick(this);
+            if(!NPC.active || NPC.life<=0)return;
+            UpdateBodyStats();
 			Actor.ContactPhysics = true;
 			ActorInput input = Think();
 			Actor.Vel = NPC.velocity;
@@ -360,7 +366,7 @@ namespace TerraCommand.Content.NPCs
 			Vector2 ore = PixelTerrain.NearestSolidPixel(digTile.X, digTile.Y, shoulder);
 			Item dig = Loadout.Held;
 			var digger = dig.ModItem as CCDigger;
-			float reach = digger != null ? 10f + digger.Spec.FireVelocity * 10f : 16 * 4;
+			float reach = digger != null ? (10f + digger.Spec.FireVelocity * 10f) * CC.WorldScale : 16 * 4 * CC.WorldScale;
 			if (Vector2.Distance(ore, shoulder) > reach - 8f) {
 				// out of reach: sink a body-wide shaft under its feet towards the ore, and drop into it (CC diggers)
 				ore = NPC.Bottom + new Vector2(Math.Clamp(ore.X - NPC.Center.X, -3f, 3f) + shaftSide * 5f, 6f);
@@ -503,7 +509,7 @@ namespace TerraCommand.Content.NPCs
             int type=cc?.Spec.Projectile??(gun.useAmmo==AmmoID.Bullet?ProjectileID.Bullet:gun.shoot);
             Vector2 displacement=target.Center-origin;
             if(Common.TerraCommandConfig.Instance.ProjectilesChipTerrain && ContentSamples.ProjectilesByType.TryGetValue(type,out var sample) && Common.Physics.KineticBullet.Eligible(sample)) {
-                float speed=cc?.Spec.FireVelocity??Math.Max(gun.shootSpeed+5f,6f)*(sample.extraUpdates+1);
+                float speed=cc!=null?cc.Spec.FireVelocity*CC.WorldScale:Math.Max(gun.shootSpeed+5f,6f)*(sample.extraUpdates+1);
                 return Common.Physics.BulletTravel.AimVelocity(displacement,speed,sample.extraUpdates+1);
             }
             return displacement;
@@ -556,7 +562,7 @@ namespace TerraCommand.Content.NPCs
 				shakeDeg *= Devices.IsFirearm(it)?Devices.Stats(it).NoSupportFactor:2f;
 			Vector2 dir = aimAngle.ToRotationVector2();
 			float dev = Devices.Gaussian() * MathHelper.ToRadians(shakeDeg / 2f);
-			Vector2 muzzle = RigRenderer.GunAt(pose) + dir * 16f;
+			Vector2 muzzle = RigRenderer.GunAt(pose) + dir * (16f * CC.WorldScale);
 			bool hostile = Team == EnemyTeam;   // the AI faction's rounds hurt players and their bodies
 			if (cc != null)
 				CCFirearm.Fire(NPC.GetSource_FromAI(), muzzle, dir.RotatedBy(dev) * speed, proj, it.damage, it.knockBack, Main.myPlayer, cc.Spec, hostile);
@@ -591,7 +597,7 @@ namespace TerraCommand.Content.NPCs
 				return;
 			sbyte rot = Quant(Actor.Rot), aim = Quant(Actor.AimAngle);
 			if (Math.Abs(rot - sentRot) > 3 || Math.Abs(aim - sentAim) > 3 || Actor.Status != sentStatus || Actor.Flipped != sentFlip
-				|| Actor.Move != sentMove || Actor.Grounded != sentGrounded || Main.GameUpdateCount % 30 == (ulong)(NPC.whoAmI % 30) && NPC.velocity.LengthSquared() > 0.01f)
+				|| Actor.Wounds.Bleeding && Main.GameUpdateCount % 60 == 0 || Actor.Move != sentMove || Actor.Grounded != sentGrounded || Main.GameUpdateCount % 30 == (ulong)(NPC.whoAmI % 30) && NPC.velocity.LengthSquared() > 0.01f)
 				NPC.netUpdate = true;
 		}
 
@@ -615,7 +621,7 @@ namespace TerraCommand.Content.NPCs
 			sentFlip = Actor.Flipped;
 			Actor.WriteGait(writer);
 			ContactSnapshot.Capture(Actor.Contacts).Write(writer);
-			Actor.Limbs.Write(writer);writer.Write(Actor.BodyId);
+			Actor.Limbs.Write(writer);writer.Write(Actor.BodyId);Actor.Wounds.Write(writer);
 			Loadout.Write(writer, visualsOnly: true);
 		}
 
@@ -634,7 +640,7 @@ namespace TerraCommand.Content.NPCs
 			Actor.CrouchAmount = reader.ReadByte() / 10f;
 			GaitState gait = GaitState.Read(reader);
 			ContactSnapshot contacts = ContactSnapshot.Read(reader);
-			Actor.Limbs.CopyFrom(LimbState.Read(reader));Actor.BodyId=reader.ReadUInt64();
+			Actor.Limbs.CopyFrom(LimbState.Read(reader));Actor.BodyId=reader.ReadUInt64();Actor.Wounds.CopyFrom(ActorWounds.Read(reader));
 			Loadout = UnitLoadout.Read(reader);
 			Actor.Apply(ActorStats.Get(Loadout.Kind), 0);
 			gait.Apply(Actor);

@@ -1,0 +1,65 @@
+nospawn
+clearnpcs
+clearunits
+goto spawn
+flatten 100 30
+clearinv
+wait 60
+maxlife 400
+wait 2
+heal
+wound player 2
+expect injuries player == 1
+wait 1300
+expect life < 400
+expect life >= 398
+deploy CloneBody 100
+wait 10
+switch
+wait 5
+expect injuries player == 0
+expect injuries unit == 1
+switch
+wait 5
+expect injuries player == 1
+expect injuries unit == 0
+give Medikit
+hold Medikit
+use 2
+wait 30
+expect injuries player == 0
+expect life == 400
+wait 600
+expect life == 400
+limbdetach player 2
+wait 5
+expect limb player 2 false
+expect injuries player == 1
+expect life == 370
+wait 650
+expect life < 370
+expect alive
+
+# Internal bleeding still uses the normal spare-body death transfer.
+hurt 330
+limbdetach player 3
+wait 700
+expect alive
+expect injuries player == 0
+expect limb player 2 true
+expect units == 0
+
+# Idle bodies collect internal wound damage on the authority too.
+spawnunit 100 0
+wait 30
+wound unit 4
+wait 1300
+expect unitlife <= 99
+expect unitlife >= 98
+expect injuries unit == 1
+wound unit 4 stump
+wound unit 4 stump
+wound unit 4 stump
+wait 4000
+expect units == 0
+expect deathfx corpse

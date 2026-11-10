@@ -13,7 +13,7 @@ namespace TerraCommand.Content.NPCs {
 		public LimbWreckPhysics Physics {get;private set;}=new(ActorKind.Soldier,2,4);
 		public override void SetDefaults() { NPC.width=20;NPC.height=10;NPC.lifeMax=50;NPC.friendly=true;NPC.noGravity=NPC.noTileCollide=true;NPC.aiStyle=-1;NPC.knockBackResist=0;NPC.npcSlots=0;NPC.netAlways=true; }
 		public override bool CheckActive()=>false;
-		void Style(ActorKind k,int l,int f,bool flipped) { kind=k;limb=l;frame=f;flip=flipped; Physics=new(k,l,f){Flipped=flip}; NPC.width=Physics.Mask.Width;NPC.height=Physics.Mask.Height; }
+		void Style(ActorKind k,int l,int f,bool flipped) { kind=k;limb=l;frame=f;flip=flipped; Physics=new(k,l,f){Flipped=flip}; NPC.width=Physics.Mask.Width*CC.WorldScale;NPC.height=Physics.Mask.Height*CC.WorldScale; }
 		public void Initialize(DetachedLimb part) { Style(part.Kind,part.Limb,part.Frame,part.Flip);NPC.Center=part.Position;NPC.velocity=part.Velocity;NPC.rotation=part.Rotation;Physics.Motion.AngularVelocity=part.Spin;NPC.netUpdate=true; }
 		public override void AI() {
 			NPC.timeLeft=600; Physics.Motion.Position=NPC.Center;Physics.Motion.Velocity=NPC.velocity;Physics.Motion.Rotation=NPC.rotation;
@@ -29,7 +29,7 @@ namespace TerraCommand.Content.NPCs {
 		public override bool PreDraw(SpriteBatch sb,Vector2 screen,Color color) {
 			string prefix=kind==ActorKind.Crab||limb<2?"Leg":"Arm";
 			var tex=ModContent.Request<Texture2D>($"TerraCommand/Content/Actors/{kind}/{prefix}{(limb%2==0?"Front":"Back")}{frame}",ReLogic.Content.AssetRequestMode.ImmediateLoad).Value;
-			sb.Draw(tex,NPC.Center-screen,null,color,NPC.rotation,Physics.Origin,1,flip?SpriteEffects.FlipHorizontally:SpriteEffects.None,0);return false;
+			sb.Draw(tex,NPC.Center-screen,null,color,NPC.rotation,Physics.Origin,CC.WorldScale,flip?SpriteEffects.FlipHorizontally:SpriteEffects.None,0);return false;
 		}
 	}
 }

@@ -8,14 +8,17 @@ namespace TerraCommand.Common.Actors
 
 	/// <summary>
 	/// Unit conversions and Cortex Command constants (see docs/cc-actor-design.md). CC simulates at 60 Hz with 20 px per metre,
-	/// the same tick rate as Terraria, so its pixels map 1:1.
+	/// the same tick rate as Terraria; one CC pixel occupies one 2px Terraria art pixel.
 	/// </summary>
 	public static class CC
 	{
-		public const float PPM = 20f;
+		public const int WorldScale = 2;
+        public const float PPM = 20f * WorldScale;
+        public const float TerrainCellArea = 4f / (WorldScale * WorldScale);
 		public const float Dt = 1f / 60f;
 		/// <summary>m/s -> px/tick</summary>
-		public static float Speed(float mps) => mps * PPM / 60f;
+		public static float SourceSpeed(float mps) => mps * 20f / 60f;
+        public static float Speed(float mps) => mps * PPM / 60f;
 		/// <summary>m/s^2 -> px/tick^2</summary>
 		public static float Accel(float mps2) => mps2 * PPM / 3600f;
 		/// <summary>px/tick -> m/s</summary>
@@ -56,14 +59,14 @@ namespace TerraCommand.Common.Actors
 		public const float WalkLean = -0.1f, RunLean = -0.12f, CrouchLean = -0.8f;
 
 		// hitbox heights for postures (a standing Terraria body is 42)
-		public const int StandHeight = 42, CrouchHeight = 32, LyingHeight = 20;
+		public const int StandHeight = 42 * WorldScale, CrouchHeight = 32 * WorldScale, LyingHeight = 20 * WorldScale;
 		/// <summary>A CC actor stands on a narrow footprint; Terraria's 20px player would bridge holes its feet should step into.</summary>
-		public const int BodyWidth = 14;
+		public const int BodyWidth = 14 * WorldScale;
 
 		public const float AimRange = MathHelper.PiOver2;
 		public static readonly float LyingFriction = Accel(9f);     // ~0.45 friction x 20 m/s^2
 		/// <summary>Blast impulses are tuned for Terraria creatures (gravity 0.4); a CC body under CC gravity gets half.</summary>
-		public const float BlastScale = 0.5f;
+		public const float BlastScale = 0.5f * WorldScale;
 	}
 
 	/// <summary>What sets the actor types apart (CC: each actor's Mass, health, jetpack and limbs).</summary>
@@ -76,9 +79,9 @@ namespace TerraCommand.Common.Actors
 
 		static readonly ActorStats soldier = new(), brain = new() { Kind = ActorKind.Brain, Fuel = 0, CanJet = false, Speed = 0.6f, CanRun = false },
 			light = new() { Kind = ActorKind.Light, Mass = 110f, LifeScale = 0.8f, Fuel = 110f, JetForce = 2900f, Speed = 1.15f },
-			heavy = new() { Kind = ActorKind.Heavy, Mass = 200f, LifeScale = 1.6f, Fuel = 60f, JetForce = 5800f, Speed = 0.85f },
-			crab = new() { Kind = ActorKind.Crab, Mass = 120f, LifeScale = 1.2f, Fuel = 0, CanJet = false, CanRun = false, CanCrouch = false, Speed = 0.9f, StandHeight = 22 },
-			turret = new() { Kind = ActorKind.Turret, Mass = 300f, LifeScale = 2f, Fuel = 0, CanJet = false, CanRun = false, CanCrouch = false, Moves = false, Speed = 0f, StandHeight = 26 };
+			heavy = new() { Kind = ActorKind.Heavy, StandHeight = 44 * CC.WorldScale, Mass = 200f, LifeScale = 1.6f, Fuel = 60f, JetForce = 5800f, Speed = 0.85f },
+			crab = new() { Kind = ActorKind.Crab, Mass = 120f, LifeScale = 1.2f, Fuel = 0, CanJet = false, CanRun = false, CanCrouch = false, Speed = 0.9f, StandHeight = 22 * CC.WorldScale },
+			turret = new() { Kind = ActorKind.Turret, Mass = 300f, LifeScale = 2f, Fuel = 0, CanJet = false, CanRun = false, CanCrouch = false, Moves = false, Speed = 0f, StandHeight = 26 * CC.WorldScale };
 
 		public static ActorStats Get(ActorKind k) => k switch {
 			ActorKind.Brain => brain, ActorKind.Light => light, ActorKind.Heavy => heavy,
@@ -135,6 +138,7 @@ namespace TerraCommand.Common.Actors
 		public readonly Gait[] Hands = { new(), new() };
 		public ulong BodyId=BitConverter.ToUInt64(Guid.NewGuid().ToByteArray(),0);
 		public readonly LimbState Limbs=new();
+		public readonly ActorWounds Wounds = new();
 		public bool FrontArmFree = true;
 		public readonly Gait[] Legs = { new(), new() };   // [0] front (FG), [1] back (BG)
 
@@ -560,7 +564,8 @@ namespace TerraCommand.Common.Actors
 
 		public int WantedWidth()
 		{
-			if (Kind == ActorKind.Crab || Kind == ActorKind.Turret) return ActorSpriteMasks.Get(Kind, Kind == ActorKind.Crab ? "Body" : "Base").Width;
+			if (Kind == ActorKind.Crab) return ActorSpriteMasks.Get(Kind,"Body").Width * CC.WorldScale;
+            if (Kind == ActorKind.Turret) return Math.Max(ActorSpriteMasks.Get(Kind,"Base").Width,ActorSpriteMasks.Get(Kind,"Head").Width) * CC.WorldScale;
 			if (Status == ActorStatus.Stable && Prone == ProneState.NotProne)
 				return CC.BodyWidth;
 			return (int)MathF.Round(CC.BodyWidth + (StandHeight - CC.BodyWidth) * Math.Abs(MathF.Sin(Rot)));
@@ -591,10 +596,10 @@ namespace TerraCommand.Common.Actors
 
 		public LimbPath(Vector2 start, float travelSpeed, params Vector2[] segs)
 		{
-			Start = start;
-			Segs = segs;
+			Start = start * CC.WorldScale;
+			Segs = Array.ConvertAll(segs, v => v * CC.WorldScale);
 			TravelSpeed = travelSpeed;
-			foreach (Vector2 s in segs)
+			foreach (Vector2 s in Segs)
 				Length += s.Length();
 		}
 
@@ -636,8 +641,8 @@ namespace TerraCommand.Common.Actors
 			new(15, 6), new(-2, 6), new(-1, 3), new(-2, 2), new(-10, 0), new(-10, 0), new(6, -3), new(6, -3)) { EndSegments = 2, StartSegments = 2 };
 		public static readonly LimbPath ArmCrawl = new(new(-8, -6), 1.5f,
 			new(0, -4), new(3, -4), new(5, -1), new(5, 1), new(1, 8), new(-2, 10)) { AlongBody = true, StartSegments = 3 };
-		public static readonly Vector2 Stand = new(0, 12);
-		public static readonly Vector2 Crouch = new(-4, 7);
+		public static readonly Vector2 Stand = new Vector2(0, 12) * CC.WorldScale;
+		public static readonly Vector2 Crouch = new Vector2(-4, 7) * CC.WorldScale;
 	}
 
 	/// <summary>A value snapshot can be fully consumed even when an inactive/own actor ignores the packet.</summary>

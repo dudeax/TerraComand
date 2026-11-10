@@ -1,5 +1,7 @@
 # Limbs, hatches and ballistics — working 0.11.0
 
+For the 0.12.0 wound and material changes, see [persistent wounds and living joints](wounds-and-joints.md). The notes below describe the 0.11.0 stage.
+
 Living actors now track four removable limbs. Projectile wounds detach arms after eight hits and legs after ten. Missing limbs disappear from the native rig and contact solver, remove their mass, and remain missing when switching bodies or saving their physical state. A single remaining arm gives rifles their unsupported-fire spread penalty while still supporting one-handed pistols. Losing both legs forces a prone stance; losing both arms drops the held weapon and prevents handheld weapon use. Crabs retain their mounted weapon. Detached limbs become temporary physical NPCs with native sprite silhouettes, inherited translation/spin and terrain collisions. Their lifetime is one minute. Body identities keep delayed multiplayer injury messages from applying to a different controlled body.
 
 Dropships carry the native left and right hatch sprites, pivots and collision masks. Doors swing 28 degrees over 250ms. Each hatch weighs 200kg and has the source 750 N·s joint strength. Joint overloads and explosions can detach doors into physical craft wrecks. A missing hatch leaves its side of the bay open; the remaining door still follows the ship's opening command. Hatch state and all six craft attachment slots synchronize.

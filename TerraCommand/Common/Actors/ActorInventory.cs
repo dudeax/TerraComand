@@ -22,7 +22,7 @@ namespace TerraCommand.Common.Actors
 	{
 		public const int Held = 0;
 		const int QueueEnd = 50;      // slots 1..49 are the carried queue (50..57 stay coins/ammo)
-		public const float Reach = 34f;
+		public const float Reach = 34f * CC.WorldScale;
 
 		/// <summary>The item F would pick up (local player, refreshed each tick).</summary>
 		public int ItemInReach = -1;

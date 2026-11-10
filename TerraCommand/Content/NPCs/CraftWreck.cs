@@ -21,7 +21,7 @@ namespace TerraCommand.Content.NPCs {
 			Physics=new(part.Kind); NPC.Center=part.Position; NPC.velocity=part.Velocity;
 			Physics.Motion.Position=part.Position; Physics.Motion.Velocity=part.Velocity;
 			Physics.Motion.Rotation=NPC.rotation=part.Rotation; Physics.Motion.AngularVelocity=part.Spin;
-			NPC.width=Physics.Mask.Width; NPC.height=Physics.Mask.Height; NPC.Center=part.Position;
+			NPC.width=Physics.Mask.Width*CC.WorldScale; NPC.height=Physics.Mask.Height*CC.WorldScale; NPC.Center=part.Position;
 			NPC.netUpdate=true;
 		}
 		public override void AI() {
@@ -38,13 +38,13 @@ namespace TerraCommand.Content.NPCs {
 		public override void SendExtraAI(BinaryWriter w) { w.Write((byte)Physics.Kind); w.Write(Physics.Motion.AngularVelocity); w.Write(Physics.Motion.Rotation); }
 		public override void ReceiveExtraAI(BinaryReader r) {
 			var kind=(CraftPart)r.ReadByte(); float spin=r.ReadSingle(); float rotation=r.ReadSingle();
-			if(kind!=Physics.Kind) { Physics=new(kind); NPC.width=Physics.Mask.Width; NPC.height=Physics.Mask.Height; }
+			if(kind!=Physics.Kind) { Physics=new(kind); NPC.width=Physics.Mask.Width*CC.WorldScale; NPC.height=Physics.Mask.Height*CC.WorldScale; }
 			Physics.Motion.AngularVelocity=spin; Physics.Motion.Rotation=NPC.rotation=rotation;
 		}
 		public override bool PreDraw(SpriteBatch sb,Vector2 screenPos,Color color) {
 			string name=Physics.Kind switch {CraftPart.LeftEngine=>"DropshipEngineLeft",CraftPart.RightEngine=>"DropshipEngineRight",CraftPart.LeftHatch=>"DropshipHatchLeft",CraftPart.RightHatch=>"DropshipHatchRight",_=>"RocketLeg4"};
 			var texture=ModContent.Request<Texture2D>("TerraCommand/Content/NPCs/"+name,ReLogic.Content.AssetRequestMode.ImmediateLoad).Value;
-			sb.Draw(texture,NPC.Center-screenPos,null,color,NPC.rotation,Physics.Origin,1,Physics.Kind==CraftPart.LeftGear?SpriteEffects.FlipHorizontally:SpriteEffects.None,0);
+			sb.Draw(texture,NPC.Center-screenPos,null,color,NPC.rotation,Physics.Origin,CC.WorldScale,Physics.Kind==CraftPart.LeftGear?SpriteEffects.FlipHorizontally:SpriteEffects.None,0);
 			return false;
 		}
 	}

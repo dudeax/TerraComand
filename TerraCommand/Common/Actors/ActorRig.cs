@@ -119,7 +119,7 @@ namespace TerraCommand.Common.Actors
 	public static class RigRenderer
 	{
 		/// <summary>Where the hip goes: lowered by the crouch, and moved so a lying body is centred on its (short) hitbox.</summary>
-		public static Vector2 Hip(in RigPose p, ActorArt art)
+		static Vector2 HipNative(in RigPose p, ActorArt art)
 		{
 			float lying = Lying(p);
 			float stand = MathHelper.Lerp(art.HipHeight, art.CrouchHipHeight, p.Crouch);
@@ -131,37 +131,59 @@ namespace TerraCommand.Common.Actors
 		/// <summary>Aim direction in the world (screen-oriented angle).</summary>
 		public static float AimWorld(in RigPose p) => p.Dir < 0 ? MathHelper.Pi + p.AimAngle : -p.AimAngle;
 
-		public static Vector2 NozzleWorld(in RigPose p)
-		{
-			ActorArt art = ActorArt.Get(p.Kind);
-			return Hip(p, art) + new Vector2(art.JetpackAt.X * p.Dir, art.JetpackAt.Y + 9f).RotatedBy(p.Rot);
-		}
+        static RigPose NativePose(RigPose p) {
+            Vector2 origin=p.Feet; float scale=CC.WorldScale;
+            p.Feet=Vector2.Zero;
+            p.ContactHip=(p.ContactHip-origin)/scale;
+            p.ContactFoot0=(p.ContactFoot0-origin)/scale;p.ContactFoot1=(p.ContactFoot1-origin)/scale;
+            p.ContactHand0=(p.ContactHand0-origin)/scale;p.ContactHand1=(p.ContactHand1-origin)/scale;
+            p.FrontFoot/=scale;p.BackFoot/=scale;p.FrontHand/=scale;p.BackHand/=scale;
+            p.Sink/=scale;p.Kick/=scale;p.WalkDist/=scale;p.VelX/=scale;
+            return p;
+        }
+        public static float ItemWorldScale(Item item) => item?.ModItem?.Mod.Name=="TerraCommand" ? CC.WorldScale : 1f;
+        public static Vector2 Hip(in RigPose p,ActorArt art) => p.Feet+HipNative(NativePose(p),art)*CC.WorldScale;
+        public static Vector2 Shoulder(in RigPose p) => p.Feet+ShoulderNative(NativePose(p))*CC.WorldScale;
+        public static Vector2 Grip(in RigPose p) => p.Feet+GripNative(NativePose(p))*CC.WorldScale;
+        public static Vector2 GunAt(in RigPose p) => p.Feet+GunAtNative(NativePose(p))*CC.WorldScale;
+        public static Vector2 NozzleWorld(in RigPose p) {
+            ActorArt art=ActorArt.Get(p.Kind);var native=NativePose(p);
+            return p.Feet+(HipNative(native,art)+new Vector2(art.JetpackAt.X*p.Dir,art.JetpackAt.Y+ActorSpriteMasks.Jetpack.Height/2f).RotatedBy(p.Rot))*CC.WorldScale;
+        }
 
 		/// <summary>The front shoulder (world): aiming is measured from here, so the muzzle line passes through the cursor.</summary>
-		public static Vector2 Shoulder(in RigPose p)
+		static Vector2 ShoulderNative(in RigPose p)
 		{
 			if (p.Kind == ActorKind.Crab)
 				return p.Feet + new Vector2(2f * p.Dir, -18f).RotatedBy(p.Rot);
 			if (p.Kind == ActorKind.Turret)
 				return p.Feet + new Vector2(0f, -16f);
 			ActorArt art = ActorArt.Get(p.Kind);
-			return Hip(p, art) + new Vector2(art.Shoulder.X * p.Dir, art.Shoulder.Y).RotatedBy(p.Rot);
+			return HipNative(p, art) + new Vector2(art.Shoulder.X * p.Dir, art.Shoulder.Y).RotatedBy(p.Rot);
 		}
 
 		/// <summary>Where the front hand grips the held item (world).</summary>
-		public static Vector2 Grip(in RigPose p)
+		static Vector2 GripNative(in RigPose p)
 		{
 			ActorArt art = ActorArt.Get(p.Kind);
-			if (p.ContactPose) return Hip(p, art) + (((p.MissingLimbs&4)!=0?p.ContactHand1:p.ContactHand0) - p.ContactHip).RotatedBy(p.Rot - p.ContactRotation);
-			Vector2 shoulder = Hip(p, art) + new Vector2(art.Shoulder.X * p.Dir, art.Shoulder.Y).RotatedBy(p.Rot);
+			if (p.ContactPose) return HipNative(p, art) + (((p.MissingLimbs&4)!=0?p.ContactHand1:p.ContactHand0) - p.ContactHip).RotatedBy(p.Rot - p.ContactRotation);
+			Vector2 shoulder = HipNative(p, art) + new Vector2(art.Shoulder.X * p.Dir, art.Shoulder.Y).RotatedBy(p.Rot);
 			return shoulder + AimWorld(p).ToRotationVector2() * 8f + new Vector2(0f, 1.5f);
 		}
 
-		public static void Build(RigPose p, List<RigPiece> outList, bool onlyHead = false)
-		{
+		public static void Build(RigPose p,List<RigPiece> outList,bool onlyHead=false) {
+            int start=onlyHead?0:outList.Count;
+            BuildNative(NativePose(p),outList,p.Feet,onlyHead);
+            for(int i=start;i<outList.Count;i++) {
+                var part=outList[i];
+                outList[i]=part with {Pos=p.Feet+part.Pos*CC.WorldScale,Scale=part.Scale*CC.WorldScale};
+            }
+        }
+        static void BuildNative(RigPose p,List<RigPiece> outList,Vector2 worldOrigin,bool onlyHead=false)
+        {
 			ActorArt art = ActorArt.Get(p.Kind);
 			if (p.Kind == ActorKind.Crab) {
-				BuildCrab(p, art, outList);
+				BuildCrab(p, art, outList,worldOrigin);
 				return;
 			}
 			if (p.Kind == ActorKind.Turret) {
@@ -172,7 +194,7 @@ namespace TerraCommand.Common.Actors
 				return;
 			int dir = p.Dir;
 			float rot = p.Rot;
-			Vector2 hip = Hip(p, art);
+			Vector2 hip = HipNative(p, art);
 			Vector2 ContactPoint(Vector2 point) => hip + (point - p.ContactHip).RotatedBy(rot - p.ContactRotation);
 			SpriteEffects fx = dir > 0 ? SpriteEffects.None : SpriteEffects.FlipHorizontally;
 			Color light = p.Light, back = p.Light.MultiplyRGB(new Color(165, 165, 165));
@@ -194,8 +216,8 @@ namespace TerraCommand.Common.Actors
 				}
 				if (moving) {
 					LimbPath path = p.Prone ? LimbPaths.Crawl : Math.Abs(p.VelX) > 1.1f ? LimbPaths.Run : LimbPaths.Walk;
-					float prog = (p.WalkDist / path.Length + (leg == 0 ? 0f : 0.5f)) % 1f;
-					Vector2 at = path.At(prog * path.Length, out _);
+					float prog = (p.WalkDist * CC.WorldScale / path.Length + (leg == 0 ? 0f : 0.5f)) % 1f;
+					Vector2 at = path.At(prog * path.Length, out _) / CC.WorldScale;
 					bool backwards = Math.Sign(p.VelX) != dir;   // walking backwards runs the path the other way
 					return new Vector2(at.X * (backwards ? -dir : dir), at.Y);
 				}
@@ -216,7 +238,7 @@ namespace TerraCommand.Common.Actors
 				Vector2 sole = p.ContactPose ? ContactPoint(leg == 0 ? p.ContactFoot0 : p.ContactFoot1) : hip + local.RotatedBy(legFrame);
 				if (!p.ContactPose && !lying && p.Grounded) {
 					// plant the foot on the actual ground (pixel terrain): feet step onto bumps and into dips
-					float ground = GroundBelow(new Vector2(sole.X, hip.Y), art.HipHeight + 6f);
+					float ground = GroundBelow(new Vector2(sole.X, hip.Y), art.HipHeight + 6f,worldOrigin);
 					if (sole.Y > ground)
 						sole.Y = ground;
 				}
@@ -294,21 +316,21 @@ namespace TerraCommand.Common.Actors
 				Color c = item.GetAlpha(light);
 				if (item.ModItem is Content.Items.Devices.RiotShield) {
 					// a shield is held upright in front of the body
-					outList.Add(new RigPiece(tex, at + aim.ToRotationVector2() * 3f, src, c, rot * 0.3f, src.Size() / 2f, item.scale, fx));
+					outList.Add(new RigPiece(tex, at + aim.ToRotationVector2() * 3f, src, c, rot * 0.3f, src.Size() / 2f, item.scale*ItemWorldScale(item)/CC.WorldScale, fx));
 				}
 				else if (item.consumable || !IsGunLike(item) && item.damage <= 0) {
 					// grenades and small tools sit in the hand
-					outList.Add(new RigPiece(tex, at, src, c, rot * 0.5f, src.Size() / 2f, item.scale, fx));
+					outList.Add(new RigPiece(tex, at, src, c, rot * 0.5f, src.Size() / 2f, item.scale*ItemWorldScale(item)/CC.WorldScale, fx));
 				}
 				else if (IsGunLike(item)) {
-					outList.Add(new RigPiece(tex, at, src, c, aim, new Vector2(src.Width * 0.3f, src.Height * 0.55f), item.scale,
+					outList.Add(new RigPiece(tex, at, src, c, aim, new Vector2(src.Width * 0.3f, src.Height * 0.55f), item.scale*ItemWorldScale(item)/CC.WorldScale,
 						dir > 0 ? SpriteEffects.None : SpriteEffects.FlipVertically));
 				}
 				else {
 					// swords and tools are drawn diagonally (handle bottom-left): lay the blade along the aim
 					float r = dir > 0 ? aim + MathHelper.PiOver4 : aim - MathHelper.Pi - MathHelper.PiOver4 + MathHelper.TwoPi;
 					Vector2 o = dir > 0 ? new Vector2(src.Width * 0.15f, src.Height * 0.85f) : new Vector2(src.Width * 0.85f, src.Height * 0.85f);
-					outList.Add(new RigPiece(tex, at, src, c, r, o, item.scale, fx));
+					outList.Add(new RigPiece(tex, at, src, c, r, o, item.scale*ItemWorldScale(item)/CC.WorldScale, fx));
 				}
 			}
 
@@ -330,7 +352,7 @@ namespace TerraCommand.Common.Actors
 				|| item.ModItem is Content.Items.Devices.RiotShield or Content.Items.Devices.RemoteDetonator or Content.Items.Devices.Medikit);
 
 		/// <summary>A four-legged drone: a low body, legs stepping on the walk cycle a quarter apart, the gun mounted on top.</summary>
-		static void BuildCrab(RigPose p, ActorArt art, List<RigPiece> outList)
+		static void BuildCrab(RigPose p, ActorArt art, List<RigPiece> outList,Vector2 worldOrigin)
 		{
 			if (!art.Torso.IsLoaded || !art.Thigh.IsLoaded)
 				return;
@@ -349,15 +371,15 @@ namespace TerraCommand.Common.Actors
 				if (p.ContactPose) foot = index switch { 0 => p.ContactFoot0, 1 => p.ContactFoot1, 2 => p.ContactHand0, _ => p.ContactHand1 };
 				else if (moving && !p.Unstable) {
 					LimbPath path = LimbPaths.Walk;
-					float prog = (p.WalkDist / (path.Length * 0.6f) + phase) % 1f;
-					Vector2 at = path.At(prog * path.Length, out _) * 0.6f;
+					float prog = (p.WalkDist * CC.WorldScale / (path.Length * 0.6f) + phase) % 1f;
+					Vector2 at = path.At(prog * path.Length, out _) * (0.6f / CC.WorldScale);
 					bool backwards = Math.Sign(p.VelX) != dir;
 					foot = new Vector2(hip.X + at.X * (backwards ? -dir : dir), body.Y + at.Y);
 				}
 				else
 					foot = hip + new Vector2(hipX * 0.5f, 9f).RotatedBy(p.Unstable ? rot : 0f);
 				if (!p.ContactPose && p.Grounded && !p.Unstable) {
-					float ground = GroundBelow(new Vector2(foot.X, hip.Y), 16f);
+					float ground = GroundBelow(new Vector2(foot.X, hip.Y), 16f,worldOrigin);
 					if (foot.Y > ground)
 						foot.Y = ground;
 				}
@@ -399,15 +421,15 @@ namespace TerraCommand.Common.Actors
 			Main.instance.LoadItem(item.type);
 			Texture2D tex = TextureAssets.Item[item.type].Value;
 			Rectangle src = Main.itemAnimations[item.type] != null ? Main.itemAnimations[item.type].GetFrame(tex) : tex.Frame();
-			outList.Add(new RigPiece(tex, at, src, item.GetAlpha(light), AimWorld(p), new Vector2(src.Width * 0.3f, src.Height * 0.55f), item.scale,
+			outList.Add(new RigPiece(tex, at, src, item.GetAlpha(light), AimWorld(p), new Vector2(src.Width * 0.3f, src.Height * 0.55f), item.scale*ItemWorldScale(item)/CC.WorldScale,
 				p.Dir > 0 ? SpriteEffects.None : SpriteEffects.FlipVertically));
 		}
 
 		/// <summary>Where a body's gun sits (world): the front hand for humanoids, the mount for drones and turrets.</summary>
-		public static Vector2 GunAt(in RigPose p) => p.Kind switch {
+		static Vector2 GunAtNative(in RigPose p) => p.Kind switch {
 			ActorKind.Crab => p.Feet + new Vector2(2f * p.Dir, -18f).RotatedBy(p.Rot),
 			ActorKind.Turret => p.Feet + new Vector2(0f, -16f) + AimWorld(p).ToRotationVector2() * 4f,
-			_ => Grip(p),
+			_ => GripNative(p),
 		};
 
 		public static bool IsGunLike(Item item) =>
@@ -427,10 +449,10 @@ namespace TerraCommand.Common.Actors
 		}
 
 		/// <summary>The first solid pixel below a point (within a range), else the end of the range.</summary>
-		static float GroundBelow(Vector2 from, float range)
+		static float GroundBelow(Vector2 from, float range,Vector2 worldOrigin)
 		{
 			for (float y = 0; y < range; y += 1f)
-				if (Collision.SolidCollision(new Vector2(from.X, from.Y + y), 1, 1))
+				if (Collision.SolidCollision(worldOrigin+new Vector2(from.X,from.Y+y)*CC.WorldScale, 1, 1))
 					return from.Y + y;
 			return from.Y + range;
 		}
@@ -500,7 +522,7 @@ namespace TerraCommand.Common.Actors
 				FrontHand = a.Hands[0].Foot(Vector2.Zero), BackHand = a.Hands[1].Foot(Vector2.Zero),
 				FrontHandCrawls = a.Hands[0].Path != null, BackHandCrawls = a.Hands[1].Path != null,
 				Held = Player.HeldItem,
-				HeldInUse = Player.itemAnimation > 0 && !RigRenderer.IsGunLike(Player.HeldItem),
+				HeldInUse = Player.itemAnimation > 0 && !RigRenderer.IsGunLike(Player.HeldItem) && RigRenderer.ItemWorldScale(Player.HeldItem)==1,
 				Kick = Player.GetModPlayer<Combat.AimPlayer>().GunKick,
 				Light = Lighting.GetColor(Player.Center.ToTileCoordinates()),
 			};
@@ -520,7 +542,7 @@ namespace TerraCommand.Common.Actors
 				}
 				if (layer.Mod != null)
 					continue;
-				if (layer == PlayerDrawLayers.HeldItem && p.itemAnimation > 0 && !RigRenderer.IsGunLike(p.HeldItem))
+				if (layer == PlayerDrawLayers.HeldItem && p.itemAnimation > 0 && !RigRenderer.IsGunLike(p.HeldItem) && RigRenderer.ItemWorldScale(p.HeldItem)==1)
 					continue;
 				layer.Hide();
 			}

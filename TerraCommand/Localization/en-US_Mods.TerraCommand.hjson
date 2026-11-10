@@ -172,6 +172,26 @@ Items: {
 		DisplayName: Turret Kit
 		Tooltip: ""
 	}
+
+	CoalitionAutoPistol: {
+		DisplayName: Coalition Auto Pistol
+		Tooltip: ""
+	}
+
+	CoalitionAutoShotgun: {
+		DisplayName: Coalition Auto Shotgun
+		Tooltip: ""
+	}
+
+	CoalitionHeavyPistol: {
+		DisplayName: Coalition Heavy Pistol
+		Tooltip: ""
+	}
+
+	CoalitionShotgun: {
+		DisplayName: Coalition Shotgun
+		Tooltip: ""
+	}
 }
 
 Tiles.LaunchPad.MapEntry: Launch Pad

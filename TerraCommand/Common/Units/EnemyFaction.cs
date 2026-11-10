@@ -114,7 +114,7 @@ namespace TerraCommand.Common.Units
 					t.ClearEverything();
 					PixelTerrain.Clear(i, j);
 					bool edge = i == left || i == left + BunkerW - 1 || j == floor - BunkerH;
-					bool doorway = j >= floor - 4 && (door > 0 ? i == left + BunkerW - 1 : i == left);
+					bool doorway = j >= floor - 7 && (door > 0 ? i == left + BunkerW - 1 : i == left);
 					if (edge && !doorway)
 						t.ResetToType(TileID.GrayBrick);
 					if (!edge)

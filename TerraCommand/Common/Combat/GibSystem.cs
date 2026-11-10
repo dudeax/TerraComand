@@ -497,7 +497,7 @@ namespace TerraCommand.Common.Combat
 		static void StepCorpse(Corpse k)
 		{
 			k.Vel.Y = Math.Min(k.Vel.Y + Actors.CC.Gravity, 14f);
-			const int w = 20, h = 20;
+			const int w = 20 * Actors.CC.WorldScale, h = 20 * Actors.CC.WorldScale;
 			Vector2 tl = k.Pose.Feet - new Vector2(w / 2f, h);
 			Vector2 v = Collision.TileCollision(tl, k.Vel, w, h, true, true);
 			bool grounded = v.Y != k.Vel.Y && k.Vel.Y > 0;

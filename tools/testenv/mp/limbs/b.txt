@@ -1,3 +1,6 @@
+maxlife 400
+wait 2
+heal
 goto spawn
 wait 60
 sync ready

@@ -196,10 +196,10 @@ namespace TerraCommand.Common.Orbital
 		{
 			// it comes in from high above the landing zone
 			float x = Math.Clamp(lz.X, 16 * 60, Main.maxTilesX * 16 - 16 * 60);
-			float y = Math.Max(16 * 45f, lz.Y - 900f);
+			float y = Math.Max(16 * 45f, lz.Y - 900f * Actors.CC.WorldScale);
 			float targetX = x;
 			if (style == ShipStyle.Dropship)   // a dropship comes in at an angle, from whichever side has more room
-				x = Math.Clamp(x + (x < Main.maxTilesX * 8 ? -1 : 1) * 700f, 16 * 50, Main.maxTilesX * 16 - 16 * 50);
+				x = Math.Clamp(x + (x < Main.maxTilesX * 8 ? -1 : 1) * (700f * Actors.CC.WorldScale), 16 * 50, Main.maxTilesX * 16 - 16 * 50);
 			int idx = NPC.NewNPC(Entity.GetSource_NaturalSpawn(), (int)x, (int)y, ModContent.NPCType<CargoShip>());
 			if (idx < 0 || idx >= Main.maxNPCs)
 				return -1;
@@ -248,7 +248,7 @@ namespace TerraCommand.Common.Orbital
 				side = -side;
 				if (enemy && it.ModItem is not Content.Items.BodyItem)
 					continue;
-				Vector2 at = ship.NPC.Bottom + new Vector2(side * (ship.NPC.width / 2f + 14f + Main.rand.Next(0, 12)), -2f);
+				Vector2 at = ship.NPC.Bottom + new Vector2(side * (ship.NPC.width / 2f + 14f * Actors.CC.WorldScale + Main.rand.Next(0, 12) * Actors.CC.WorldScale), -2f);
 				if (it.ModItem is Content.Items.BodyItem body) {
 					for (int i = 0; i < it.stack; i++) {
 						int weapon = body.BuiltInWeapon;
@@ -256,7 +256,7 @@ namespace TerraCommand.Common.Orbital
 							weapon = guns[0].type;
 							guns.RemoveAt(0);
 						}
-						int u = UnitSystem.SpawnFresh(at + new Vector2(side * i * 14f, 0f), ship.Team, body.Kind, weapon);
+						int u = UnitSystem.SpawnFresh(at + new Vector2(side * i * 14f * Actors.CC.WorldScale, 0f), ship.Team, body.Kind, weapon);
 						if (enemy && u >= 0 && Main.npc[u].ModNPC is CloneUnit cu) {
 							cu.Order = UnitOrder.BrainHunt;
 							Main.npc[u].netUpdate = true;
@@ -636,7 +636,7 @@ namespace TerraCommand.Common.Orbital
 				// out: step down beside the ship
 				if (Player.whoAmI == Main.myPlayer) {
 					wasIn.Physics.Motion.Position = wasIn.NPC.Bottom;
-					Player.Bottom = wasIn.Physics.World(new Vector2((wasIn.NPC.width / 2f + 12f) * Player.direction,20));
+					Player.Bottom = wasIn.Physics.World(new Vector2((wasIn.NPC.width / (2f * Actors.CC.WorldScale) + 12f) * Player.direction,20));
 					Player.velocity = wasIn.Physics.Motion.PointVelocity(Player.Bottom);
 					var body = Player.GetModPlayer<Physics.BodyPhysicsPlayer>();
 					body.Actor.Vel = Player.velocity; body.SkipImpactCheck();

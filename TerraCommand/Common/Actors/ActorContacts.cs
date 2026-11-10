@@ -90,7 +90,7 @@ namespace TerraCommand.Common.Actors
 			omega += Cross(radius, impulse) / inertia;
 		}
 		internal static Vector2 CentreOffset(CCActor a, float rot) => a.Kind == ActorKind.Crab || a.Kind == ActorKind.Turret
-			? new Vector2(0, -12) : ContactGeometry.HipOffset(a, rot) + ContactGeometry.Rotate(new Vector2(0, -8), rot);
+			? new Vector2(0, -12) * CC.WorldScale : ContactGeometry.HipOffset(a, rot) + ContactGeometry.Rotate(new Vector2(0, -8) * CC.WorldScale, rot);
 		internal static bool Solid(IActorTerrain terrain, Vector2 point, Vector2 previous, bool drop, out ContactSurface material) {
 			if (!terrain.Sample(point, out material)) return false;
 			return !material.OneWay || !drop && point.Y >= previous.Y && previous.Y <= material.Top + Skin;
@@ -114,10 +114,11 @@ namespace TerraCommand.Common.Actors
 			return result;
 		}
 
+		static Vector2[] Scaled(params Vector2[] atoms) => Array.ConvertAll(atoms,p=>p*CC.WorldScale);
 		// Source AtomGroups.ini, relative to each group's JointOffset, with feet referenced at the sole.
-		static readonly Vector2[] HumanFoot = { new(-1,-3), new(-1,-2), new(-1,-1), new(0,0), new(1,0), new(2,0), new(3,-1) };
-		static readonly Vector2[] HumanHand = { new(-5,1), new(-5,0), new(-5,-1), new(-4,-1), new(-3,-1), new(-2,-1), new(-1,-1), new(0,-1) };
-		static readonly Vector2[] CrabFoot = { new(-1,-1), new(-1,0), new(0,0), new(1,0), new(2,0) };
+		static readonly Vector2[] HumanFoot = Scaled( new(-1,-3), new(-1,-2), new(-1,-1), new(0,0), new(1,0), new(2,0), new(3,-1) );
+		static readonly Vector2[] HumanHand = Scaled( new(-5,1), new(-5,0), new(-5,-1), new(-4,-1), new(-3,-1), new(-2,-1), new(-1,-1), new(0,-1) );
+		static readonly Vector2[] CrabFoot = Scaled( new(-1,-1), new(-1,0), new(0,0), new(1,0), new(2,0) );
 		static Vector2[] LimbAtoms(CCActor actor, int limb) => actor.Kind == ActorKind.Crab ? CrabFoot : limb < 2 ? HumanFoot : HumanHand;
 		public static bool LimbIntersects(CCActor actor, int limb, Vector2 tip, Rectangle cell) {
 			foreach (Vector2 offset in LimbAtoms(actor,limb)) {
@@ -220,7 +221,8 @@ namespace TerraCommand.Common.Actors
 			motion.Position = feet; motion.Velocity = actor.Vel;
 			motion.Rotation = angle; motion.AngularVelocity = omega / CC.Dt;
 			motion.Mass = actor.Mass; motion.Inertia = inertia;
-			motion.Friction=.4f; motion.Restitution=actor.Kind==ActorKind.Heavy || actor.Kind==ActorKind.Crab ? .5f : .75f;
+			var bodyMaterial=ActorMaterials.For(actor.Kind,4);
+            motion.Friction=bodyMaterial.Friction; motion.Restitution=bodyMaterial.Restitution;
 			RigidBodyTravel.Step(motion, state.BodyShape, terrain, input.Prone);
 			feet = motion.Position; actor.Vel = motion.Velocity;
 			actor.Rot = motion.Rotation; actor.AngVel = motion.AngularVelocity;
@@ -239,13 +241,13 @@ namespace TerraCommand.Common.Actors
 		static Vector2 Rest(CCActor a, int limb) {
 			if (a.Kind == ActorKind.Crab) {
 				float x = limb switch { 0 => -6, 1 => 6, 2 => -4, _ => 8 };
-				return new Vector2(x * 0.5f * a.FlipFactor, 9);
+				return new Vector2(x * 0.5f * a.FlipFactor, 9) * CC.WorldScale;
 			}
-			if (limb >= 2 && a.FrontArmFree) return new Vector2(0, 12);
+			if (limb >= 2 && a.FrontArmFree) return new Vector2(0, 12) * CC.WorldScale;
 			if (limb < 2) return new Vector2((limb == 0 ? 3.5f : -3.5f) * a.FlipFactor,
-				MathHelper.Lerp(15, a.Kind == ActorKind.Brain ? 11 : 9, a.CrouchAmount));
+				MathHelper.Lerp(15, a.Kind == ActorKind.Brain ? 11 : 9, a.CrouchAmount)) * CC.WorldScale;
 			float aim = a.Flipped ? MathHelper.Pi + a.AimAngle : -a.AimAngle;
-			return ContactGeometry.Unit(aim) * (limb == 2 ? 8 : 14) + new Vector2(0, 1.5f);
+			return (ContactGeometry.Unit(aim) * (limb == 2 ? 8 : 14) + new Vector2(0, 1.5f)) * CC.WorldScale;
 		}
 		static void Initialize(CCActor a, Vector2 feet, IActorTerrain terrain, bool drop) {
 			Vector2 hip = feet + ContactGeometry.HipOffset(a);
@@ -272,7 +274,7 @@ namespace TerraCommand.Common.Actors
 				// Terrain can be placed/settled around a tip between frames. Never keep a static grip inside it.
 				if (!returnStroke && LimbBlocked(a, i, terrain, limb.Position, limb.Position, input.Prone)) {
 					Vector2 embedded = limb.Position; bool free = false;
-					for (int distance = 1; distance <= 18 && !free; distance++)
+					for (int distance = 1; distance <= 18 * CC.WorldScale && !free; distance++)
 						foreach (Vector2 escape in RecoveryDirections) {
 							Vector2 candidate = embedded + escape * distance;
 							if (LimbBlocked(a, i, terrain, candidate, embedded, input.Prone)) continue;
@@ -286,7 +288,7 @@ namespace TerraCommand.Common.Actors
 				if(a.Kind!=ActorKind.Crab && i>=2 && input.HoldingDevice && i==(a.Limbs.Has(2)?2:3)) motor=false;
 				float force = a.Kind == ActorKind.Crab ? 3000 : i < 2 ? a.Move == MoveState.Run ? CC.RunPush : a.Move == MoveState.Crawl ? CC.CrawlPush : a.Move == MoveState.Stand ? 4200 : a.Move == MoveState.Crouch ? 4000 : CC.WalkPush : 3400;
 				if (motor && gait.Path != null) force *= 1 + limb.SegmentTicks++ * CC.Dt / 0.5f;
-				float reach = a.Kind == ActorKind.Crab ? 12 : i < 2 ? 16 : a.Kind == ActorKind.Brain ? 12 : 14;
+				float reach = (a.Kind == ActorKind.Crab ? 12 : i < 2 ? 16 : a.Kind == ActorKind.Brain ? 12 : 14) * CC.WorldScale;
 				Vector2 target;
 				float advance = 0;
 				if (motor && gait.Path != null) {
@@ -331,7 +333,7 @@ namespace TerraCommand.Common.Actors
 				if (offsetToTarget.LengthSquared() > reach * reach) target = joint + Vector2.Normalize(offsetToTarget) * reach;
 				Vector2 desired = target - limb.Position;
 				if (motor && gait.Path == null) desired *= CC.Dt / 0.020f;
-				float maxTravel = motor ? gait.Path != null ? advance : CC.Speed(a.Move == MoveState.Crouch ? 0.5f : 0.7f) : Math.Max(1, advance + a.Vel.Length());
+				float maxTravel = motor ? gait.Path != null ? advance : CC.Speed(a.Move == MoveState.Crouch ? 0.5f : 0.7f) : Math.Max(CC.WorldScale, advance + a.Vel.Length());
 				if (desired.Length() > maxTravel) desired = Vector2.Normalize(desired) * maxTravel;
 				Vector2 desiredVelocity = desired + (motor || a.Jetting || active && !a.Lying ? jointVelocity : Vector2.Zero);
 				returnStroke = motor && gait.Path != null && gait.Path.EndSegments > 0 && gait.Path.Segs.Length - gait.Segment <= gait.Path.EndSegments;
@@ -339,10 +341,10 @@ namespace TerraCommand.Common.Actors
 				if (returnStroke) { moved = limb.Position + desiredVelocity; normal = Vector2.Zero; }
 				// A planted sole can push tangentially without moving into a solid side wall.
 				if (!returnStroke && desiredVelocity.Y >= 0 && normal == Vector2.Zero) {
-					SweepLimb(a,i,terrain,moved,new Vector2(0,1),input.Prone,out Vector2 support,out var supportSurface);
+					SweepLimb(a,i,terrain,moved,new Vector2(0,CC.WorldScale),input.Prone,out Vector2 support,out var supportSurface);
 					if (support.Y < -0.4f) { normal = support; surface = supportSurface; }
 				}
-				bool withinReach = Vector2.DistanceSquared(joint, moved) <= (reach + 1) * (reach + 1);
+				bool withinReach = Vector2.DistanceSquared(joint, moved) <= (reach + CC.WorldScale) * (reach + CC.WorldScale);
 				if (normal != Vector2.Zero && withinReach) {
 					limb.Supported = true; limb.Normal = normal;
 					if (motor) {

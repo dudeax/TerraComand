@@ -43,13 +43,23 @@ namespace TerraCommand.Common.Physics {
 			} else ActorCommit(unit,projectile,limb);
 		}
 		static void ActorCommit(CloneUnit unit,Projectile projectile,int limb) {
-			var state=projectile.GetGlobalProjectile<CraftPartHits>(); if(state.lastActor==unit.NPC.whoAmI || !unit.Actor.Limbs.Has(limb))return;
+			var state=projectile.GetGlobalProjectile<CraftPartHits>(); if(state.lastActor==unit.NPC.whoAmI || limb<0 || limb>5 || limb<4 && !unit.Actor.Limbs.Has(limb))return;
 			state.lastActor=unit.NPC.whoAmI;
-			if(unit.Actor.Limbs.Wound(limb)) LimbSystem.Detach(unit,limb);unit.NPC.netUpdate=true;
+			Combat.ActorInjurySystem.Wound(unit.Actor,limb);
+			if(limb<4) {
+                bool sever=unit.Actor.Limbs.Wound(limb,unit.Actor.Kind);
+                if(KineticBullet.Eligible(projectile)) {
+                    var profile=RoundProfile.Get(projectile.GetGlobalProjectile<KineticBullet>().Profile);
+                    Vector2 impulse=(projectile.velocity-unit.NPC.velocity/(projectile.extraUpdates+1))*((projectile.extraUpdates+1)*60f/CC.PPM*profile.Mass);
+                    sever |= unit.Actor.Limbs.Impulse(unit.Actor.Kind,limb,impulse,Main.GameUpdateCount).Detached;
+                }
+                if(sever)LimbSystem.Detach(unit,limb);
+            }
+            unit.NPC.netUpdate=true;
 		}
 		public static void ReceiveActor(BinaryReader r,int from) {
 			int index=r.ReadInt16(),identity=r.ReadInt32(),limb=r.ReadByte();ulong bodyId=r.ReadUInt64();
-			if(Main.netMode!=NetmodeID.Server || from<0 || from>=Main.maxPlayers || !Main.player[from].active || index<0 || index>=Main.maxNPCs || limb>3 || !Main.npc[index].active || Main.npc[index].ModNPC is not CloneUnit unit || unit.Team!=CloneUnit.EnemyTeam || unit.Actor.BodyId!=bodyId)return;
+			if(Main.netMode!=NetmodeID.Server || from<0 || from>=Main.maxPlayers || !Main.player[from].active || index<0 || index>=Main.maxNPCs || limb>5 || !Main.npc[index].active || Main.npc[index].ModNPC is not CloneUnit unit || unit.Team!=CloneUnit.EnemyTeam || unit.Actor.BodyId!=bodyId)return;
 			var projectile=Main.projectile.FirstOrDefault(p=>p.active && p.owner==from && p.identity==identity && p.friendly && p.damage>0);
 			if(projectile==null || Vector2.DistanceSquared(projectile.Center,unit.NPC.Center)>MathF.Pow(Math.Max(64,projectile.velocity.Length()*15),2))return;
 			ActorCommit(unit,projectile,limb);

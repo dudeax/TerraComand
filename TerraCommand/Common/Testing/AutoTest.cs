@@ -607,7 +607,7 @@ namespace TerraCommand.Common.Testing
                     Item gun=P.inventory[Actors.ActorInventory.Held];
                     if(a[2]=="head" && P.PickAmmo(gun,out int round,out float speed,out _,out _,out _,dontConsume:true)
                         && ContentSamples.ProjectilesByType.TryGetValue(round,out var sample) && Physics.KineticBullet.Eligible(sample)) {
-                        float gameSpeed=gun.ModItem is Combat.CCFirearm cc?cc.Spec.FireVelocity:speed*(sample.extraUpdates+1);
+                        float gameSpeed=gun.ModItem is Combat.CCFirearm cc?cc.Spec.FireVelocity*Actors.CC.WorldScale:speed*(sample.extraUpdates+1);
                         Vector2 muzzle=Actors.RigRenderer.GunAt(P.GetModPlayer<Actors.RigPlayer>().Pose());
                         float flight=Math.Max(0,Vector2.Distance(at,muzzle)-20)/Math.Max(1,gameSpeed);
                         at.Y-=Actors.CC.Gravity*(flight*flight+flight/(sample.extraUpdates+1))*.5f;
@@ -826,7 +826,12 @@ namespace TerraCommand.Common.Testing
 					if(!serverMode) throw new InvalidOperationException("detachonsync is a dedicated-server fixture");
 					pendingDetach=(a[1],Enum.Parse<Physics.CraftPart>(a[2],true)); break;
 				}
-				case "limbdetach": {
+				case "wound": {
+                    var actor=a[1]=="player"?P.GetModPlayer<Physics.BodyPhysicsPlayer>().Actor:UnitSystem.TeamUnits(P.team).First().Actor;
+                    actor.Wounds.Add(I(a[2]),a.Length>3?Enum.Parse<Actors.WoundKind>(a[3],true):Actors.WoundKind.Entry);
+                    break;
+                }
+                case "limbdetach": {
                     int limb=I(a[2]);
                     if(a[1]=="player") Physics.LimbSystem.Detach(P,limb);
                     else Physics.LimbSystem.Detach(UnitSystem.TeamUnits(P.team).First(),limb);
@@ -1173,7 +1178,11 @@ namespace TerraCommand.Common.Testing
 					Expect(Cmp(n, a[3], F(a[4])), $"{desc} (has {n})");
 					break;
 				}
-				case "mywounds": { int n = P.GetModPlayer<Combat.DamagePlayer>().Wounds.Count; Expect(Cmp(n, a[2], F(a[3])), $"{desc} (has {n})"); break; }
+				case "injuries": {
+                    var actor=a[2]=="player"?P.GetModPlayer<Physics.BodyPhysicsPlayer>().Actor:a[2]=="other"?Main.player.First(p=>p.active && p.whoAmI!=P.whoAmI).GetModPlayer<Physics.BodyPhysicsPlayer>().Actor:UnitSystem.TeamUnits(P.team).First().Actor;
+                    Expect(Cmp(actor.Wounds.Count,a[3],F(a[4])),$"{desc} (emitters {actor.Wounds.Count})");break;
+                }
+                case "mywounds": { int n = P.GetModPlayer<Combat.DamagePlayer>().Wounds.Count; Expect(Cmp(n, a[2], F(a[3])), $"{desc} (has {n})"); break; }
 				case "unitlife": {
 					var u = UnitSystem.AllUnits().OrderBy(x => Vector2.Distance(x.NPC.Center, P.Center)).First();
 					Expect(Cmp(u.NPC.life, a[2], F(a[3])), $"{desc} (unit life {u.NPC.life}/{u.NPC.lifeMax})");

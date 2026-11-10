@@ -13,7 +13,7 @@ using Terraria.ModLoader;
 namespace TerraCommand.Common.Combat
 {
 	/// <summary>
-	/// Cortex Command style damage: headshots, visible wounds (cosmetic only: no bleeding), gibbing on violent
+	/// Cortex Command style damage: headshots, visible wounds and persistent actor bleeding, gibbing on violent
 	/// deaths, and no natural health regeneration (potions, buffs and accessories still heal).
 	/// </summary>
 	public static class DamageRules
@@ -101,8 +101,10 @@ namespace TerraCommand.Common.Combat
 		}
 
 		public override void OnHitByProjectile(NPC npc,Projectile projectile,NPC.HitInfo hit,int damageDone) {
-			if(npc.life>0 && npc.ModNPC is Content.NPCs.CloneUnit unit && unit.Actor.Limbs.At(unit.Actor,npc.Bottom,DamageRules.HitPoint(npc.Hitbox,projectile)) is int limb)
-				Physics.CraftPartHits.ActorHit(unit,projectile,limb);
+			if(npc.life>0 && damageDone>0 && npc.ModNPC is Content.NPCs.CloneUnit unit) {
+                int region=unit.Actor.Limbs.At(unit.Actor,npc.Bottom,DamageRules.HitPoint(npc.Hitbox,projectile)) ?? (LastHeadshot ? 5 : 4);
+                Physics.CraftPartHits.ActorHit(unit,projectile,region);
+            }
 		}
 
 		/// <summary>Whether the most recent projectile hit (on this machine) was a headshot. For tests.</summary>
@@ -147,12 +149,15 @@ namespace TerraCommand.Common.Combat
 		int headshotTicks;               // the last hit was a headshot, recently
 		Vector2? pendingHitPoint;
 		bool pendingHead;
+        Vector2 pendingImpulse;
 
 		public override void NaturalLifeRegen(ref float regen)
 		{
 			if (!TerraCommandConfig.Instance.NaturalLifeRegen)
 				regen = 0f;
 		}
+
+		public override void PostUpdate() => ActorInjurySystem.Tick(Player);
 
 		public override void ResetEffects()
 		{
@@ -169,7 +174,12 @@ namespace TerraCommand.Common.Combat
 			Vector2 hp = DamageRules.HitPoint(Player.Hitbox, proj);
 			pendingHitPoint = hp;
 			pendingHead = DamageRules.InHeadZone(Player.Hitbox, hp);
-			var anatomy=Player.GetModPlayer<Physics.BodyPhysicsPlayer>().Actor;
+			pendingImpulse=Vector2.Zero;
+            if(Physics.KineticBullet.Eligible(proj)) {
+                var profile=Physics.RoundProfile.Get(proj.GetGlobalProjectile<Physics.KineticBullet>().Profile);
+                pendingImpulse=(proj.velocity-Player.velocity/(proj.extraUpdates+1))*((proj.extraUpdates+1)*60f/Actors.CC.PPM*profile.Mass);
+            }
+            var anatomy=Player.GetModPlayer<Physics.BodyPhysicsPlayer>().Actor;
 			if(anatomy.Limbs.At(anatomy,Player.Bottom,hp).HasValue)pendingHead=false;
 			if (DamageRules.IsExplosive(proj))
 				BlastedTimer = 15;
@@ -193,10 +203,17 @@ namespace TerraCommand.Common.Combat
 				DamageRules.AddWound(Wounds, Player.Hitbox, pendingHitPoint, pendingHead, Player.direction);
 				GibSystem.Spray(pendingHitPoint ?? Player.Center, new Vector2(info.HitDirection, -0.3f), 5);
 			}
-			if(Player.whoAmI==Main.myPlayer && !Player.dead && pendingHitPoint is Vector2 point) {
+			if(info.Damage>0 && info.DamageSource.SourceProjectileType>0 && Player.whoAmI==Main.myPlayer && !Player.dead && pendingHitPoint is Vector2 point) {
 				var actor=Player.GetModPlayer<Physics.BodyPhysicsPlayer>().Actor;
-				if(actor.Limbs.At(actor,Player.Bottom,point) is int limb && actor.Limbs.Wound(limb)) Physics.LimbSystem.Detach(Player,limb);
+				int region=actor.Limbs.At(actor,Player.Bottom,point) ?? (pendingHead ? 5 : 4);
+                ActorInjurySystem.Wound(actor,region);
+                if(region<4) {
+                    bool sever=actor.Limbs.Wound(region,actor.Kind);
+                    sever |= actor.Limbs.Impulse(actor.Kind,region,pendingImpulse,Main.GameUpdateCount).Detached;
+                    if(sever)Physics.LimbSystem.Detach(Player,region);
+                }
 			}
+			pendingImpulse=Vector2.Zero;
 			headshotTicks = pendingHead ? 10 : 0;
 			pendingHitPoint = null;
 			pendingHead = false;

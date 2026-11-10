@@ -6,7 +6,7 @@
       "sources": [
         "Coalition.rte/Actors/Infantry/CoalitionLight/TorsoA.png"
       ],
-      "operation": "palette transparency; nearest-neighbour fit"
+      "operation": "palette transparency"
     },
     {
       "output": "TerraCommand/Content/Actors/Soldier/Head.png",
@@ -210,14 +210,14 @@
       "sources": [
         "Coalition.rte/Actors/Infantry/CoalitionLight/TorsoA.png"
       ],
-      "operation": "palette transparency; nearest-neighbour fit"
+      "operation": "palette transparency"
     },
     {
       "output": "TerraCommand/Content/Actors/Light/Head.png",
       "sources": [
         "Coalition.rte/Actors/Infantry/CoalitionLight/HeadA.png"
       ],
-      "operation": "palette transparency; nearest-neighbour fit"
+      "operation": "palette transparency"
     },
     {
       "output": "TerraCommand/Content/Actors/Light/Foot.png",
@@ -413,14 +413,14 @@
       "sources": [
         "Coalition.rte/Actors/Infantry/CoalitionHeavy/TorsoB.png"
       ],
-      "operation": "palette transparency; nearest-neighbour fit"
+      "operation": "palette transparency"
     },
     {
       "output": "TerraCommand/Content/Actors/Heavy/Head.png",
       "sources": [
         "Coalition.rte/Actors/Infantry/CoalitionHeavy/HeadB.png"
       ],
-      "operation": "palette transparency; nearest-neighbour fit"
+      "operation": "palette transparency"
     },
     {
       "output": "TerraCommand/Content/Actors/Heavy/Foot.png",
@@ -616,14 +616,14 @@
       "sources": [
         "Base.rte/Actors/Brains/Brainbot/Torso.png"
       ],
-      "operation": "palette transparency; nearest-neighbour fit"
+      "operation": "palette transparency"
     },
     {
       "output": "TerraCommand/Content/Actors/Brain/Head.png",
       "sources": [
         "Base.rte/Actors/Brains/Brainbot/MobileBrain000.png"
       ],
-      "operation": "palette transparency; nearest-neighbour fit"
+      "operation": "palette transparency"
     },
     {
       "output": "TerraCommand/Content/Actors/Brain/Foot.png",
@@ -840,14 +840,14 @@
       "sources": [
         "Base.rte/Actors/Shared/Jetpack.png"
       ],
-      "operation": "palette transparency; nearest-neighbour fit"
+      "operation": "palette transparency"
     },
     {
       "output": "TerraCommand/Content/Actors/Crab/Body.png",
       "sources": [
         "Coalition.rte/Actors/Mecha/GatlingDrone/MountMobile000.png"
       ],
-      "operation": "palette transparency; nearest-neighbour fit"
+      "operation": "palette transparency"
     },
     {
       "output": "TerraCommand/Content/Actors/Crab/LegFront0.png",
@@ -941,18 +941,74 @@
       "operation": "palette transparency; nearest-neighbour fit"
     },
     {
+      "output": "TerraCommand/Content/Actors/BlastRunner/Body.png",
+      "sources": [
+        "Coalition.rte/Actors/Mecha/BlastRunner/BlastRunnerBody000.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/BlastRunner/LegFront0.png",
+      "sources": [
+        "Coalition.rte/Actors/Mecha/BlastRunner/LegFGSmallA000.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/BlastRunner/LegBack0.png",
+      "sources": [
+        "Coalition.rte/Actors/Mecha/BlastRunner/LegBGSmallA000.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/BlastRunner/LegFront1.png",
+      "sources": [
+        "Coalition.rte/Actors/Mecha/BlastRunner/LegFGSmallA001.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/BlastRunner/LegBack1.png",
+      "sources": [
+        "Coalition.rte/Actors/Mecha/BlastRunner/LegBGSmallA001.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/BlastRunner/LegFront2.png",
+      "sources": [
+        "Coalition.rte/Actors/Mecha/BlastRunner/LegFGSmallA002.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Actors/BlastRunner/LegBack2.png",
+      "sources": [
+        "Coalition.rte/Actors/Mecha/BlastRunner/LegBGSmallA002.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Items/BlastRunner.png",
+      "sources": [
+        "Coalition.rte/Actors/Mecha/BlastRunner/BlastRunnerBody000.png"
+      ],
+      "operation": "palette transparency; nearest-neighbour fit"
+    },
+    {
       "output": "TerraCommand/Content/Actors/Turret/Base.png",
       "sources": [
         "Base.rte/Actors/Turrets/SmallTurret/MountStaticA000.png"
       ],
-      "operation": "palette transparency; nearest-neighbour fit"
+      "operation": "palette transparency"
     },
     {
       "output": "TerraCommand/Content/Actors/Turret/Head.png",
       "sources": [
         "Base.rte/Actors/Turrets/SmallTurret/TurretSmallA.png"
       ],
-      "operation": "palette transparency; nearest-neighbour fit"
+      "operation": "palette transparency"
     },
     {
       "output": "TerraCommand/Content/Items/TurretKit.png",
@@ -1077,6 +1133,34 @@
       "output": "TerraCommand/Content/Items/Devices/Medikit.png",
       "sources": [
         "Base.rte/Devices/Special/Medikit/MedikitA.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Items/Devices/AutoPistol.png",
+      "sources": [
+        "Coalition.rte/Devices/Weapons/AutoPistol/AutoPistol000.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Items/Devices/HeavyPistol.png",
+      "sources": [
+        "Coalition.rte/Devices/Weapons/HeavyPistol/HeavyPistol000.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Items/Devices/Shotgun.png",
+      "sources": [
+        "Coalition.rte/Devices/Weapons/Shotgun/Shotgun000.png"
+      ],
+      "operation": "palette transparency"
+    },
+    {
+      "output": "TerraCommand/Content/Items/Devices/AutoShotgun.png",
+      "sources": [
+        "Coalition.rte/Devices/Weapons/AutoShotgun/AutoShotgun000.png"
       ],
       "operation": "palette transparency"
     },

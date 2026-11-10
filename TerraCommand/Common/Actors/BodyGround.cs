@@ -12,8 +12,8 @@ namespace TerraCommand.Common.Actors
 	/// </summary>
 	public static class BodyGround
 	{
-		public const float FeetHalfWidth = 4f;     // the feet occupy the middle of the (14px) hitbox
-		public const float MaxStepDown = 6f;
+		public const float FeetHalfWidth = 4f * CC.WorldScale;     // the feet occupy the middle of the (14px) hitbox
+		public const float MaxStepDown = 6f * CC.WorldScale;
 
 		static bool Solid(float x, float y, float w, float h) => Collision.SolidCollision(new Vector2(x, y), (int)w, (int)h);
 
@@ -21,14 +21,14 @@ namespace TerraCommand.Common.Actors
 		public static float Slope(Vector2 feet)
 		{
 			float? Ray(float x) {
-				for (int y = -12; y <= 18; y++)
+				for (int y = -12 * CC.WorldScale; y <= 18 * CC.WorldScale; y++)
 					if (TerrariaActorTerrain.Instance.Sample(new Vector2(x,feet.Y + y),out _)) return feet.Y + y;
 				return null;
 			}
-			float? left = Ray(feet.X - 10), right = Ray(feet.X + 10);
-			if (!left.HasValue || !right.HasValue || left.Value <= feet.Y - 12 || right.Value <= feet.Y - 12)
+			float? left = Ray(feet.X - 10 * CC.WorldScale), right = Ray(feet.X + 10 * CC.WorldScale);
+			if (!left.HasValue || !right.HasValue || left.Value <= feet.Y - 12 * CC.WorldScale || right.Value <= feet.Y - 12 * CC.WorldScale)
 				return 0;
-			return Math.Clamp(MathF.Atan2(right.Value - left.Value, 20f), -MathHelper.ToRadians(40), MathHelper.ToRadians(40));
+			return Math.Clamp(MathF.Atan2(right.Value - left.Value, 20f * CC.WorldScale), -MathHelper.ToRadians(40), MathHelper.ToRadians(40));
 		}
 
 		/// <summary>

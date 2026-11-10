@@ -70,8 +70,12 @@ wait 10
 expect headshot no
 expect wounds Zombie >= 1
 screenshot wounds
+# Spread was exercised above; use a precise rifle to isolate head-region routing.
+give Longshot
+hold Longshot
 aimnpc Zombie head
 wait 150                         # settle sharp aim before checking the hit zone
+aimnpc Zombie head               # refresh after the prone body settles
 shoot 1 30
 wait 10
 expect headshot yes

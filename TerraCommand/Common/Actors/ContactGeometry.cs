@@ -23,16 +23,16 @@ namespace TerraCommand.Common.Actors
 		public static Vector2 HipOffset(CCActor a, float rotation) {
 			float lying = Math.Clamp((Math.Abs(MathF.Sin(rotation)) - 0.3f) / 0.5f, 0, 1);
 			float h = MathHelper.Lerp(15, a.Kind == ActorKind.Brain ? 11 : 9, a.Status == ActorStatus.Stable && a.Prone == ProneState.NotProne ? a.CrouchAmount : 0);
-			return new Vector2(-a.FlipFactor * 6.5f * lying, -MathHelper.Lerp(h, 6, lying));
+			return new Vector2(-a.FlipFactor * 6.5f * lying, -MathHelper.Lerp(h, 6, lying)) * CC.WorldScale;
 		}
-		public static Vector2 Shoulder(CCActor a) => a.Kind == ActorKind.Heavy ? new(1, -15) : a.Kind == ActorKind.Brain ? new(0, -12) : new(1, -13);
-		public static Vector2 Neck(CCActor a) => a.Kind == ActorKind.Heavy ? new(1, -17) : a.Kind == ActorKind.Brain ? new(0, -8) : new(1, -15);
+		public static Vector2 Shoulder(CCActor a) => (a.Kind == ActorKind.Heavy ? new Vector2(1, -15) : a.Kind == ActorKind.Brain ? new Vector2(0, -12) : new Vector2(1, -13)) * CC.WorldScale;
+		public static Vector2 Neck(CCActor a) => (a.Kind == ActorKind.Heavy ? new Vector2(1, -17) : a.Kind == ActorKind.Brain ? new Vector2(0, -8) : new Vector2(1, -15)) * CC.WorldScale;
 		public static Vector2 Joint(CCActor a, Vector2 hip, float rot, int limb) {
 			if (a.Kind == ActorKind.Crab) {
 				float x = limb switch { 0 => -6, 1 => 6, 2 => -4, _ => 8 };
-				return hip - HipOffset(a, rot) - new Vector2(0, 12) + Rotate(new Vector2(x * a.FlipFactor, 3), rot);
+				return hip - HipOffset(a, rot) - new Vector2(0, 12) * CC.WorldScale + Rotate(new Vector2(x * a.FlipFactor, 3) * CC.WorldScale, rot);
 			}
-			if (limb < 2) return hip + Rotate(new Vector2((limb == 0 ? 1 : -1) * a.FlipFactor, 0), a.Lying ? rot : a.GroundSlope);
+			if (limb < 2) return hip + Rotate(new Vector2((limb == 0 ? 1 : -1) * a.FlipFactor, 0) * CC.WorldScale, a.Lying ? rot : a.GroundSlope);
 			Vector2 shoulder = Shoulder(a); shoulder.X *= limb == 2 ? a.FlipFactor : -a.FlipFactor;
 			return hip + Rotate(shoulder, rot);
 		}
@@ -44,26 +44,27 @@ namespace TerraCommand.Common.Actors
 			return Vector2.Dot(p - from, bend) >= Vector2.Dot(q - from, bend) ? p : q;
 		}
 
-		public static int Build(CCActor a, Vector2 feet, float rotation, Vector2[] into, bool limbs = false) {
+		public static int Build(CCActor a, Vector2 feet, float rotation, Vector2[] into, bool limbs = false, byte[] regions = null) {
 			Vector2 hip = feet + HipOffset(a, rotation);
 			int n = 0, dir = a.FlipFactor;
-			void Part(string part, Vector2 at, float angle, Vector2 origin) {
+			void Part(string part, Vector2 at, float angle, Vector2 origin, byte region = 4) {
 				ContactMask mask = ActorSpriteMasks.Get(a.Kind, part);
 				for (int i = 0; i < mask.Points.Length && n < into.Length; i += 2) {
 					Vector2 p = new(mask.Points[i] - origin.X, mask.Points[i + 1] - origin.Y);
 					p.X *= dir;
-					into[n++] = at + Rotate(p, angle);
+					if(regions != null && n < regions.Length) regions[n] = region;
+					into[n++] = at + Rotate(p * CC.WorldScale, angle);
 				}
 			}
 			ContactMask torso = ActorSpriteMasks.Get(a.Kind, a.Kind == ActorKind.Crab ? "Body" : a.Kind == ActorKind.Turret ? "Base" : "Torso");
 			if (a.Kind == ActorKind.Crab || a.Kind == ActorKind.Turret) {
-				Part(a.Kind == ActorKind.Crab ? "Body" : "Base", feet - new Vector2(0, torso.Height / 2f), rotation, new Vector2(torso.Width / 2f, torso.Height / 2f));
+				Part(a.Kind == ActorKind.Crab ? "Body" : "Base", feet - new Vector2(0, torso.Height / 2f * CC.WorldScale), rotation, new Vector2(torso.Width / 2f, torso.Height / 2f));
 				if (a.Kind == ActorKind.Crab && limbs && a.Contacts.Initialized) {
 					for (int i = 0; i < 4; i++) {
 						if(!a.Limbs.Has(i)) continue;
 				Vector2 joint = Joint(a, hip, rotation, i), tip = a.Contacts.Limbs[i].Position;
-						Vector2 knee = Knee(joint, tip, 6, Rotate(-Vector2.UnitY, rotation));
-						tip = knee + Normalized(tip - knee, Vector2.UnitY) * 6;
+						Vector2 knee = Knee(joint, tip, 6 * CC.WorldScale, Rotate(-Vector2.UnitY, rotation));
+						tip = knee + Normalized(tip - knee, Vector2.UnitY) * (6 * CC.WorldScale);
 						for (int bone = 0; bone < 2; bone++) {
 							string part = bone == 0 ? "Thigh" : "Shin";
 							Vector2 from = part == "Thigh" ? joint : knee, to = part == "Thigh" ? knee : tip;
@@ -74,7 +75,7 @@ namespace TerraCommand.Common.Actors
 				}
 				if (a.Kind == ActorKind.Turret) {
 					ContactMask head = ActorSpriteMasks.Get(a.Kind, "Head");
-					Part("Head", feet - new Vector2(0, 16), -a.AimAngle * dir, new Vector2(head.Width / 2f, head.Height / 2f));
+					Part("Head", feet - new Vector2(0, 16) * CC.WorldScale, -a.AimAngle * dir, new Vector2(head.Width / 2f, head.Height / 2f));
 				}
 				return n;
 			}
@@ -82,18 +83,18 @@ namespace TerraCommand.Common.Actors
 			Vector2 neck = Neck(a); neck.X *= dir;
 			ContactMask hm = ActorSpriteMasks.Get(a.Kind, "Head");
 			float headTurn = a.Status != ActorStatus.Stable ? 0 : Math.Clamp(-a.AimAngle * 0.45f * dir - rotation * 0.4f, -0.6f, 0.6f);
-			Part("Head", hip + Rotate(neck, rotation), rotation + headTurn, new Vector2(hm.Width / 2f, hm.Height));
+			Part("Head", hip + Rotate(neck, rotation), rotation + headTurn, new Vector2(hm.Width / 2f, hm.Height), 5);
 			if (a.Kind != ActorKind.Brain) {
 				Vector2 pack = a.Kind == ActorKind.Heavy ? new(-8 * dir, -10) : new(-7 * dir, -9);
-				Part("Jetpack", hip + Rotate(pack, rotation), rotation, new Vector2(ActorSpriteMasks.Jetpack.Width / 2f, ActorSpriteMasks.Jetpack.Height / 2f));
+				Part("Jetpack", hip + Rotate(pack * CC.WorldScale, rotation), rotation, new Vector2(ActorSpriteMasks.Jetpack.Width / 2f, ActorSpriteMasks.Jetpack.Height / 2f), 6);
 			}
 			if (!limbs || !a.Contacts.Initialized) return n;
 			for (int i = 0; i < 4; i++) {
 				if(!a.Limbs.Has(i)) continue;
 				Vector2 joint = Joint(a, hip, rotation, i), tip = a.Contacts.Limbs[i].Position;
-				float length = i < 2 ? 7 : a.Kind == ActorKind.Brain ? 6 : 7;
+				float length = (i < 2 ? 7 : a.Kind == ActorKind.Brain ? 6 : 7) * CC.WorldScale;
 				float frame = a.Lying ? rotation : a.GroundSlope;
-				Vector2 end = i < 2 ? tip - Rotate(new Vector2(0, 2), frame) : tip;
+				Vector2 end = i < 2 ? tip - Rotate(new Vector2(0, 2) * CC.WorldScale, frame) : tip;
 				Vector2 bend = i < 2 ? Rotate(new Vector2(dir, 0), frame) : Rotate(Vector2.UnitY, rotation);
 				Vector2 middle = Knee(joint, end, length, bend);
 				end = middle + Normalized(end - middle, Vector2.UnitY) * length;

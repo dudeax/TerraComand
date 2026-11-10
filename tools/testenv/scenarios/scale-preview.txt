@@ -1,0 +1,45 @@
+nospawn
+clearnpcs
+clearunits
+goto spawn
+flatten 180 90
+maxlife 400
+wait 60
+heal
+clearinv
+give CoalitionAssaultRifle
+hold CoalitionAssaultRifle
+aim 25 -5
+spawnunit -360 0 CoalitionAssaultRifle Light
+spawnunit -240 0 CoalitionAssaultRifle Heavy
+spawnunit -120 0 CoalitionPistol Brain
+spawnunit 120 0 ServicePistol Crab
+spawnunit 240 0 FieldRifle Turret
+wait 90
+expect height == 84
+expect width == 28
+expect shapeinsolid == 0
+screenshot native-2x-actors
+aim 25 -40
+wait 15
+mark
+shoot 1 0
+wait 1
+expect rounds == 34
+expect bulletx > 0
+stock GoldCoin 20
+fill 10 0 42 3 LihzahrdBrick
+callcraft rocket 20
+wait 950
+expect shipstate waiting
+expect shipmass == 948
+screenshot native-2x-rocket
+clearnpcs
+clearunits
+goto spawn
+wait 60
+callcraft dropship 18
+wait 950
+expect shipstate waiting
+expect shipmass == 3422
+screenshot native-2x-dropship

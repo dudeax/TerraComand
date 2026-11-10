@@ -1,4 +1,4 @@
 nospawn
-flatten 140 40
+flatten 260 60
 stock GoldCoin 10
 stock CloneBody 2

@@ -8,6 +8,7 @@ using Terraria.ID;
 using Terraria.ModLoader;
 using TerraCommand.Common.Destruction;
 using TerraCommand.Common.Physics;
+using Actors = TerraCommand.Common.Actors;
 
 namespace TerraCommand.Content.Projectiles
 {
@@ -21,7 +22,7 @@ namespace TerraCommand.Content.Projectiles
 	{
 		public override void SetDefaults()
 		{
-			Projectile.width = Projectile.height = 14;
+			Projectile.width = Projectile.height = 14 * Actors.CC.WorldScale;
 			Projectile.friendly = true;
 			Projectile.DamageType = DamageClass.Ranged;
 			Projectile.penetrate = 6;
@@ -36,7 +37,7 @@ namespace TerraCommand.Content.Projectiles
 		public override void AI()
 		{
 			Projectile.rotation += 0.6f * Math.Sign(Projectile.velocity.X == 0 ? 1 : Projectile.velocity.X);
-			Projectile.velocity.Y += 0.04f;
+			Projectile.velocity.Y += 0.04f * Actors.CC.WorldScale;
 			if (Main.rand.NextBool(4) && !Main.dedServ) {
 				var d = Dust.NewDustDirect(Projectile.position, Projectile.width, Projectile.height, DustID.Iron, 0, 0, 120, default, 0.8f);
 				d.noGravity = true;
@@ -62,7 +63,7 @@ namespace TerraCommand.Content.Projectiles
 		public override bool PreDraw(ref Color lightColor)
 		{
 			Texture2D tex = TextureAssets.Projectile[Type].Value;
-			Main.EntitySpriteDraw(tex, Projectile.Center - Main.screenPosition, null, lightColor, Projectile.rotation, tex.Size() / 2f, 1f, SpriteEffects.None);
+			Main.EntitySpriteDraw(tex, Projectile.Center - Main.screenPosition, null, lightColor, Projectile.rotation, tex.Size() / 2f, Actors.CC.WorldScale, SpriteEffects.None);
 			return false;
 		}
 	}
@@ -144,7 +145,7 @@ namespace TerraCommand.Content.Projectiles
 
 		public override void SetDefaults()
 		{
-			Projectile.width = Projectile.height = Small ? 8 : 12;
+			Projectile.width = Projectile.height = (Small ? 8 : 12) * Actors.CC.WorldScale;
 			Projectile.friendly = true;
 			Projectile.DamageType = DamageClass.Ranged;
 			Projectile.penetrate = -1;
@@ -177,7 +178,7 @@ namespace TerraCommand.Content.Projectiles
 						Projectile.Kill();
 						return;
 					}
-			Projectile.velocity.Y = Math.Min(Projectile.velocity.Y + 0.25f, 12f);
+			Projectile.velocity.Y = Math.Min(Projectile.velocity.Y + 0.25f * Actors.CC.WorldScale, 12f * Actors.CC.WorldScale);
 			Projectile.rotation += Projectile.velocity.X * 0.08f;
 			if (Fuse > 0 && !Remote && Projectile.timeLeft % 20 == 0 && !Main.dedServ)
 				Dust.NewDust(Projectile.Center, 1, 1, DustID.Torch, 0, -1f, 0, default, 0.7f);
@@ -206,7 +207,7 @@ namespace TerraCommand.Content.Projectiles
 
 		public override void OnKill(int timeLeft)
 		{
-			Explosions.Detonate(Projectile.Center, BlastRadius, Projectile.damage, Projectile.owner);
+			Explosions.Detonate(Projectile.Center, BlastRadius * Actors.CC.WorldScale, Projectile.damage, Projectile.owner);
 			if (Projectile.owner != Main.myPlayer)
 				return;
 			var src = Projectile.GetSource_FromThis();
@@ -237,7 +238,7 @@ namespace TerraCommand.Content.Projectiles
 		public override bool PreDraw(ref Color lightColor)
 		{
 			Texture2D tex = TextureAssets.Projectile[Type].Value;
-			Main.EntitySpriteDraw(tex, Projectile.Center - Main.screenPosition, null, lightColor, Projectile.rotation, tex.Size() / 2f, 1f, SpriteEffects.None);
+			Main.EntitySpriteDraw(tex, Projectile.Center - Main.screenPosition, null, lightColor, Projectile.rotation, tex.Size() / 2f, Actors.CC.WorldScale, SpriteEffects.None);
 			return false;
 		}
 	}
@@ -299,7 +300,7 @@ namespace TerraCommand.Content.Projectiles
 		public override bool PreDraw(ref Color lightColor)
 		{
 			Texture2D tex = TextureAssets.Projectile[Type].Value;
-			Main.EntitySpriteDraw(tex, Projectile.Center - Main.screenPosition, null, lightColor, Projectile.rotation, tex.Size() / 2f, 0.55f, SpriteEffects.None);
+			Main.EntitySpriteDraw(tex, Projectile.Center - Main.screenPosition, null, lightColor, Projectile.rotation, tex.Size() / 2f, 0.55f * Actors.CC.WorldScale, SpriteEffects.None);
 			return false;
 		}
 	}

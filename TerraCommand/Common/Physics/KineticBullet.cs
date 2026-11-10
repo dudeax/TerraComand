@@ -101,7 +101,7 @@ namespace TerraCommand.Common.Physics {
 			if(!TerrainRules.IsCarvable(x,y)||!WorldGen.CanKillTile(x,y))return true;
 			int type=Main.tile[x,y].TileType;
 			if(!TerrainRules.ExplosionCanAffect(type)||TerrainRules.MinPick(type)>TerrainRules.ExplosivePower)return true;
-			resistance=Main.netMode==NetmodeID.MultiplayerClient?TerrainRules.Material(type).Integrity*4:BallisticFractures.Resistance(point);
+			resistance=Main.netMode==NetmodeID.MultiplayerClient?TerrainRules.Material(type).Integrity*global::TerraCommand.Common.Actors.CC.TerrainCellArea:BallisticFractures.Resistance(point);
 			return true;
 		}
 		public void Spend(Vector2 point,float work) {

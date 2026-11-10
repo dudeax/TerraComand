@@ -61,17 +61,17 @@ namespace TerraCommand.Common.Physics {
 				occupied.Add(fill.Points[i] / 2 + fill.Points[i + 1] / 2 * ((fill.Width + 1) / 2));
 				bottom = Math.Max(bottom, fill.Points[i + 1] + 1);
 			}
-			Width = style == ShipStyle.Rocket ? 40 : hull.Width;
-			Height = style == ShipStyle.Rocket ? 105 : style==ShipStyle.Dropship?86:bottom;
+			Width = (style == ShipStyle.Rocket ? 40 : hull.Width) * CC.WorldScale;
+			Height = (style == ShipStyle.Rocket ? 105 : style==ShipStyle.Dropship?86:bottom) * CC.WorldScale;
 			SweepRadius = Math.Max(Width, Height);
 			Motion.Shape = this; Motion.Mass = Profile.EmptyMass; Motion.Friction=.4f; Motion.Restitution=.5f;
 			Motion.ContactImpulse=OnContactImpulse;
 			UpdateInertia();
 		}
 
-		public Vector2 CentreOffset(float rotation) => new(0, origin.Y - Height);
+		public Vector2 CentreOffset(float rotation) => new(0, origin.Y * CC.WorldScale - Height);
 		public Vector2 Centre => Motion.Position + CentreOffset(Motion.Rotation);
-		public Vector2 World(Vector2 local) => Centre + ContactGeometry.Rotate(local, Motion.Rotation);
+		public Vector2 World(Vector2 local) => Centre + ContactGeometry.Rotate(local * CC.WorldScale, Motion.Rotation);
 		public Vector2 TextureOrigin => origin;
 		public Vector2 DrawPosition => Centre;
 		public Vector2 GearOffset(int side) => new(side * (12 + 5 * Gear), 29 + 8 + 8 * Gear);
@@ -79,7 +79,14 @@ namespace TerraCommand.Common.Physics {
 		bool InBay(Vector2 local) => Style==ShipStyle.Dropship
 			? (BayOpen || !Attachments.Has(local.X<0?CraftPart.LeftHatch:CraftPart.RightHatch)) && Math.Abs(local.X)<24 && local.Y>5 && local.Y<46
 			: BayOpen && Style==ShipStyle.Rocket && Math.Abs(local.X)<9 && local.Y>-20 && local.Y<30;
-		public float PartAngle(CraftPart part) => part<=CraftPart.RightEngine?EngineAngle:part>=CraftPart.LeftHatch?Motion.Rotation+(part==CraftPart.LeftHatch?1:-1)*MathHelper.ToRadians(28)*HatchOpen:Motion.Rotation;
+		// Leg::UpdateLegRotation: correct the native horizontal sprite toward the gear's ankle path.
+        float GearExtension => Math.Clamp((new Vector2(5*Gear,8+8*Gear).Length()-MathF.Sqrt(125))/(MathF.Sqrt(349)-MathF.Sqrt(125)),0,1);
+        public int GearFrame => Math.Min(4,(int)MathF.Floor(GearExtension*5));
+        public float GearAngle(int side) {
+            float correction=-MathF.Atan2(-5,10)-(MathF.Atan2(-5,18)-MathF.Atan2(-5,10))*MathF.Sin(GearExtension*MathHelper.PiOver2);
+            return Motion.Rotation+MathF.Atan2(8+8*Gear,side*5*Gear)+(side<0?MathHelper.Pi:0)+side*correction;
+        }
+        public float PartAngle(CraftPart part) => part<= CraftPart.RightEngine?EngineAngle:part>=CraftPart.LeftHatch?Motion.Rotation+(part==CraftPart.LeftHatch?1:-1)*MathHelper.ToRadians(28)*HatchOpen:GearAngle(part==CraftPart.LeftGear?-1:1);
 		public static Vector2 PartOrigin(CraftPart part) => part switch {CraftPart.LeftEngine=>new(29,21),CraftPart.RightEngine=>new(6,21),CraftPart.LeftHatch=>new(36,-22),CraftPart.RightHatch=>new(0,-22),_=>new(4,10)};
 		public static ContactMask HatchMask(CraftPart part,bool fill) => part==CraftPart.LeftHatch?(fill?ShipCollisionMasks.DropshipHatchLeftFill:ShipCollisionMasks.DropshipHatchLeftHull):(fill?ShipCollisionMasks.DropshipHatchRightFill:ShipCollisionMasks.DropshipHatchRightHull);
 
@@ -87,42 +94,42 @@ namespace TerraCommand.Common.Physics {
 			Vector2 centre = feet + CentreOffset(angle); int count = 0;
 			if (Style == ShipStyle.Dropship) {
 				Add(ShipCollisionMasks.DropshipBodyHull,centre,new Vector2(55,32),angle);
-				if(Attachments.Has(CraftPart.LeftEngine)) Add(ShipCollisionMasks.DropshipEngineLeftHull,centre + ContactGeometry.Rotate(new Vector2(-49,-3),angle),new Vector2(29,21),EngineAngle);
-				if(Attachments.Has(CraftPart.RightEngine)) Add(ShipCollisionMasks.DropshipEngineRightHull,centre + ContactGeometry.Rotate(new Vector2(49,-3),angle),new Vector2(6,21),EngineAngle);
+				if(Attachments.Has(CraftPart.LeftEngine)) Add(ShipCollisionMasks.DropshipEngineLeftHull,centre + ContactGeometry.Rotate(new Vector2(-49,-3) * CC.WorldScale,angle),new Vector2(29,21),EngineAngle);
+				if(Attachments.Has(CraftPart.RightEngine)) Add(ShipCollisionMasks.DropshipEngineRightHull,centre + ContactGeometry.Rotate(new Vector2(49,-3) * CC.WorldScale,angle),new Vector2(6,21),EngineAngle);
 				foreach(var part in new[]{CraftPart.LeftHatch,CraftPart.RightHatch}) if(Attachments.Has(part))
-					Add(HatchMask(part,false),centre+ContactGeometry.Rotate(PartJoint(part),angle),PartOrigin(part),angle+(part==CraftPart.LeftHatch?1:-1)*MathHelper.ToRadians(28)*HatchOpen,false);
+					Add(HatchMask(part,false),centre+ContactGeometry.Rotate(PartJoint(part) * CC.WorldScale,angle),PartOrigin(part),angle+(part==CraftPart.LeftHatch?1:-1)*MathHelper.ToRadians(28)*HatchOpen,false);
 				return count;
 			}
 			void Add(ContactMask mask,Vector2 pivot,Vector2 spriteOrigin,float rotation,bool cutBay=true) {
 				for(int i=0;i<mask.Points.Length && count<atoms.Length;i+=2) {
-					Vector2 point=pivot+ContactGeometry.Rotate(new Vector2(mask.Points[i],mask.Points[i+1])-spriteOrigin,rotation);
-					if (!cutBay || !InBay(ContactGeometry.Rotate(point-centre,-angle))) atoms[count++]=point;
+					Vector2 point=pivot+ContactGeometry.Rotate((new Vector2(mask.Points[i],mask.Points[i+1])-spriteOrigin) * CC.WorldScale,rotation);
+					if (!cutBay || !InBay(ContactGeometry.Rotate(point-centre,-angle) / CC.WorldScale)) atoms[count++]=point;
 				}
 			}
 			for (int i = 0; i < hull.Points.Length && count < atoms.Length; i += 2) {
 				Vector2 local = new Vector2(hull.Points[i], hull.Points[i + 1]) - origin;
-				if (!InBay(local)) atoms[count++] = centre + ContactGeometry.Rotate(local, angle);
+				if (!InBay(local)) atoms[count++] = centre + ContactGeometry.Rotate(local * CC.WorldScale, angle);
 			}
 			if (Style == ShipStyle.Rocket) {
 				// Landing gear's source static paths: raised (0,8), lowered (5,16), under joints (+/-12,29).
 				for (int side = -1; side <= 1; side += 2) {
 					if(!Attachments.Has(side<0?CraftPart.LeftGear:CraftPart.RightGear)) continue;
-					Vector2 foot = centre + ContactGeometry.Rotate(GearOffset(side), angle);
-					for (int x = -3; x <= 3 && count < atoms.Length; x++) atoms[count++] = foot + new Vector2(x, 0);
+					Vector2 foot = centre + ContactGeometry.Rotate(GearOffset(side) * CC.WorldScale, angle);
+					for (int x = -3; x <= 3 && count < atoms.Length; x++) atoms[count++] = foot + new Vector2(x * CC.WorldScale, 0);
 				}
 			}
 			return count;
 		}
 
 		public bool Contains(Vector2 worldPoint) {
-			Vector2 local = ContactGeometry.Rotate(worldPoint - Centre, -Motion.Rotation);
+			Vector2 local = ContactGeometry.Rotate(worldPoint - Centre, -Motion.Rotation) / CC.WorldScale;
 			if(Style==ShipStyle.Dropship) foreach(var part in new[]{CraftPart.LeftHatch,CraftPart.RightHatch})
-				if(Attachments.Has(part) && MaskContains(HatchMask(part,true),ContactGeometry.Rotate(worldPoint-World(PartJoint(part)),-PartAngle(part))+PartOrigin(part))) return true;
+				if(Attachments.Has(part) && MaskContains(HatchMask(part,true),ContactGeometry.Rotate(worldPoint-World(PartJoint(part)),-PartAngle(part))/CC.WorldScale+PartOrigin(part))) return true;
 			if (InBay(local)) return false;
 			if (Style == ShipStyle.Dropship) {
 				return MaskContains(ShipCollisionMasks.DropshipBodyFill,local + new Vector2(55,32))
-					|| Attachments.Has(CraftPart.LeftEngine) && MaskContains(ShipCollisionMasks.DropshipEngineLeftFill,ContactGeometry.Rotate(worldPoint-World(new Vector2(-49,-3)),-EngineAngle)+new Vector2(29,21))
-					|| Attachments.Has(CraftPart.RightEngine) && MaskContains(ShipCollisionMasks.DropshipEngineRightFill,ContactGeometry.Rotate(worldPoint-World(new Vector2(49,-3)),-EngineAngle)+new Vector2(6,21));
+					|| Attachments.Has(CraftPart.LeftEngine) && MaskContains(ShipCollisionMasks.DropshipEngineLeftFill,ContactGeometry.Rotate(worldPoint-World(new Vector2(-49,-3)),-EngineAngle)/CC.WorldScale+new Vector2(29,21))
+					|| Attachments.Has(CraftPart.RightEngine) && MaskContains(ShipCollisionMasks.DropshipEngineRightFill,ContactGeometry.Rotate(worldPoint-World(new Vector2(49,-3)),-EngineAngle)/CC.WorldScale+new Vector2(6,21));
 			}
 			Vector2 pixel = local + origin;
 			if (pixel.X < 0 || pixel.Y < 0 || pixel.X >= fill.Width || pixel.Y >= fill.Height) return false;
@@ -172,7 +179,7 @@ namespace TerraCommand.Common.Physics {
 		void Rocket(in CraftInput control) {
 			MainOn = control.Main; LeftOn = control.Steer > 0.1f; RightOn = control.Steer < -0.1f;
 			UpLeftOn = UpRightOn = control.Down;
-			float gearStep = CC.Speed(10) / MathF.Sqrt(5 * 5 + 8 * 8);
+			float gearStep = CC.Speed(10) / (MathF.Sqrt(5 * 5 + 8 * 8) * CC.WorldScale);
 			Gear = Math.Clamp(Gear + (MainOn ? -gearStep : gearStep), 0, 1);
 			if (MainOn) {
 				// CC angles are counter-clockwise; screen-space recoil leans beyond the hull angle to restore it.
@@ -213,15 +220,15 @@ namespace TerraCommand.Common.Physics {
 		}
 
 		/// <summary>Request vertical thrust with approach damping before the hatch joints touch terrain.</summary>
-		public float AutomaticDropshipVertical(float gap) => -Math.Clamp(gap*.04f-Motion.Velocity.Y*.8f,-2.5f,2.5f)*3/7.5f;
+		public float AutomaticDropshipVertical(float gap) => -Math.Clamp((gap*.04f-Motion.Velocity.Y*.8f)/CC.WorldScale,-2.5f,2.5f)*3/7.5f;
 
 		/// <summary>Choose AI steering using the actual angular kick of a new side-engine burst.</summary>
 		public float AutomaticRocketSteer(float wantedVelocity) {
-			float tilt=Math.Clamp((wantedVelocity-Motion.Velocity.X)*.04f,-.12f,.12f);
+			float tilt=Math.Clamp((wantedVelocity-Motion.Velocity.X)*(.04f/CC.WorldScale),-.12f,.12f);
 			float wantedOmega=Math.Clamp((tilt-Motion.Rotation)*3,-1,1);
 			float error=wantedOmega-Motion.AngularVelocity;
 			int direction=Math.Sign(error);
-			float lever=ActorContacts.Cross(new Vector2(-12,-41),new Vector2(MathF.Cos(MathHelper.Pi/8),-MathF.Sin(MathHelper.Pi/8)));
+			float lever=ActorContacts.Cross(new Vector2(-12,-41) * CC.WorldScale,new Vector2(MathF.Cos(MathHelper.Pi/8),-MathF.Sin(MathHelper.Pi/8)));
 			bool emitting=direction>0?LeftOn:RightOn;
 			float kick=lever*(Profile.SideForce*CC.Dt+(emitting?0:Profile.SideBurst))*CC.PPM/Math.Max(1,Motion.Inertia);
 			return Math.Abs(error)>kick*.5f?direction:0;
@@ -237,7 +244,7 @@ namespace TerraCommand.Common.Physics {
 			float rotation=PartAngle(part);
 			Vector2 spriteOrigin=part==CraftPart.LeftGear?new(ShipCollisionMasks.RocketGearHull.Width-4,10):PartOrigin(part);
 			var wreck=new CraftWreckPhysics(part);
-			Vector2 position=joint+ContactGeometry.Rotate(wreck.Origin-spriteOrigin,rotation);
+			Vector2 position=joint+ContactGeometry.Rotate((wreck.Origin-spriteOrigin) * CC.WorldScale,rotation);
 			Vector2 velocity=Motion.PointVelocity(position);
 			Detached.Enqueue(new(part,position,velocity,rotation,Motion.AngularVelocity));
 			float partMass=CraftAttachments.Mass(part);
@@ -251,11 +258,11 @@ namespace TerraCommand.Common.Physics {
 				if(!Applicable(part) || !Attachments.Has(part)) continue;
 				Vector2 joint=World(PartJoint(part));
 				if(part<=CraftPart.RightEngine) {
-					Vector2 pixel=ContactGeometry.Rotate(point-joint,-EngineAngle)+(part==CraftPart.LeftEngine?new Vector2(29,21):new Vector2(6,21));
+					Vector2 pixel=ContactGeometry.Rotate(point-joint,-EngineAngle)/CC.WorldScale+(part==CraftPart.LeftEngine?new Vector2(29,21):new Vector2(6,21));
 					if(MaskContains(part==CraftPart.LeftEngine?ShipCollisionMasks.DropshipEngineLeftFill:ShipCollisionMasks.DropshipEngineRightFill,pixel)) return part;
 				} else if(part>=CraftPart.LeftHatch) {
-					if(MaskContains(HatchMask(part,true),ContactGeometry.Rotate(point-joint,-PartAngle(part))+PartOrigin(part))) return part;
-				} else if(Vector2.DistanceSquared(point,joint)<8*8) return part;
+					if(MaskContains(HatchMask(part,true),ContactGeometry.Rotate(point-joint,-PartAngle(part))/CC.WorldScale+PartOrigin(part))) return part;
+				} else if(Vector2.DistanceSquared(point,joint)<8*8*CC.WorldScale*CC.WorldScale) return part;
 			}
 			return null;
 		}

@@ -34,10 +34,10 @@ namespace TerraCommand.Common.Physics {
 			Motion.Mass=CraftAttachments.Mass(kind);
 			float radiusSum=0;
 			for(int i=0;i<Mask.Points.Length;i+=2) radiusSum+=Vector2.DistanceSquared(new Vector2(Mask.Points[i],Mask.Points[i+1]),kind==CraftPart.LeftGear?new Vector2(8,6):Origin);
-			Motion.Inertia=Motion.Mass*radiusSum/Math.Max(1,Mask.Points.Length/2);
+			Motion.Inertia=Motion.Mass*CC.WorldScale*CC.WorldScale*radiusSum/Math.Max(1,Mask.Points.Length/2);
 			Motion.Shape=this; Motion.Friction=.4f; Motion.Restitution=.5f;
 		}
-		public float SweepRadius=>Math.Max(Mask.Width,Mask.Height);
+		public float SweepRadius=>Math.Max(Mask.Width,Mask.Height)*CC.WorldScale;
 		public Vector2 CentreOffset(float rotation)=>Vector2.Zero;
 		public int Build(Vector2 anchor,float rotation,Vector2[] atoms) {
 			int count=0;
@@ -45,12 +45,12 @@ namespace TerraCommand.Common.Physics {
 				Vector2 pixel=new(Mask.Points[i],Mask.Points[i+1]);
 				if(Kind==CraftPart.LeftGear) pixel.X=Mask.Width-pixel.X;
 				Vector2 local=pixel-Origin;
-				atoms[count++]=anchor+ContactGeometry.Rotate(local,rotation);
+				atoms[count++]=anchor+ContactGeometry.Rotate(local*CC.WorldScale,rotation);
 			}
 			return count;
 		}
 		public bool Contains(Vector2 world) {
-			Vector2 pixel=ContactGeometry.Rotate(world-Motion.Position,-Motion.Rotation)+Origin;
+			Vector2 pixel=ContactGeometry.Rotate(world-Motion.Position,-Motion.Rotation)/CC.WorldScale+Origin;
 			if(Kind==CraftPart.LeftGear) pixel.X=Mask.Width-pixel.X;
 			var fill=Kind switch {CraftPart.LeftEngine=>ShipCollisionMasks.DropshipEngineLeftFill,CraftPart.RightEngine=>ShipCollisionMasks.DropshipEngineRightFill,CraftPart.LeftHatch=>ShipCollisionMasks.DropshipHatchLeftFill,CraftPart.RightHatch=>ShipCollisionMasks.DropshipHatchRightFill,_=>ShipCollisionMasks.RocketGearFill};
 			if(pixel.X<0 || pixel.Y<0 || pixel.X>=fill.Width || pixel.Y>=fill.Height) return false;

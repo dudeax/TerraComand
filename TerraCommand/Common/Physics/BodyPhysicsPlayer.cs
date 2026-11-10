@@ -281,8 +281,32 @@ namespace TerraCommand.Common.Physics
 		public void SkipImpactCheck() { skipImpact = true; Actor.Contacts.Reset(); }
 
 		public byte SpawnedLimbs; public bool BodyLocked;
-		public override void SaveData(TagCompound tag) { using var stream=new MemoryStream(); Actor.Limbs.Write(new BinaryWriter(stream));tag["limbs"]=stream.ToArray();tag["bodyId"]=unchecked((long)Actor.BodyId); }
-		public override void LoadData(TagCompound tag) { if(tag.ContainsKey("bodyId"))Actor.BodyId=unchecked((ulong)tag.GetLong("bodyId")); var bytes=tag.GetByteArray("limbs"); if(bytes.Length==5) {using var stream=new MemoryStream(bytes);Actor.Limbs.CopyFrom(LimbState.Read(new BinaryReader(stream)));SpawnedLimbs=Actor.Limbs.Missing;} }
+		public override void SaveData(TagCompound tag)
+        {
+            using var stream = new MemoryStream();
+            Actor.Limbs.Write(new BinaryWriter(stream));
+            tag["limbs"] = stream.ToArray();
+            tag["bodyId"] = unchecked((long)Actor.BodyId);
+            using var wounds = new MemoryStream();
+            Actor.Wounds.Write(new BinaryWriter(wounds));
+            tag["wounds"] = wounds.ToArray();
+        }
+
+        public override void LoadData(TagCompound tag)
+        {
+            var wounds = tag.GetByteArray("wounds");
+            if (wounds.Length > 0) {
+                using var stream = new MemoryStream(wounds);
+                Actor.Wounds.CopyFrom(ActorWounds.Read(new BinaryReader(stream)));
+            }
+            if (tag.ContainsKey("bodyId")) Actor.BodyId = unchecked((ulong)tag.GetLong("bodyId"));
+            var limbs = tag.GetByteArray("limbs");
+            if (limbs.Length == 5) {
+                using var stream = new MemoryStream(limbs);
+                Actor.Limbs.CopyFrom(LimbState.Read(new BinaryReader(stream)));
+                SpawnedLimbs = Actor.Limbs.Missing;
+            }
+        }
 
 		public void AdoptBody(Actors.ActorMotion motion, Actors.ActorKind kind)
 		{
@@ -316,7 +340,7 @@ namespace TerraCommand.Common.Physics
 
 		public override void OnRespawn()
 		{
-			Actor.Limbs.CopyFrom(new LimbState()); SpawnedLimbs=0;BodyLocked=false;Actor.BodyId=BitConverter.ToUInt64(Guid.NewGuid().ToByteArray(),0);
+			Actor.Limbs.CopyFrom(new LimbState()); Actor.Wounds.Clear(); SpawnedLimbs=0;BodyLocked=false;Actor.BodyId=BitConverter.ToUInt64(Guid.NewGuid().ToByteArray(),0);
 			Actor.Status = ActorStatus.Stable;
 			Actor.Prone = ProneState.NotProne;
 			Actor.Rot = Actor.AngVel = 0f;
@@ -337,6 +361,7 @@ namespace TerraCommand.Common.Physics
 
 		// ------------------------------------------------------------ multiplayer: other clients see the posture
 
+		uint syncedWounds;
 		ulong syncedLimbs,syncedBody;
 		byte syncedStatus, syncedProne, syncedCrouch;
 		sbyte syncedRot, syncedAim;
@@ -346,7 +371,7 @@ namespace TerraCommand.Common.Physics
 		public override void CopyClientState(ModPlayer targetCopy)
 		{
 			var t = (BodyPhysicsPlayer)targetCopy;
-			t.syncedBody=Actor.BodyId;t.syncedLimbs=Actor.Limbs.Stamp;
+			t.syncedWounds=Actor.Wounds.Revision; t.syncedBody=Actor.BodyId;t.syncedLimbs=Actor.Limbs.Stamp;
 			t.syncedStatus = (byte)Actor.Status;
 			t.syncedProne = (byte)Actor.Prone;
 			t.syncedCrouch = (byte)(Actor.CrouchAmount * 10);
@@ -364,7 +389,7 @@ namespace TerraCommand.Common.Physics
 		public override void SendClientChanges(ModPlayer clientPlayer)
 		{
 			var c = (BodyPhysicsPlayer)clientPlayer;
-			if (c.syncedBody!=Actor.BodyId || c.syncedLimbs!=Actor.Limbs.Stamp || c.syncedStatus != (byte)Actor.Status || c.syncedProne != (byte)Actor.Prone || c.syncedCrouch != (byte)(Actor.CrouchAmount * 10)
+			if (c.syncedWounds!=Actor.Wounds.Revision || c.syncedBody!=Actor.BodyId || c.syncedLimbs!=Actor.Limbs.Stamp || c.syncedStatus != (byte)Actor.Status || c.syncedProne != (byte)Actor.Prone || c.syncedCrouch != (byte)(Actor.CrouchAmount * 10)
 				|| Math.Abs(c.syncedRot - QuantRot(Actor.Rot)) > 2 || c.syncedFlip != Actor.Flipped
 				|| Math.Abs(c.syncedAim - QuantRot(Actor.AimAngle)) > 2 || c.syncedKind != (byte)Player.GetModPlayer<Actors.RigPlayer>().Kind
 				|| c.syncedMove != (byte)Actor.Move || c.syncedContacts != Actor.Contacts.Initialized || c.syncedGrounded != Actor.Grounded
@@ -387,7 +412,7 @@ namespace TerraCommand.Common.Physics
 			p.Write(QuantRot(Actor.AimAngle));
 			p.Write((byte)Player.GetModPlayer<Actors.RigPlayer>().Kind);
 			Actor.WriteGait(p);
-			ContactSnapshot.Capture(Actor.Contacts).Write(p); Actor.Limbs.Write(p);p.Write(Actor.BodyId);
+			ContactSnapshot.Capture(Actor.Contacts).Write(p); Actor.Limbs.Write(p);p.Write(Actor.BodyId); Actor.Wounds.Write(p);
 			p.Send(toWho, fromWho);
 		}
 
@@ -404,7 +429,7 @@ namespace TerraCommand.Common.Physics
 			var kind = (Actors.ActorKind)r.ReadByte();
 			GaitState gait = GaitState.Read(r);
 			ContactSnapshot contacts = ContactSnapshot.Read(r);
-			var limbs=LimbState.Read(r);ulong bodyId=r.ReadUInt64();
+			var limbs=LimbState.Read(r);ulong bodyId=r.ReadUInt64(); var wounds=ActorWounds.Read(r);
 			if (Main.netMode == NetmodeID.Server)
 				who = from;
 			Player p = Main.player[who];
@@ -420,12 +445,13 @@ namespace TerraCommand.Common.Physics
 			bp.Actor.Flipped = flip;
 			bp.Actor.AimAngle = aim;
 			bp.Actor.Limbs.CopyFrom(limbs);
+			bp.Actor.Wounds.CopyFrom(wounds);
 			bp.Actor.Apply(ActorStats.Get(kind), 0);
 			gait.Apply(bp.Actor);
 			contacts.Apply(bp.Actor.Contacts);
 			bp.Actor.Contacts.BindPaths(bp.Actor);
 			p.GetModPlayer<Actors.RigPlayer>().Kind = kind;
-			bp.height = Math.Clamp(h, CC.LyingHeight, CC.StandHeight);
+			bp.height = Math.Clamp(h, Math.Min(CC.LyingHeight,ActorStats.Get(kind).StandHeight), ActorStats.Get(kind).StandHeight);
 			bp.width = bp.Actor.WantedWidth();
 			bp.ApplyHeight();
 			if (Main.netMode == NetmodeID.Server)

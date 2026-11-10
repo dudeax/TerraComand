@@ -1,0 +1,28 @@
+goto spawn
+clearinv
+wait 60
+sync start
+wound player 4
+wait 60
+expect injuries player == 1
+sync wounded
+sync observed
+deploy CloneBody 100
+wait 60
+switch
+wait 60
+expect injuries player == 0
+expect injuries unit == 1
+sync swapped
+sync checked
+switch
+wait 60
+expect injuries player == 1
+give Medikit
+hold Medikit
+use 2
+wait 60
+expect injuries player == 0
+sync treated
+sync done
+expect alive

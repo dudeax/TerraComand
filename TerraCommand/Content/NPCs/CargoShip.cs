@@ -58,12 +58,12 @@ namespace TerraCommand.Content.NPCs
 			get {
 				Physics.Motion.Position = NPC.Bottom;
 				Vector2 centre = Physics.World(Style == ShipStyle.Dropship ? new Vector2(0,20) : new Vector2(0,10));
-				int width = Style == ShipStyle.Dropship ? 48 : 20;
-				return new Rectangle((int)centre.X-width/2,(int)centre.Y-25,width,50);
+				int width = (Style == ShipStyle.Dropship ? 48 : 20)*CC.WorldScale;
+				return new Rectangle((int)centre.X-width/2,(int)centre.Y-25*CC.WorldScale,width,50*CC.WorldScale);
 			}
 		}
 		public bool CommandedDoorOpen => Style != ShipStyle.Crate
-			&& (State == ShipState.Unloading || State == ShipState.Waiting || State == ShipState.Piloted && (Grounded || Style == ShipStyle.Dropship && Math.Abs(LandY - NPC.Bottom.Y - 8) < 8 && Math.Abs(NPC.velocity.Y) < 0.7f));
+			&& (State == ShipState.Unloading || State == ShipState.Waiting || State == ShipState.Piloted && (Grounded || Style == ShipStyle.Dropship && Math.Abs(LandY - NPC.Bottom.Y - 8 * CC.WorldScale) < 8 * CC.WorldScale && Math.Abs(NPC.velocity.Y) < 0.7f * CC.WorldScale));
 		public bool DoorOpen => CommandedDoorOpen || Style==ShipStyle.Dropship && (!Physics.Attachments.Has(CraftPart.LeftHatch) || !Physics.Attachments.Has(CraftPart.RightHatch));
 		public bool CanPilot => Style == ShipStyle.Dropship || Style == ShipStyle.Rocket;
 
@@ -158,7 +158,7 @@ namespace TerraCommand.Content.NPCs
 				if (Thrusting) Exhaust();
 				return;
 			}
-			if (OrbitY <= 0) OrbitY = Math.Min(NPC.position.Y, GroundBelow(NPC.Bottom) - 900);
+			if (OrbitY <= 0) OrbitY = Math.Min(NPC.position.Y, GroundBelow(NPC.Bottom) - 900 * CC.WorldScale);
 			if (State == ShipState.Piloted && (Pilot < 0 || !Main.player[Pilot].active || Main.player[Pilot].dead)) Unpilot();
 			if (Timer++ % 15 == 0 || LandY <= 0) LandY = GroundBelow(NPC.Bottom);
 			CraftInput input = ControlFlight();
@@ -176,8 +176,8 @@ namespace TerraCommand.Content.NPCs
 				NPC.SimpleStrikeNPC(Math.Max(1, (int)(Physics.ImpactDamage * NPC.lifeMax)), 0, noPlayerInteraction: true);
 			if (!NPC.active) return;
 			bool arrived = Style == ShipStyle.Dropship
-				? Math.Abs(LandY - solved.Y - 8) < 7 && Math.Abs(TargetX - solved.X) < 16 && NPC.velocity.Length() < 0.7f
-				: Grounded && NPC.velocity.Length() < 1.5f;
+				? Math.Abs(LandY - solved.Y - 8 * CC.WorldScale) < 7 * CC.WorldScale && Math.Abs(TargetX - solved.X) < 16 * CC.WorldScale && NPC.velocity.Length() < 0.7f * CC.WorldScale
+				: Grounded && NPC.velocity.Length() < 1.5f * CC.WorldScale;
 			if (State == ShipState.Descending && arrived) {
 				State = ShipState.Unloading; Timer = 0; NPC.netUpdate = true;
 				SoundEngine.PlaySound(SoundID.Item53 with { Pitch = -0.5f }, NPC.Center);
@@ -198,7 +198,7 @@ namespace TerraCommand.Content.NPCs
 					if (Team == CloneUnit.EnemyTeam && Timer > 120) Launch();
 				}
 			}
-			else if (State == ShipState.Piloted && (Grounded || Style == ShipStyle.Dropship && Math.Abs(LandY - NPC.Bottom.Y - 8) < 8 && Math.Abs(NPC.velocity.Y) < 0.7f) && Timer % 30 == 0) ShipSystem.LoadFromBay(this);
+			else if (State == ShipState.Piloted && (Grounded || Style == ShipStyle.Dropship && Math.Abs(LandY - NPC.Bottom.Y - 8 * CC.WorldScale) < 8 * CC.WorldScale && Math.Abs(NPC.velocity.Y) < 0.7f * CC.WorldScale) && Timer % 30 == 0) ShipSystem.LoadFromBay(this);
 			else if (State == ShipState.Ascending && solved.Y - NPC.height < OrbitY) ShipSystem.ReachedOrbit(this);
 			if (Main.GameUpdateCount % 6 == 0) NPC.netUpdate = true;
 			if (Thrusting) Exhaust();
@@ -212,11 +212,11 @@ namespace TerraCommand.Content.NPCs
 				return new(steer, (up ? 1 : 0) - (down ? 1 : 0), up, down);
 			}
 			if(Style==ShipStyle.Rocket && (State==ShipState.Waiting || State==ShipState.Unloading)) return default;
-			float wantedX = Math.Clamp((TargetX - NPC.Bottom.X) * 0.025f, -3, 3);
-			float steerAuto = Math.Clamp((wantedX - NPC.velocity.X) * 0.7f, -1, 1);
+			float wantedX = Math.Clamp((TargetX - NPC.Bottom.X) * 0.025f, -3 * CC.WorldScale, 3 * CC.WorldScale);
+			float steerAuto = Math.Clamp((wantedX - NPC.velocity.X) * (0.7f / CC.WorldScale), -1, 1);
 			if (Style == ShipStyle.Rocket) steerAuto=Physics.AutomaticRocketSteer(wantedX);
 			if (State == ShipState.Ascending) return new(steerAuto,1,Style!=ShipStyle.Rocket || Math.Abs(NPC.rotation)<1,false);
-			float gap = LandY - NPC.Bottom.Y - (Style == ShipStyle.Dropship ? 8 : 0);
+			float gap = LandY - NPC.Bottom.Y - (Style == ShipStyle.Dropship ? 8 * CC.WorldScale : 0);
 			if (Style == ShipStyle.Dropship) {
 				// Brake the approach before the fragile hatch joints touch down.
 
@@ -224,9 +224,9 @@ namespace TerraCommand.Content.NPCs
 				return new(steerAuto, Physics.AutomaticDropshipVertical(gap), true, false);
 			}
 			float mass = Physics.EmptyMass + ShipSystem.CargoMass(this);
-			float brake = Math.Max(0.01f, Physics.Profile.MainForce / mass / 180 - CC.Gravity);
-			bool fire = NPC.velocity.Y > MathF.Sqrt(2 * brake * Math.Max(0, gap - 12));
-			if (gap < 24 && NPC.velocity.Y < 2.5f) fire = false;
+			float brake = Math.Max(0.01f, CC.Accel(Physics.Profile.MainForce / mass) - CC.Gravity);
+			bool fire = NPC.velocity.Y > MathF.Sqrt(2 * brake * Math.Max(0, gap - 12 * CC.WorldScale));
+			if (gap < 24 * CC.WorldScale && NPC.velocity.Y < 2.5f * CC.WorldScale) fire = false;
 			// Rocket side jets are attitude controls as well as lateral thrusters.
 			return new(steerAuto, 0, fire && Math.Abs(NPC.rotation)<1, false);
 		}
@@ -391,22 +391,22 @@ namespace TerraCommand.Content.NPCs
 				var body = ModContent.Request<Texture2D>("TerraCommand/Content/NPCs/DropshipBody",AssetRequestMode.ImmediateLoad).Value;
 				foreach(var part in new[]{CraftPart.LeftHatch,CraftPart.RightHatch}) if(Physics.Attachments.Has(part)) {
 					var door=ModContent.Request<Texture2D>("TerraCommand/Content/NPCs/"+(part==CraftPart.LeftHatch?"DropshipHatchLeft":"DropshipHatchRight"),AssetRequestMode.ImmediateLoad).Value;
-					sb.Draw(door,Physics.World(Physics.PartJoint(part))-screenPos,null,drawColor,Physics.PartAngle(part),ShipPhysics.PartOrigin(part),1,SpriteEffects.None,0);
+					sb.Draw(door,Physics.World(Physics.PartJoint(part))-screenPos,null,drawColor,Physics.PartAngle(part),ShipPhysics.PartOrigin(part),CC.WorldScale,SpriteEffects.None,0);
 				}
-				sb.Draw(body,Physics.DrawPosition-screenPos,null,drawColor,NPC.rotation,new Vector2(55,32),1,SpriteEffects.None,0);
+				sb.Draw(body,Physics.DrawPosition-screenPos,null,drawColor,NPC.rotation,new Vector2(55,32),CC.WorldScale,SpriteEffects.None,0);
 				for(int side=-1;side<=1;side+=2) {
 					if(!Physics.Attachments.Has(side<0?CraftPart.LeftEngine:CraftPart.RightEngine)) continue;
 					var engine=ModContent.Request<Texture2D>("TerraCommand/Content/NPCs/DropshipEngine"+(side<0 ? "Left" : "Right"),AssetRequestMode.ImmediateLoad).Value;
-					sb.Draw(engine,Physics.World(new Vector2(side*49,-3))-screenPos,null,drawColor,Physics.EngineAngle,new Vector2(side<0 ? 29 : 6,21),1,SpriteEffects.None,0);
+					sb.Draw(engine,Physics.World(new Vector2(side*49,-3))-screenPos,null,drawColor,Physics.EngineAngle,new Vector2(side<0 ? 29 : 6,21),CC.WorldScale,SpriteEffects.None,0);
 				}
 			}
-			else sb.Draw(tex, Physics.DrawPosition - screenPos, null, drawColor, NPC.rotation, Physics.TextureOrigin, 1f, SpriteEffects.None, 0f);
+			else sb.Draw(tex, Physics.DrawPosition - screenPos, null, drawColor, NPC.rotation, Physics.TextureOrigin, CC.WorldScale, SpriteEffects.None, 0f);
 			if (Style == ShipStyle.Rocket) {
-				int frame = Math.Clamp((int)MathF.Round(Physics.Gear * 4), 0, 4);
+				int frame = Physics.GearFrame;
 				var leg = ModContent.Request<Texture2D>($"TerraCommand/Content/NPCs/RocketLeg{frame}", AssetRequestMode.ImmediateLoad).Value;
 				for (int side = -1; side <= 1; side += 2)
-					if(Physics.Attachments.Has(side<0?CraftPart.LeftGear:CraftPart.RightGear)) sb.Draw(leg, Physics.World(new Vector2(side * 12,29)) - screenPos, null, drawColor, NPC.rotation,
-						new Vector2(side < 0 ? leg.Width - 4 : 4,10), 1f, side < 0 ? SpriteEffects.FlipHorizontally : SpriteEffects.None, 0);
+					if(Physics.Attachments.Has(side<0?CraftPart.LeftGear:CraftPart.RightGear)) sb.Draw(leg, Physics.World(new Vector2(side * 12,29)) - screenPos, null, drawColor, Physics.GearAngle(side),
+						new Vector2(side < 0 ? leg.Width - 4 : 4,10), CC.WorldScale, side < 0 ? SpriteEffects.FlipHorizontally : SpriteEffects.None, 0);
 			}
 			// cargo count above a landed ship (local team only)
 			if (DoorOpen && Team == Main.LocalPlayer.team) {

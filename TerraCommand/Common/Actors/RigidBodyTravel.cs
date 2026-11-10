@@ -9,6 +9,17 @@ namespace TerraCommand.Common.Actors {
 		float SweepRadius { get; }
 	}
 
+	/// <summary>Compound bodies can assign different source materials to individual contact atoms.</summary>
+    public interface IRigidBodyMaterials {
+        ContactSurface MaterialForAtom(int index);
+    }
+
+    public static class ActorMaterials {
+        public static ContactSurface For(ActorKind kind, int region) => region == 6 || kind is ActorKind.Brain or ActorKind.Crab or ActorKind.Turret
+            ? new(.4f,.75f) // Civilian/Military Stuff
+            : new(.6f,.6f); // Flesh, Kevlared Flesh, Armoured Flesh
+    }
+
 	public sealed class RigidBodyMotion {
 		public Vector2 Position, Velocity, TravelImpulse;
 		public float Rotation, AngularVelocity, Mass = 1, Inertia = 1;
@@ -32,11 +43,13 @@ namespace TerraCommand.Common.Actors {
 		}
 	}
 
-	internal sealed class ActorBodyShape : IRigidBodyShape {
+	internal sealed class ActorBodyShape : IRigidBodyShape, IRigidBodyMaterials {
 		public CCActor Actor;
+        readonly byte[] regions = new byte[4096];
+        public ContactSurface MaterialForAtom(int index) => ActorMaterials.For(Actor.Kind,regions[index]);
 		public Vector2 CentreOffset(float angle) => ActorContacts.CentreOffset(Actor, angle);
-		public float SweepRadius => 40;
-		public int Build(Vector2 feet, float angle, Vector2[] atoms) => ContactGeometry.Build(Actor, feet, angle, atoms);
+		public float SweepRadius => 40 * CC.WorldScale;
+		public int Build(Vector2 feet, float angle, Vector2[] atoms) => ContactGeometry.Build(Actor, feet, angle, atoms, regions: regions);
 	}
 
 	/// <summary>Shared swept translation/rotation and simultaneous contact impulses for actors and craft.</summary>
@@ -62,7 +75,7 @@ namespace TerraCommand.Common.Actors {
 			if (motion.Blocked( feet, angle, terrain, drop)) {
 				bool freed = false;
 				Vector2 original = feet;
-				for (int distance = 1; distance <= 24 && !freed; distance++) {
+				for (int distance = 1; distance <= 24 * CC.WorldScale && !freed; distance++) {
 					foreach (Vector2 direction in RecoveryDirections) {
 						Vector2 candidate = original + direction * distance;
 						if (motion.Blocked( candidate, angle, terrain, drop)) continue;
@@ -108,11 +121,12 @@ namespace TerraCommand.Common.Actors {
 					Vector2 normal = Normal(terrain, point, previous, drop);
 					float vn = Vector2.Dot(pointVelocity, normal);
 					if (vn >= -0.00001f) continue;
-					float restitution = vn < -0.75f ? surface.Restitution * motion.Restitution : 0;
+					ContactSurface bodyMaterial = shape is IRigidBodyMaterials materials ? materials.MaterialForAtom(i) : new(motion.Friction,motion.Restitution);
+                    float restitution = vn < -0.75f ? surface.Restitution * bodyMaterial.Restitution : 0;
 					float jn = -(1 + restitution) * vn * EffectiveMass(motion.Mass, inertia, radius, normal) / hitCount;
 					Vector2 tangent = Perpendicular(normal);
 					float jt = -Vector2.Dot(pointVelocity, tangent) * EffectiveMass(motion.Mass, inertia, radius, tangent) / hitCount;
-					jt = Math.Clamp(jt, -jn * surface.Friction * motion.Friction, jn * surface.Friction * motion.Friction);
+					jt = Math.Clamp(jt, -jn * surface.Friction * bodyMaterial.Friction, jn * surface.Friction * bodyMaterial.Friction);
 					Vector2 impulse = normal * jn + tangent * jt;
 					totalImpulse += impulse; totalTorque += Cross(radius, impulse);
 					motion.ContactImpulse?.Invoke(point + motion.TerrainFrame.Origin,impulse);

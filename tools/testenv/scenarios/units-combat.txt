@@ -1,7 +1,7 @@
 # Idle bodies fight with the weapon they hold, and follow orders.
 nospawn
 goto spawn
-flatten 60 14
+flatten 100 60
 wait 30
 give FlintlockPistol
 give MusketBall 100
@@ -27,7 +27,7 @@ order sentry
 wait 30
 expect unitlife >= 90
 fill -20 0 20 3 LihzahrdBrick  # a yielding soil landing can cushion this fall
-liftunit 20                     # loaded bodies can exceed the 4800 Ns gib limit at 25 tiles, depending on pose
+liftunit 40                     # same physical fall at 40 world pixels per metre
 wait 150
 expect unitlife < 90
 expect units == 1

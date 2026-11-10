@@ -50,7 +50,7 @@ namespace TerraCommand.Common.Combat
 		{
 			if (it.ModItem is CCFirearm cc) {
 				FirearmSpec s = cc.Spec;
-				return new FirearmStats(s.Magazine, s.ReloadTicks, s.ShakeDeg, s.SharpShakeDeg, s.SharpLength, s.NoSupportFactor);
+				return new FirearmStats(s.Magazine, s.ReloadTicks, s.ShakeDeg, s.SharpShakeDeg, s.SharpLength * CC.WorldScale, s.NoSupportFactor);
 			}
 			int t = Math.Max(1, it.useTime);
 			int mag;
@@ -72,7 +72,7 @@ namespace TerraCommand.Common.Combat
 			float shake = t <= 10 ? 5f : t <= 20 ? 3f : t <= 35 ? 1.6f : 0.8f;  // degrees, CC-style full range
 			float sharpShake = shake * 0.55f;
 			float sharpLength = Math.Clamp(120f + t * 6f, 140f, 420f);              // CC: pistol ~150, rifle 250, sniper 400+
-			return new FirearmStats(mag, reload, shake, sharpShake, sharpLength, 2f);
+			return new FirearmStats(mag, reload, shake, sharpShake, sharpLength * CC.WorldScale, 2f);
 		}
 
 		/// <summary>Sharp-aim reach for any aimed device (camera look-ahead).</summary>
@@ -281,7 +281,7 @@ namespace TerraCommand.Common.Combat
 				return;
 			Vector2 aimDir = AimDir();
 			Vector2 from = RigRenderer.Grip(Player.GetModPlayer<RigPlayer>().Pose());
-			float speed = MathHelper.Lerp(2.5f, 9f, ThrowCharge);   // CC: MinThrowVel .. MaxThrowVel
+			float speed = MathHelper.Lerp(2.5f, 9f, ThrowCharge) * CC.WorldScale;   // CC: MinThrowVel .. MaxThrowVel
 			Vector2 vel = aimDir * speed + Player.velocity * 0.5f;
 			var source = Player.GetSource_ItemUse(it);
 			int dmg = Player.GetWeaponDamage(it);
@@ -309,7 +309,7 @@ namespace TerraCommand.Common.Combat
 				Vector2 from = RigRenderer.Grip(Player.GetModPlayer<RigPlayer>().Pose());
 				Vector2 aim = Main.MouseWorld - from;
 				Vector2 dir = aim.LengthSquared() > 1 ? Vector2.Normalize(aim) : AimDir();
-				const float range = 56f;
+				const float range = 56f * CC.WorldScale;
 				Destruction.PixelMining.DigPoint = null;
 				for (float d = 0; d <= range; d += 1f) {
 					Vector2 p = from + dir * d;
@@ -336,7 +336,7 @@ namespace TerraCommand.Common.Combat
 			// Sweep from the shoulder: a muzzle beyond a thin wall must not fire through it.
 			var pose = Player.GetModPlayer<RigPlayer>().Pose();
 			Vector2 grip = RigRenderer.GunAt(pose);
-			float length = TextureAssets.Item[it.type].IsLoaded ? TextureAssets.Item[it.type].Width() * 0.7f * it.scale : 20f;
+			float length = TextureAssets.Item[it.type].IsLoaded ? TextureAssets.Item[it.type].Width() * 0.7f * it.scale * RigRenderer.ItemWorldScale(it) : 20f * CC.WorldScale;
 			Vector2 shoulder = RigRenderer.Shoulder(pose);
 			Vector2 reach = grip + dir * length - shoulder;
 			float distance = reach.Length();
@@ -349,7 +349,7 @@ namespace TerraCommand.Common.Combat
 			}
 			// The gun is offset from the shoulder, especially when prone. Converge on the actual cursor.
 			Vector2 aim = Main.MouseWorld - position;
-			if (aim.LengthSquared() > 4f)
+			if (aim.LengthSquared() > 4f && Vector2.Dot(aim,dir)>0)
 				dir = Vector2.Normalize(aim);
 			velocity = dir.RotatedBy(dev) * speed;
 			if (Testing.AutoTest.Enabled) {
@@ -364,9 +364,9 @@ namespace TerraCommand.Common.Combat
 			}
 			// recoil pushes the whole body (heavier bodies barely notice); the gun jolts back
 			if (Player.whoAmI == Main.myPlayer) {
-				float push = knockback * 0.06f * CC.Mass / Actor.Mass;
+				float push = knockback * 0.06f * CC.WorldScale * CC.Mass / Actor.Mass;
 				Player.velocity -= dir * push;
-				GunKick = Math.Min(4f, GunKick + 1.5f + knockback * 0.2f);
+				GunKick = Math.Min(4f * CC.WorldScale, GunKick + (1.5f + knockback * 0.2f) * CC.WorldScale);
 			}
 		}
 	}
@@ -414,7 +414,7 @@ namespace TerraCommand.Common.Combat
 			CCActor a = p.GetModPlayer<BodyPhysicsPlayer>().Actor;
 			float reach = Devices.SharpLength(p.inventory[ActorInventory.Held]);
 			Vector2 dir = (a.Flipped ? MathHelper.Pi + a.AimAngle : -a.AimAngle).ToRotationVector2();
-			Vector2 want = dir * (30f + reach * a.SharpAim);       // CC AimDistance 30 + SharpLength x progress
+			Vector2 want = dir * (30f * CC.WorldScale + reach * a.SharpAim);       // CC AimDistance 30 + SharpLength x progress
 			offset = Vector2.Lerp(offset, want, 0.12f);
 			Main.screenPosition += offset;
 		}
@@ -432,7 +432,7 @@ namespace TerraCommand.Common.Combat
 				CCActor a = p.GetModPlayer<BodyPhysicsPlayer>().Actor;
 				Vector2 dir = (a.Flipped ? MathHelper.Pi + a.AimAngle : -a.AimAngle).ToRotationVector2();
 				Vector2 from = RigRenderer.GunAt(p.GetModPlayer<RigPlayer>().Pose());
-				float len = 60f + Devices.SharpLength(p.inventory[ActorInventory.Held]) * (0.4f + 0.6f * a.SharpAim);
+				float len = 60f * CC.WorldScale + Devices.SharpLength(p.inventory[ActorInventory.Held]) * (0.4f + 0.6f * a.SharpAim);
 				Texture2D px = TextureAssets.MagicPixel.Value;
 				// a line of dots along the aim, fanning into two as the spread widens
 				for (float d = 24f; d < len; d += 10f) {

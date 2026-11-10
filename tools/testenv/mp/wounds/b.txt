@@ -1,0 +1,16 @@
+goto spawn
+goto rel -6 0
+clearinv
+wait 60
+sync start
+sync wounded
+expect injuries other == 1
+sync observed
+sync swapped
+expect injuries other == 0
+expect injuries unit == 1
+sync checked
+sync treated
+expect injuries other == 0
+sync done
+expect alive

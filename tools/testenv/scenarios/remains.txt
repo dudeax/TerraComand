@@ -42,17 +42,18 @@ expect splats >= 5                 # blood on the ground
 screenshot remains-gibs
 
 # a Terraria enemy shot through the head on the killing shot: its head comes off
-give FlintlockPistol
-give MusketBall 100
-hold FlintlockPistol
+# Precision separates head-region/death routing from the spread test in combat.txt.
+give Longshot
+hold Longshot
 spawnnpc Zombie 160 0
 wait 60
 pin Zombie
 npclife Zombie 12                  # one more hit kills it
 aimnpc Zombie head
 wait 150                         # settle sharp aim before checking the hit zone
+aimnpc Zombie head
 shoot 1 0
-wait 20
+wait 90                          # finish the sniper animation before deploying another body
 expect npcs Zombie == 0
 expect deathfx decap
 screenshot remains-decap

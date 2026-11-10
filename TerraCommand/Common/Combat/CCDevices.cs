@@ -30,7 +30,7 @@ namespace TerraCommand.Common.Combat
 		public int ParticleCount = 1;         // particles per round (a shotgun's pellets)
 		public float ParticleSpreadDeg;       // pellets' own spread
 		public int Projectile = ProjectileID.Bullet;
-		public float FireVelocity = 14f;      // px/tick
+		public float FireVelocity = 14f;      // native CC pixels/tick; item converts to world scale
 		public float VelocityVariation;       // 0..1, per particle
 		public float Recoil = 2f;             // knockback-like push on the shooter
 		public bool OneHanded;
@@ -58,7 +58,7 @@ namespace TerraCommand.Common.Combat
 			Item.damage = Damage;
 			Item.knockBack = s.Recoil;
 			Item.shoot = s.Projectile;
-			Item.shootSpeed = s.FireVelocity;
+			Item.shootSpeed = s.FireVelocity * Actors.CC.WorldScale;
 			Item.UseSound = s.Sound;
 			Item.rare = Rarity;
 			Item.value = ValueCopper;

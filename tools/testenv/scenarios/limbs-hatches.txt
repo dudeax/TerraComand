@@ -4,6 +4,9 @@ goto spawn
 flatten 140 40
 clearinv
 wait 30
+maxlife 400
+wait 2
+heal
 limbdetach player 0
 wait 2
 expect limb player 0 false
